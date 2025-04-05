@@ -1,4 +1,4 @@
-name: IPQ60XX-6.12-WIFI
+name: JDCLOUD-AX1800-WIFI-6.12
 
 on:
   repository_dispatch:
