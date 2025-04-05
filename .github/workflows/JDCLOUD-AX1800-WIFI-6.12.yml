@@ -109,7 +109,13 @@ jobs:
         echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
         chmod +x $DIY_SCRIPT
         cd $OPENWRT_PATH
-        $GITHUB_WORKSPACE/$DIY_SCRIPT
+        $GITHUB_WORKSPACE/$DIY_SCRIPT # 判断执行是否成功 输出提示
+        if [ $? -ne 0 ]; then
+          echo "自定义脚本($DIY_SCRIPT)执行失败"
+          exit 1
+        else
+          echo "自定义脚本($DIY_SCRIPT)执行成功"
+        fi
 
     - name: Download DL Package(下载DL软件包)
       run: |
