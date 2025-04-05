@@ -1,4 +1,4 @@
-![https://github.com/openwrt/openwrt/blob/main/include/logo.png](https://github.com/openwrt/openwrt/blob/main/include/logo.png)
+![](https://github.com/openwrt/openwrt/blob/main/include/logo.png)
 
 ## 特别提示 [![](https://img.shields.io/badge/-个人免责声明-FFFFFF.svg)](#特别提示-)
 
