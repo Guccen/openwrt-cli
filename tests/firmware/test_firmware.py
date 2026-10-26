@@ -125,7 +125,9 @@ exit 0
 
     def test_web_configuration_permissions_are_bounded(self):
         acl = json.loads((ROOT / "package/router-ui/files/router-ui.json").read_text(encoding="utf-8"))["router-ui"]
-        self.assertEqual(set(acl["write"]["ubus"]), {"session", "uci"})
+        self.assertEqual(set(acl["write"]["ubus"]), {"session", "uci", "router.maintenance"})
+        self.assertEqual(acl["write"]["ubus"]["router.maintenance"], ["reboot"])
+        self.assertEqual(acl["read"]["ubus"]["iwinfo"], ["info", "assoclist"])
         self.assertEqual(set(acl["write"]["uci"]), {"network", "dhcp", "wireless"})
         self.assertNotIn("commit", acl["write"]["ubus"]["uci"])
         self.assertNotIn("add", acl["write"]["ubus"]["uci"])

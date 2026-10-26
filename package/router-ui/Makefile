@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=router-ui
-PKG_VERSION:=0.3.0
+PKG_VERSION:=0.4.0
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 
@@ -12,7 +12,7 @@ define Package/router-ui
   SECTION:=admin
   CATEGORY:=Administration
   TITLE:=轻量设备管理页面
-  DEPENDS:=+uhttpd +uhttpd-mod-ubus +rpcd
+  DEPENDS:=+uhttpd +uhttpd-mod-ubus +rpcd +jsonfilter
 endef
 
 define Package/router-ui/description
@@ -23,10 +23,11 @@ define Build/Compile
 endef
 
 define Package/router-ui/install
-	$(INSTALL_DIR) $(1)/www $(1)/usr/share/rpcd/acl.d $(1)/usr/share/licenses/router-ui
+	$(INSTALL_DIR) $(1)/www $(1)/usr/share/rpcd/acl.d $(1)/usr/share/licenses/router-ui $(1)/usr/libexec/rpcd
 	$(CP) ./htdocs/. $(1)/www/
 	$(INSTALL_DATA) ./files/router-ui.json $(1)/usr/share/rpcd/acl.d/router-ui.json
 	$(INSTALL_DATA) ./files/shadcn-ui.LICENSE $(1)/usr/share/licenses/router-ui/shadcn-ui.LICENSE
+	$(INSTALL_BIN) ./files/router.maintenance $(1)/usr/libexec/rpcd/router.maintenance
 endef
 
 $(eval $(call BuildPackage,router-ui))

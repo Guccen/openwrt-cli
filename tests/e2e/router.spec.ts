@@ -1,25 +1,10 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { entryPaths, pageRoutes } from "../../frontend/src/lib/routes";
+import { loginPage, navigate } from "./helpers";
 
 const anonymous = "0".repeat(32);
 const password = process.env.SIM_PASSWORD;
-
-async function loginPage(page: Page) {
-  await page.goto("/");
-  await page.getByLabel("设备密码").fill(password!);
-  await page.getByRole("button", { name: "登录", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "系统概览", exact: true })).toBeVisible();
-}
-
-async function navigate(page: Page, title: string) {
-  if ((page.viewportSize()?.width ?? 1280) < 768)
-    await page.getByRole("button", { name: "切换菜单", exact: true }).click();
-  await page.getByRole("link", { name: title, exact: true }).click();
-  await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
-  const route = Object.values(pageRoutes).find((item) => item.title === title)!;
-  await expect(page).toHaveURL((url) => url.pathname === route.path);
-}
 
 async function applyDialog(page: Page, button: string) {
   await page.getByRole("button", { name: button, exact: true }).click();
@@ -108,6 +93,7 @@ test("real ubus login, permissions, interfaces and session invalidation", async 
       ["uci", "commit"],
       ["file", "exec"],
       ["system", "reboot"],
+      ["iwinfo", "scan"],
     ]) {
       const access = await rpc(request, session, "session", "access", {
         scope: "ubus",
@@ -115,6 +101,19 @@ test("real ubus login, permissions, interfaces and session invalidation", async 
         function: method,
       });
       expect(access.result).toEqual([0, { access: false }]);
+    }
+    const wireless = await rpc(request, session, "network.wireless", "status");
+    expect(wireless.result[0]).toBe(0);
+    expect(typeof wireless.result[1]).toBe("object");
+    const maintenance = await rpc(request, session, "router.maintenance", "status");
+    expect(maintenance.result[1]).toMatchObject({ ok: true, operationBusy: false });
+    for (const method of ["info", "assoclist"]) {
+      const allowed = await rpc(request, session, "session", "access", {
+        scope: "ubus",
+        object: "iwinfo",
+        function: method,
+      });
+      expect(allowed.result).toEqual([0, { access: true }]);
     }
   } finally {
     const logout = await rpc(request, session, "session", "destroy");
@@ -320,6 +319,39 @@ test("network backup previews, rejects the wrong role and restores DNS with conf
   await expect(page.getByLabel("DNS 服务器", { exact: true })).toHaveValue(
     original.dns.servers.join("\n"),
   );
+});
+
+test("wireless runtime status refreshes on demand and stays unavailable on N1", async ({
+  page,
+}, testInfo) => {
+  await loginPage(page);
+  let reads = 0;
+  page.on("request", (request) => {
+    if (
+      request.url().endsWith("/ubus") &&
+      request.postDataJSON()?.params?.[1] === "network.wireless"
+    )
+      ++reads;
+  });
+  if (process.env.SIM_DEVICE !== "jdcloud-ax1800") {
+    await page.goto(pageRoutes.wirelessStatus.path);
+    await page.getByLabel("设备密码").fill(password!);
+    await page.getByRole("button", { name: "登录", exact: true }).click();
+    await expect(page.getByText("此设备未开放无线状态。", { exact: true })).toBeVisible();
+    expect(reads).toBe(0);
+    return;
+  }
+  await navigate(page, "无线状态");
+  await expect(page.getByRole("button", { name: "刷新", exact: true })).toBeEnabled();
+  expect(reads).toBeGreaterThan(0);
+  const initial = reads;
+  await page.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect.poll(() => reads).toBe(initial + 1);
+  await expect(page.getByRole("button", { name: "刷新", exact: true })).toBeEnabled();
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("wireless-status.png"), fullPage: true });
 });
 
 test("LAN address handoff confirms at the new origin and restores the initial address", async ({

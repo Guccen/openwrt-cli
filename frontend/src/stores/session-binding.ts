@@ -1,10 +1,17 @@
 import { useRouter } from "./router";
 import { useSettings } from "./settings";
+import { useWireless } from "./wireless";
+import { useMaintenance } from "./maintenance";
 
 // 会话绑定独立于页面生命周期，避免首次路由跳转覆盖刚接收的配置事务。
 export function bindSettingsSession() {
-  useSettings.getState().bind(useRouter.getState().session);
+  const bind = (session: string | null) => {
+    useSettings.getState().bind(session);
+    useWireless.getState().bind(session);
+    useMaintenance.getState().bind(session);
+  };
+  bind(useRouter.getState().session);
   return useRouter.subscribe((state, previous) => {
-    if (state.session !== previous.session) useSettings.getState().bind(state.session);
+    if (state.session !== previous.session) bind(state.session);
   });
 }

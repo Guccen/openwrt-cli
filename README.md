@@ -1,6 +1,6 @@
 # OpenWrt 轻量固件与设备控制台
 
-为京东云 AX1800 和斐讯 N1 分别构建固件，共用 React 前端。当前提供登录、系统概览、网络状态、LAN、上游 DNS、AX1800 无线设置、网络设置备份恢复，以及可折叠侧栏和移动端抽屉菜单。配置应用后有 120 秒确认连接，未确认由设备自动回滚。在线刷机、恢复出厂和完整系统备份恢复尚未实现。阶段完成条件见 [开发进度](docs/development-status.md)。
+为京东云 AX1800 和斐讯 N1 分别构建固件，共用 React 前端。当前提供登录、系统概览、网络与无线状态、LAN、上游 DNS、AX1800 无线设置、网络设置备份恢复、系统配置归档导出和重启，以及可折叠侧栏和移动端抽屉菜单。配置应用后有 120 秒确认连接，未确认由设备自动回滚。在线刷机、恢复出厂和系统归档的网页恢复尚未实现。阶段完成条件见 [开发进度](docs/development-status.md)。
 
 ## 设备与模式
 
@@ -20,7 +20,7 @@ N1 旁路由地址需排除出主路由 DHCP 分配范围。当前未预装 DNS 
 - 只安装必要 feeds。源码、feeds、Actions 和 N1 打包依赖固定提交；N1 内核固定版本和 SHA-256。
 - 前端使用 Vite、React、shadcn/ui Mira、Axios、Zustand、wouter、Bun、Oxfmt、Oxlint。通过 `bunx --bun shadcn@latest init -t vite` 初始化，界面组件均来自 shadcn/ui。
 - 桌面侧栏可折叠为图标栏，小于 768px 切换为抽屉菜单，选中页面后自动收起。
-- 使用系统字体和按需图标，不加载外部字体或 CDN。设备仅运行静态资源及 OpenWrt 原有接口，不运行 Bun、Node.js。
+- 使用系统字体和按需图标，不加载外部字体或 CDN。设备通过静态资源、OpenWrt 接口和按需执行的受限 rpcd 插件提供功能，不运行 Bun、Node.js 或新增常驻服务。
 - 资源预算：原始静态资源不超过 768 KiB，按文件计算的 gzip 合计不超过 256 KiB。生产构建不输出源代码映射。
 - N1 首版保留配套内核模块依赖，移除不用的无线固件及多平台模块自动加载。预编译内核尚未按 N1 单独裁剪，镜像体积以 CI 产物为准。
 
@@ -57,15 +57,17 @@ bun run dev
 
 ## 页面地址与组件
 
-| 地址                  | 页面               |
-| --------------------- | ------------------ |
-| `/login/`             | 登录               |
-| `/overview/`          | 系统概览           |
-| `/network/`           | 网络状态           |
-| `/settings/lan/`      | LAN 设置           |
-| `/settings/dns/`      | DNS 设置           |
-| `/settings/wireless/` | AX1800 无线设置    |
-| `/settings/backup/`   | 网络设置备份与恢复 |
+| 地址                  | 页面                |
+| --------------------- | ------------------- |
+| `/login/`             | 登录                |
+| `/overview/`          | 系统概览            |
+| `/network/`           | 网络状态            |
+| `/wireless/`          | AX1800 无线运行状态 |
+| `/settings/lan/`      | LAN 设置            |
+| `/settings/dns/`      | DNS 设置            |
+| `/settings/wireless/` | AX1800 无线设置     |
+| `/settings/backup/`   | 网络设置备份与恢复  |
+| `/system/`            | 系统配置导出与重启  |
 
 使用 wouter 的 History 路由，侧栏为真实链接，支持前进、后退和直接访问。未登录访问页面时跳到登录页，登录后回到原地址；会话仍只保存在内存中，刷新后重新登录并返回当前页面。登录返回地址限制为已知页面。N1 不显示无线菜单，手动访问无线地址也不会开放配置表单。
 
@@ -118,8 +120,10 @@ bash scripts/package-n1.sh build/artifacts/*rootfs.tar.gz
 - 临时修改 LAN 地址，验证新地址确实能访问，然后不发送确认，等待设备恢复原地址。
 - 测试页面 DNS 应用确认、LAN 输入校验及跨地址确认交接；AX1800 使用禁用的虚拟无线配置测试 SSID 表单，不模拟射频硬件。
 - 下载网络设置备份、校验相同设备/模式、预览变更、拒绝错误备份，以及恢复 DNS 后的确认流程；同次应用 LAN 和 DNS，验证失联后两个配置都能回滚。
+- 验证无线只读状态权限和按需刷新；通用 QEMU 没有射频设备，连接设备列表、信号和协商速率由协议测试及本地组件测试覆盖，仍需 AX1800 实机验证。
+- 验证系统归档导出、gzip 格式和 SHA-256；暂存及待确认配置期间，另一个登录会话同样不能导出或重启。最后通过维护接口真实重启虚拟机，检查 boot ID 改变、原配置保留和旧会话失效。
 
-打开运行记录，在 Artifacts 下载 `simulation-设备-模式`：包含 HTML/JUnit 报告、页面截图、安装记录、启动日志、DHCP、网络及 `configuration.json` 配置事务结果。失败时还保留 Playwright trace。浏览器依赖仅用于开发和 CI，不进入固件；测试密码和 SSH 密钥每次临时生成，模拟磁盘及私钥不上传。
+打开运行记录，在 Artifacts 下载 `simulation-设备-模式`：包含 HTML/JUnit 报告、页面截图、安装记录、启动日志、DHCP、网络、`configuration.json` 配置事务和 `maintenance.json` 维护结果。失败时通常保留 Playwright trace；系统导出测试关闭 trace，归档仅在内存或浏览器临时目录校验后删除，不上传归档或其中的测试密钥。浏览器依赖仅用于开发和 CI，不进入固件；测试密码和 SSH 密钥每次临时生成，模拟磁盘及私钥不上传。
 
 `Build lightweight firmware` 会先等待三种模拟配置通过，再编译设备固件。编译完成后，还会安装并测试本次真实编译生成的前端 APK，失败会阻止后续打包和 Release。正式构建的模拟报告放在设备构建 Artifact 中。
 
@@ -151,6 +155,12 @@ bash scripts/simulate.sh phicomm-n1 bypass build/simulation-package/router-ui.ap
 
 网页登录会话仅存于内存，刷新后重新登录。配置权限限制在 `network`、`dhcp`、`wireless` 三个 UCI 文件，未授予直接 `commit`、任意执行、`file` 接口或其他系统配置的写权限。正常页面按需读取；仅在配置待确认期间探测连接。
 
+AX1800 的“无线状态”显示射频启用/启动状态、运行接口、实际信道、连接设备 MAC、信号、连接时长及接收/发送协商速率。通过 `network.wireless.status` 和 `iwinfo.info / assoclist` 读取，不授予扫描或断开客户端权限。`rpcd-mod-iwinfo` 仅加入 AX1800 的正式配置；N1 隐藏无线菜单。
+
+“系统维护”使用 `router.maintenance` 固定操作插件。导出沿用 `sysupgrade -b` 的标准配置列表，归档最大 128 KiB，临时文件置于私有目录并在结束后删除；客户端验证大小、gzip 标记及 SHA-256 后下载。归档可能包含密码哈希及私钥，不是完整磁盘备份，也不包含 N1 引导分区。系统归档的网页恢复尚未开放。
+
+重启需要页面二次确认，后台只调用固定的 `system.reboot`，不接受命令或路径。后台检查所有 rpcd 会话的暂存差异及回滚快照，并在执行前再次检查；备份和重启通过互斥目录串行执行。请在维护期间停止其他窗口或 SSH 的配置修改；这些操作与 OpenWrt 原生 UCI 接口不构成原子事务。重启后页面短时探测设备，原会话失效后返回登录页。演示接口不会备份宿主机或执行重启。
+
 ## 修改设置与独立更新
 
 - LAN：修改 IPv4 地址和子网掩码；旁路由还可修改上游网关。会保留桥接、WAN 及其他现有字段；如果旁路由 DNS 仍跟随默认网关，网关修改时同步更新。
@@ -164,11 +174,11 @@ bash scripts/simulate.sh phicomm-n1 bypass build/simulation-package/router-ui.ap
 
 选择“恢复原设置”可主动回滚。关闭页面或失联后，不需要浏览器继续运行，设备会在未确认时回滚。rpcd 的回滚快照和计时器位于内存，**应用期间不要重启、断电或更新系统服务**；这类中断不保证自动恢复，仍需 SSH 或设备恢复方式。此处使用 [rpcd UCI 接口](https://github.com/openwrt/rpcd/blob/master/uci.c) 的 `apply / confirm / rollback`，不直接提交设置。
 
-`router-ui` 0.3.0 可单独更新静态资源和 ACL，安装后刷新页面并重新登录以取得新权限。仅使用自己构建且已核对 SHA-256 的包，在没有待确认配置时更新，例如：
+`router-ui` 0.4.0 可单独更新静态资源、ACL 和维护插件，安装后重启 rpcd，刷新页面并重新登录以取得新接口和权限。AX1800 的无线运行详情还需要安装固件来源匹配的 `rpcd-mod-iwinfo`。仅使用自己构建且已核对 SHA-256 的包，在没有暂存或待确认配置时更新，例如：
 
 ```sh
-scp -O router-ui-0.3.0-r1.apk root@192.168.68.1:/tmp/router-ui.apk
-ssh root@192.168.68.1 'apk add --allow-untrusted /tmp/router-ui.apk'
+scp -O router-ui-0.4.0-r1.apk root@192.168.68.1:/tmp/router-ui.apk
+ssh root@192.168.68.1 'apk add --allow-untrusted /tmp/router-ui.apk && /etc/init.d/rpcd restart'
 ```
 
 安装包不改变设备网络默认值；默认配置变化仍需重新构建固件或通过设置页面修改。

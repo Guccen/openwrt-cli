@@ -172,7 +172,7 @@ def network_down():
 def build_image(role):
     imagebuilder = ROOT / "build/simulation-tools/imagebuilder"
     # 官方仓库没有 fork 中的 px5g-openssl，测试系统使用 uhttpd 原生 OpenSSL 回退。
-    packages = "uhttpd uhttpd-mod-ubus rpcd libustream-openssl openssl-util ca-bundle -luci -luci-light -luci-ssl -wpad-basic-mbedtls -libustream-mbedtls -libustream-wolfssl"
+    packages = "uhttpd uhttpd-mod-ubus rpcd jsonfilter rpcd-mod-iwinfo libustream-openssl openssl-util ca-bundle -luci -luci-light -luci-ssl -wpad-basic-mbedtls -libustream-mbedtls -libustream-wolfssl"
     if role == "bypass":
         packages += " -ppp -ppp-mod-pppoe -odhcp6c -odhcpd-ipv6only"
     with (REPORT / "imagebuilder.log").open("w") as log:
@@ -207,6 +207,8 @@ def install_package(address, package):
             lines.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  /www/{path.relative_to(bundle / 'htdocs').as_posix()}")
     acl = bundle / "files/router-ui.json"
     lines.append(f"{hashlib.sha256(acl.read_bytes()).hexdigest()}  /usr/share/rpcd/acl.d/router-ui.json")
+    plugin = bundle / "files/router.maintenance"
+    lines.append(f"{hashlib.sha256(plugin.read_bytes()).hexdigest()}  /usr/libexec/rpcd/router.maintenance")
     with (REPORT / "installed-files.log").open("w") as log:
         ssh(address, "sha256sum -c -", input="\n".join(lines) + "\n", stdout=log, stderr=subprocess.STDOUT)
 
@@ -324,6 +326,7 @@ def main():
         run("python3", ROOT / "tests/runtime/configuration.py", "--address", address)
         env = dict(os.environ, SIM_BASE_URL=f"https://{address}", SIM_DEVICE=args.device, SIM_ROLE=args.role, SIM_ADDRESS=address)
         run("bun", "run", "test:e2e", env=env)
+        run("python3", ROOT / "tests/runtime/maintenance.py", env=env)
         success = True
     finally:
         if processes:

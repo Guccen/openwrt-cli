@@ -7,6 +7,7 @@ import {
   Router,
   Settings2,
   Wifi,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { useRouter } from "@/stores/router";
@@ -46,8 +47,12 @@ export function DeviceSidebar({
     { id: "dns", icon: Globe },
   ];
   const device = useRouter((state) => state.device);
-  if (device?.device === "jdcloud-ax1800") items.push({ id: "wireless", icon: Wifi });
+  if (device?.device === "jdcloud-ax1800") {
+    items.splice(2, 0, { id: "wirelessStatus", icon: Wifi });
+    items.push({ id: "wireless", icon: Wifi });
+  }
   items.push({ id: "backup", icon: ArchiveRestore });
+  items.push({ id: "system", icon: Wrench });
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="py-3">

@@ -3,11 +3,15 @@ import { Button } from "@/components/ui/button";
 import { pageRoutes, type Page } from "@/lib/routes";
 import { useRouter } from "@/stores/router";
 import { useSettings } from "@/stores/settings";
+import { useWireless } from "@/stores/wireless";
+import { useMaintenance } from "@/stores/maintenance";
 
 export function PageHeader({ page }: { page: Page | null }) {
   const { device, snapshot, loading, refresh } = useRouter();
   const settings = useSettings();
-  const busy = loading || settings.loading;
+  const wireless = useWireless();
+  const maintenance = useMaintenance();
+  const busy = loading || settings.loading || wireless.loading || maintenance.loading;
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
@@ -20,7 +24,9 @@ export function PageHeader({ page }: { page: Page | null }) {
         variant="outline"
         disabled={busy || !!settings.pending || !!settings.destination}
         onClick={() => {
-          if (page && pageRoutes[page].settings) void settings.load();
+          if (page === "wirelessStatus") void wireless.load();
+          else if (page === "system") void maintenance.load();
+          else if (page && pageRoutes[page].settings) void settings.load();
           else void refresh();
         }}
       >

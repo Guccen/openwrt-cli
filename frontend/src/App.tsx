@@ -10,6 +10,8 @@ import { DnsPage } from "@/pages/dns-page";
 import { WirelessPage } from "@/pages/wireless-page";
 import { BackupPage } from "@/pages/backup-page";
 import { NotFoundPage } from "@/pages/not-found-page";
+import { WirelessStatusPage } from "@/pages/wireless-status-page";
+import { SystemPage } from "@/pages/system-page";
 import { useRouter } from "@/stores/router";
 
 export function App() {
@@ -48,10 +50,12 @@ export function App() {
       <Switch>
         <Route path={pageRoutes.overview.path} component={OverviewPage} />
         <Route path={pageRoutes.network.path} component={NetworkPage} />
+        <Route path={pageRoutes.wirelessStatus.path} component={WirelessStatusPage} />
         <Route path={pageRoutes.lan.path} component={LanPage} />
         <Route path={pageRoutes.dns.path} component={DnsPage} />
         <Route path={pageRoutes.wireless.path} component={WirelessPage} />
         <Route path={pageRoutes.backup.path} component={BackupPage} />
+        <Route path={pageRoutes.system.path} component={SystemPage} />
         <Route>
           <NotFoundPage />
         </Route>

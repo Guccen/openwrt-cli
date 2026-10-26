@@ -123,6 +123,41 @@ Bun.serve({
             ],
           },
         ];
+      if (object === "network.wireless" && method === "status") {
+        result = [
+          0,
+          device === "phicomm-n1"
+            ? {}
+            : {
+                radio0: {
+                  up: committed.wireless.radio0.disabled !== "1",
+                  disabled: committed.wireless.radio0.disabled === "1",
+                  pending: false,
+                  config: { band: "2g", channel: "auto" },
+                  interfaces: [
+                    {
+                      section: "default_radio0",
+                      ifname: "phy0-ap0",
+                      config: { ssid: committed.wireless.default_radio0.ssid, mode: "ap" },
+                    },
+                  ],
+                },
+              },
+        ];
+      }
+      if (object === "iwinfo" && method === "info") result = [0, { channel: 6, frequency: 2437 }];
+      if (object === "iwinfo" && method === "assoclist") result = [0, { results: [] }];
+      if (object === "router.maintenance") {
+        const configurationBusy = !!transaction || drafts.size > 0;
+        if (method === "status")
+          result = [0, { ok: true, configurationBusy, operationBusy: false, backupLimit: 131072 }];
+        // 演示模式不生成或操作真实系统归档，也不重启主机。
+        if (method === "backup" || method === "reboot")
+          result = [
+            0,
+            { ok: false, error: configurationBusy ? "configuration_busy" : "preview_only" },
+          ];
+      }
       if (object === "uci") {
         const config = args.config as ConfigName;
         const snapshot = drafts.get(sid) ?? committed;

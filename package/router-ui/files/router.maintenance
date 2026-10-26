@@ -1,0 +1,71 @@
+#!/bin/sh
+# rpcd 固定操作插件：不接受命令、文件路径、URL 或固件数据。
+set -e
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+umask 077
+LOCK=/var/run/router-ui-maintenance.lock
+
+busy_config() {
+    local entry
+    for entry in /var/run/rpcd/snapshot-files/* /var/run/rpcd/snapshot-delta/* /var/run/rpcd/uci-*/* /tmp/.uci/*; do
+        [ ! -s "$entry" ] || return 0
+    done
+    return 1
+}
+fail() {
+    printf '{"ok":false,"error":"%s"}\n' "$1"
+    exit 0
+}
+
+case "$1" in
+    list)
+        printf '%s\n' '{"status":{},"backup":{},"reboot":{"confirm":true}}'
+        ;;
+    call)
+        case "$2" in
+            status)
+                configuration=false
+                busy_config && configuration=true
+                operation=false
+                [ ! -d "$LOCK" ] || operation=true
+                printf '{"ok":true,"configurationBusy":%s,"operationBusy":%s,"backupLimit":131072}\n' "$configuration" "$operation"
+                ;;
+            backup)
+                busy_config && fail configuration_busy
+                mkdir "$LOCK" 2>/dev/null || fail operation_busy
+                directory=
+                archive=
+                trap '[ -z "$archive" ] || rm -f "$archive"; [ -z "$directory" ] || rmdir "$directory"; rmdir "$LOCK"' EXIT
+                busy_config && fail configuration_busy
+                directory=$(mktemp -d /tmp/router-ui-backup.XXXXXX) || fail backup_failed
+                archive="$directory/config.tar.gz"
+                # 限制临时文件与 ubus 响应体积；较大的自定义备份仍通过 SSH 导出。
+                (ulimit -f 256; sysupgrade -b "$archive" >/dev/null 2>&1) || fail backup_failed
+                size=$(wc -c < "$archive")
+                [ "$size" -gt 0 ] && [ "$size" -le 131072 ] || fail backup_too_large
+                busy_config && fail configuration_busy
+                checksum=$(sha256sum "$archive")
+                checksum=${checksum%% *}
+                printf '{"ok":true,"size":%s,"sha256":"%s","data":"' "$size" "$checksum"
+                base64 "$archive" | tr -d '\n'
+                printf '"}\n'
+                ;;
+            reboot)
+                confirmed=$(jsonfilter -e '@.confirm' 2>/dev/null) || fail confirmation_required
+                [ "$confirmed" = true ] || fail confirmation_required
+                busy_config && fail configuration_busy
+                mkdir "$LOCK" 2>/dev/null || fail operation_busy
+                if busy_config; then rmdir "$LOCK"; fail configuration_busy; fi
+                # 先返回响应，再次检查其他窗口的配置事务，最后通过 procd 重启。
+                (
+                    sleep 3
+                    if ! busy_config; then ubus call system reboot >/dev/null 2>&1; fi
+                    rmdir "$LOCK" 2>/dev/null || true
+                ) </dev/null >/dev/null 2>&1 &
+                printf '%s\n' '{"ok":true,"accepted":true}'
+                ;;
+            *) fail unsupported_method ;;
+        esac
+        ;;
+    *) exit 1 ;;
+esac

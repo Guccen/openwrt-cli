@@ -5,6 +5,9 @@
       "ubus": {
         "system": ["board", "info"],
         "network.interface": ["dump"],
+        "network.wireless": ["status"],
+        "iwinfo": ["info", "assoclist"],
+        "router.maintenance": ["status", "backup"],
         "session": ["access"],
         "uci": ["get", "changes"]
       },
@@ -13,6 +16,7 @@
     "write": {
       "ubus": {
         "session": ["destroy"],
+        "router.maintenance": ["reboot"],
         "uci": ["set", "delete", "revert", "apply", "confirm", "rollback"]
       },
       "uci": ["network", "dhcp", "wireless"]
