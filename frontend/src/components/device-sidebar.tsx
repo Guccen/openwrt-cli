@@ -1,5 +1,6 @@
 import {
   Activity,
+  ArchiveRestore,
   Globe,
   LogOut,
   Network,
@@ -9,6 +10,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useRouter } from "@/stores/router";
+import { Link } from "wouter";
+import { pageRoutes, type Page } from "@/lib/routes";
 import {
   Sidebar,
   SidebarContent,
@@ -26,52 +29,41 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-export type Page = "overview" | "network" | "lan" | "dns" | "wireless";
-export const pageTitles: Record<Page, string> = {
-  overview: "系统概览",
-  network: "网络状态",
-  lan: "LAN 设置",
-  dns: "DNS 设置",
-  wireless: "无线设置",
-};
-
 export function DeviceSidebar({
   page,
-  onNavigate,
   onLogout,
   disabled = false,
 }: {
-  page: Page;
-  onNavigate: (page: Page) => void;
+  page: Page | null;
   onLogout: () => void;
   disabled?: boolean;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
-  const items: { id: Page; title: string; icon: LucideIcon }[] = [
-    { id: "overview" as const, title: "系统概览", icon: Activity },
-    { id: "network" as const, title: "网络状态", icon: Network },
-    { id: "lan" as const, title: "LAN 设置", icon: Settings2 },
-    { id: "dns" as const, title: "DNS 设置", icon: Globe },
+  const items: { id: Page; icon: LucideIcon }[] = [
+    { id: "overview", icon: Activity },
+    { id: "network", icon: Network },
+    { id: "lan", icon: Settings2 },
+    { id: "dns", icon: Globe },
   ];
   const device = useRouter((state) => state.device);
-  if (device?.device === "jdcloud-ax1800")
-    items.push({ id: "wireless", title: "无线设置", icon: Wifi });
+  if (device?.device === "jdcloud-ax1800") items.push({ id: "wireless", icon: Wifi });
+  items.push({ id: "backup", icon: ArchiveRestore });
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="py-3">
         <div className="flex items-center gap-1">
           <SidebarMenu className="min-w-0">
             <SidebarMenuItem>
-              <SidebarMenuButton
-                size="lg"
-                tooltip="设备控制台"
-                onClick={() => {
-                  onNavigate("overview");
-                  if (isMobile) setOpenMobile(false);
-                }}
-              >
-                <Router className="size-4 shrink-0" />
-                <span className="text-sm font-semibold">设备控制台</span>
+              <SidebarMenuButton asChild size="lg" tooltip="设备控制台">
+                <Link
+                  href={pageRoutes.overview.path}
+                  onClick={() => {
+                    if (isMobile) setOpenMobile(false);
+                  }}
+                >
+                  <Router className="size-4 shrink-0" />
+                  <span className="text-sm font-semibold">设备控制台</span>
+                </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
@@ -87,16 +79,20 @@ export function DeviceSidebar({
               {items.map((item) => (
                 <SidebarMenuItem key={item.id}>
                   <SidebarMenuButton
+                    asChild
                     isActive={page === item.id}
-                    tooltip={item.title}
-                    aria-current={page === item.id ? "page" : undefined}
-                    onClick={() => {
-                      onNavigate(item.id);
-                      if (isMobile) setOpenMobile(false);
-                    }}
+                    tooltip={pageRoutes[item.id].title}
                   >
-                    <item.icon />
-                    <span>{item.title}</span>
+                    <Link
+                      href={pageRoutes[item.id].path}
+                      aria-current={page === item.id ? "page" : undefined}
+                      onClick={() => {
+                        if (isMobile) setOpenMobile(false);
+                      }}
+                    >
+                      <item.icon />
+                      <span>{pageRoutes[item.id].title}</span>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

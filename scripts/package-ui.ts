@@ -1,9 +1,18 @@
 import { cp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
-import { resolve, relative } from "node:path";
+import { resolve, relative, dirname } from "node:path";
 import { gzipSync } from "node:zlib";
+import { entryPaths } from "../frontend/src/lib/routes";
 
 const root = resolve(import.meta.dir, "..");
 const output = resolve(root, "dist");
+// uhttpd 直接提供目录首页；所有路由入口共用同一份静态资源。
+// 把入口也纳入体积预算和安装校验，不依赖额外的重写服务。
+for (const entry of entryPaths) {
+  const path = resolve(output, `.${entry}`, "index.html");
+  if (relative(output, path).startsWith("..")) throw new Error("页面入口路径无效");
+  await mkdir(dirname(path), { recursive: true });
+  await cp(resolve(output, "index.html"), path);
+}
 const files: string[] = [];
 async function walk(directory: string) {
   for (const item of await readdir(directory, { withFileTypes: true })) {

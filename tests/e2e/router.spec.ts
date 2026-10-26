@@ -1,4 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { entryPaths, pageRoutes } from "../../frontend/src/lib/routes";
 
 const anonymous = "0".repeat(32);
 const password = process.env.SIM_PASSWORD;
@@ -13,8 +15,10 @@ async function loginPage(page: Page) {
 async function navigate(page: Page, title: string) {
   if ((page.viewportSize()?.width ?? 1280) < 768)
     await page.getByRole("button", { name: "切换菜单", exact: true }).click();
-  await page.getByRole("button", { name: title, exact: true }).click();
+  await page.getByRole("link", { name: title, exact: true }).click();
   await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+  const route = Object.values(pageRoutes).find((item) => item.title === title)!;
+  await expect(page).toHaveURL((url) => url.pathname === route.path);
 }
 
 async function applyDialog(page: Page, button: string) {
@@ -55,6 +59,14 @@ test("real ubus login, permissions, interfaces and session invalidation", async 
     role: process.env.SIM_ROLE,
     address: process.env.SIM_ADDRESS,
   });
+  for (const path of entryPaths) {
+    const entry = await request.get(path);
+    expect(entry.status(), `Direct page entry ${path}`).toBe(200);
+    const html = await entry.text();
+    expect(html).toContain('id="root"');
+    expect(html).toMatch(/src="\/assets\//);
+  }
+  expect((await request.get("/assets/router-ui-missing.js")).status()).toBe(404);
   const redirect = await request.get(process.env.SIM_BASE_URL!.replace("https:", "http:"), {
     maxRedirects: 0,
   });
@@ -139,7 +151,7 @@ test("login, responsive navigation, refresh and logout", async ({ page }, testIn
     await page.screenshot({ path: testInfo.outputPath("collapsed-menu.png"), fullPage: true });
     await page.getByRole("button", { name: "切换菜单", exact: true }).click();
   }
-  await page.getByRole("button", { name: "网络状态", exact: true }).click();
+  await page.getByRole("link", { name: "网络状态", exact: true }).click();
   if (mobile) await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(page.getByRole("heading", { name: "网络状态", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: /lan/ }).first()).toBeVisible();
@@ -161,6 +173,33 @@ test("login, responsive navigation, refresh and logout", async ({ page }, testIn
   await page.getByRole("button", { name: "退出登录", exact: true }).click();
   await expect(page.getByText("登录设备", { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("direct page URLs preserve login destination, browser history and reload", async ({
+  page,
+}) => {
+  const response = await page.goto(pageRoutes.dns.path);
+  expect(response?.status()).toBe(200);
+  await expect(page.getByText("登录设备", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(
+    (url) => url.pathname === "/login/" && url.searchParams.get("next") === pageRoutes.dns.path,
+  );
+  await page.getByLabel("设备密码").fill(password!);
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "DNS 设置", exact: true })).toBeVisible();
+  await expect(page).toHaveURL((url) => url.pathname === pageRoutes.dns.path);
+  await navigate(page, "LAN 设置");
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "DNS 设置", exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole("heading", { name: "LAN 设置", exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("登录设备", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL((url) => url.searchParams.get("next") === pageRoutes.lan.path);
+  await page.getByLabel("设备密码").fill(password!);
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "LAN 设置", exact: true })).toBeVisible();
+  await expect(page).toHaveURL((url) => url.pathname === pageRoutes.lan.path);
 });
 
 test("DNS editing requires explicit confirmation and can restore automatic DNS", async ({
@@ -215,6 +254,65 @@ test("AX1800 wireless form edits the disabled configuration fixture", async ({
   await confirmConnection(page);
 });
 
+test("network backup previews, rejects the wrong role and restores DNS with confirmation", async ({
+  page,
+}, testInfo) => {
+  await loginPage(page);
+  await navigate(page, "备份与恢复");
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByRole("button", { name: "导出备份", exact: true }).click();
+  const download = await downloadEvent;
+  const path = testInfo.outputPath("network-backup.json");
+  await download.saveAs(path);
+  const original = JSON.parse(await readFile(path, "utf8"));
+  expect(original).toMatchObject({
+    format: "router-ui-network",
+    version: 1,
+    device: process.env.SIM_DEVICE,
+    role: process.env.SIM_ROLE,
+  });
+  expect(original).not.toHaveProperty("password");
+  let writes = 0;
+  page.on("request", (request) => {
+    if (
+      request.url().endsWith("/ubus") &&
+      request.postDataJSON()?.params?.[1] === "uci" &&
+      ["set", "delete", "apply"].includes(request.postDataJSON()?.params?.[2])
+    )
+      ++writes;
+  });
+  const upload = (value: unknown) =>
+    page.getByLabel("备份文件", { exact: true }).setInputFiles({
+      name: "network.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(value)),
+    });
+  await upload({ ...original, role: original.role === "bypass" ? "router" : "bypass" });
+  await expect(
+    page.getByText("备份的设备型号和主/旁路由模式必须与当前设备一致", { exact: true }),
+  ).toBeVisible();
+  expect(writes).toBe(0);
+  await upload(original);
+  await expect(page.getByText("备份与当前设置一致，无需恢复。", { exact: true })).toBeVisible();
+  const server = original.dns.servers?.[0] === "1.0.0.1" ? "9.9.9.9" : "1.0.0.1";
+  await upload({ ...original, dns: { servers: [server], automatic: false } });
+  await expect(page.getByRole("cell", { name: server, exact: true })).toBeVisible();
+  expect(writes).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath("backup-preview.png"), fullPage: true });
+  await applyDialog(page, "恢复这些设置");
+  await confirmConnection(page);
+  await navigate(page, "DNS 设置");
+  await expect(page.getByLabel("DNS 服务器", { exact: true })).toHaveValue(server);
+  await navigate(page, "备份与恢复");
+  await upload(original);
+  await applyDialog(page, "恢复这些设置");
+  await confirmConnection(page);
+  await navigate(page, "DNS 设置");
+  await expect(page.getByLabel("DNS 服务器", { exact: true })).toHaveValue(
+    original.dns.servers.join("\n"),
+  );
+});
+
 test("LAN address handoff confirms at the new origin and restores the initial address", async ({
   page,
   context,
@@ -239,7 +337,7 @@ test("LAN address handoff confirms at the new origin and restores the initial ad
   const popupEvent = context.waitForEvent("page");
   await page.getByRole("button", { name: "打开新地址并确认", exact: true }).click();
   const next = await popupEvent;
-  await next.waitForURL(`https://${address}/`);
+  await next.waitForURL(`https://${address}${pageRoutes.overview.path}`);
   await confirmConnection(next);
   expect(newAddressAttempts).toBeGreaterThanOrEqual(2);
   expect(next.url()).not.toContain("apply=");
@@ -253,6 +351,6 @@ test("LAN address handoff confirms at the new origin and restores the initial ad
   const restoredEvent = context.waitForEvent("page");
   await next.getByRole("button", { name: "打开新地址并确认", exact: true }).click();
   const restored = await restoredEvent;
-  await restored.waitForURL(`https://${original}/`);
+  await restored.waitForURL(`https://${original}${pageRoutes.overview.path}`);
   await confirmConnection(restored);
 });

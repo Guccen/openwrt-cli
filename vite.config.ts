@@ -5,7 +5,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   root: "frontend",
-  base: "./",
+  base: "/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { "@": fileURLToPath(new URL("./frontend/src", import.meta.url)) },

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { NetworkTable, Overview } from "../../frontend/src/App";
+import { NetworkTable } from "../../frontend/src/components/network/network-table";
+import { OverviewContent } from "../../frontend/src/components/overview/overview-content";
 import { bytes, memoryUsage, uptime } from "../../frontend/src/lib/format";
 import type { Snapshot } from "../../frontend/src/lib/types";
 
@@ -28,7 +29,7 @@ const snapshot: Snapshot = {
 };
 
 test("设备提供的文本经过转义，网络表格使用 shadcn 组件", () => {
-  const overview = renderToStaticMarkup(<Overview snapshot={snapshot} />);
+  const overview = renderToStaticMarkup(<OverviewContent snapshot={snapshot} />);
   expect(overview).not.toContain("<script>alert");
   expect(overview).toContain("&lt;script&gt;");
   expect(overview).toContain('data-slot="card"');

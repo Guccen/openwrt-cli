@@ -124,19 +124,25 @@ def run(address):
     api.login()
     new_address = address.rsplit(".", 1)[0] + ".10"
     api.set("network", "lan", {"ipaddr": new_address})
+    api.set("dhcp", section, {"server": ["192.0.2.53"], "noresolv": "1"})
     applied_at = time.monotonic()
-    api.apply(15)
-    wait_http(new_address, 12)
+    api.apply(30)
+    wait_http(new_address, 20)
     if f"'{new_address}'" not in committed(new_address, "network", "lan"):
         raise AssertionError("新的 LAN 地址没有实际生效")
+    if "192.0.2.53" not in committed(new_address, "dhcp", section):
+        raise AssertionError("同次应用的 DNS 配置没有生效")
     # 不发送 confirm，也不依赖前端页面继续运行。
-    time.sleep(max(0, applied_at + 17 - time.monotonic()))
+    time.sleep(max(0, applied_at + 32 - time.monotonic()))
     wait_http(address, 30)
     if f"'{address}'" not in committed(address, "network", "lan"):
         raise AssertionError("失联后 LAN 地址未自动恢复")
+    if committed(address, "dhcp", section) != original_dns:
+        raise AssertionError("多配置回滚没有同时恢复 DNS")
     api.call("uci", "revert", {"config": "network"})
+    api.call("uci", "revert", {"config": "dhcp"})
     api.call("session", "destroy")
-    (REPORT / "configuration.json").write_text(json.dumps({"dns_manual_rollback": "passed", "dns_confirm_persists": "passed", "cross_session_confirm_denied": "passed", "session_loss_rollback": "passed", "lan_new_address_reachable": "passed", "lan_timeout_rollback": "passed"}, indent=2) + "\n")
+    (REPORT / "configuration.json").write_text(json.dumps({"dns_manual_rollback": "passed", "dns_confirm_persists": "passed", "cross_session_confirm_denied": "passed", "session_loss_rollback": "passed", "lan_new_address_reachable": "passed", "lan_timeout_rollback": "passed", "multi_config_rollback": "passed"}, indent=2) + "\n")
     print("Configuration apply, confirm and rollback tests passed")
 
 
