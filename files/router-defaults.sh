@@ -15,12 +15,17 @@ if [ -x /sbin/wifi ]; then
     /sbin/wifi config
 fi
 if [ -f /etc/config/wireless ]; then
-    . /lib/functions.sh
-    disable_radio() {
-        uci set "wireless.$1.disabled=1"
-    }
-    config_load wireless
-    config_foreach disable_radio wifi-device
+    (
+        # OpenWrt 的配置库允许未定义的可选变量，不兼容 nounset。
+        # 只在这个子 shell 关闭 nounset，仍保留命令失败时停止初始化。
+        set +u
+        . /lib/functions.sh
+        disable_radio() {
+            uci set "wireless.$1.disabled=1"
+        }
+        config_load wireless
+        config_foreach disable_radio wifi-device
+    )
     uci commit wireless
 fi
 

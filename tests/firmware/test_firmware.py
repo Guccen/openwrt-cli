@@ -22,14 +22,19 @@ class FirmwareTests(unittest.TestCase):
             bash = "C:/Program Files/Git/bin/bash.exe"
         if not bash:
             self.skipTest("需要 Bash 执行首次启动脚本测试")
-        for fail in (False, True):
+        for fail in ("", "network", "wireless"):
             with self.subTest(fail=fail), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp).resolve()
                 firmware.overlay(root / "overlay", "jdcloud-ax1800", "router")
                 script = root / "first-boot.sh"
                 text = (root / "overlay/etc/uci-defaults/zz-router-lite").read_text(encoding="utf-8")
                 text = text.replace("/sbin/wifi", (root / "no-wifi").as_posix())
-                text = text.replace("/etc/config/wireless", (root / "no-wireless").as_posix())
+                wireless = root / "wireless"
+                wireless.write_text("config wifi-device 'radio0'\nconfig wifi-device 'radio1'\n")
+                functions = root / "functions.sh"
+                # OpenWrt 库使用未定义的可选环境变量；初始化须兼容这种调用。
+                functions.write_text('config_load() { [ -n "$IPKG_INSTROOT" ] && return 0; return 0; }\nconfig_foreach() { "$1" radio0; "$1" radio1; }\n', encoding="utf-8", newline="\n")
+                text = text.replace("/etc/config/wireless", wireless.as_posix()).replace("/lib/functions.sh", functions.as_posix())
                 script.write_text(text, encoding="utf-8", newline="\n")
                 binaries = root / "bin"
                 binaries.mkdir()
@@ -41,14 +46,15 @@ if [ "$1" = '-q' ]; then
     printf '1\\n'
     exit 0
 fi
-if [ "$*" = 'commit network' ] && [ "$UCI_FAIL" = '1' ]; then exit 1; fi
+if [ "$*" = "commit $UCI_FAIL" ]; then exit 1; fi
 if [ "$*" = 'set router-lite.setup.initialized=1' ]; then : > "$UCI_STATE"; fi
 exit 0
 """, encoding="utf-8", newline="\n")
                 mock.chmod(0o755)
                 log = root / "uci.log"
                 state = root / "initialized"
-                env = dict(os.environ, UCI_LOG=log.as_posix(), UCI_STATE=state.as_posix(), UCI_FAIL="1" if fail else "0")
+                env = dict(os.environ, UCI_LOG=log.as_posix(), UCI_STATE=state.as_posix(), UCI_FAIL=fail)
+                env.pop("IPKG_INSTROOT", None)
                 env["PATH"] = str(binaries) + os.pathsep + env["PATH"]
                 result = subprocess.run([bash, script.as_posix()], env=env, capture_output=True, text=True)
                 if fail:
@@ -58,9 +64,13 @@ exit 0
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertTrue(state.exists())
                     self.assertIn("set network.lan.ipaddr=192.168.68.1", log.read_text())
+                    self.assertIn("set wireless.radio0.disabled=1", log.read_text())
+                    self.assertIn("set wireless.radio1.disabled=1", log.read_text())
+                    self.assertIn("commit wireless", log.read_text())
                     log.write_text("")
                     subprocess.run([bash, script.as_posix()], env=env, check=True)
                     self.assertNotIn("set network", log.read_text())
+                    self.assertNotIn("set wireless", log.read_text())
 
     def test_role_configuration(self):
         bypass = firmware.merge_config("phicomm-n1", "bypass")

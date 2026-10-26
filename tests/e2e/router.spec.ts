@@ -228,6 +228,12 @@ test("LAN address handoff confirms at the new origin and restores the initial ad
   await navigate(page, "LAN 设置");
   const original = process.env.SIM_ADDRESS!;
   const address = original.slice(0, original.lastIndexOf(".")) + ".11";
+  let newAddressAttempts = 0;
+  await context.route(`https://${address}/**`, async (route) => {
+    if (route.request().isNavigationRequest() && ++newAddressAttempts === 1)
+      await route.abort("addressunreachable");
+    else await route.continue();
+  });
   await page.getByLabel("LAN IPv4 地址", { exact: true }).fill(address);
   await applyDialog(page, "应用 LAN 设置");
   const popupEvent = context.waitForEvent("page");
@@ -235,6 +241,7 @@ test("LAN address handoff confirms at the new origin and restores the initial ad
   const next = await popupEvent;
   await next.waitForURL(`https://${address}/`);
   await confirmConnection(next);
+  expect(newAddressAttempts).toBeGreaterThanOrEqual(2);
   expect(next.url()).not.toContain("apply=");
   expect(await next.evaluate(() => localStorage.length)).toBe(0);
   expect(await next.evaluate(() => sessionStorage.length)).toBe(0);

@@ -52,7 +52,7 @@ export function ApplyStatus() {
         {pending.oldOrigin !== pending.newOrigin && (
           <p>
             管理地址将变为 {pending.newOrigin}
-            。如果更换了网段，请重新连接网络；新页面可能需要确认设备证书。
+            。连接未就绪时会重试打开新页面。如果更换了网段，请重新连接网络；新页面可能需要确认设备证书。
           </p>
         )}
         {error && <p className="text-destructive">{error}</p>}

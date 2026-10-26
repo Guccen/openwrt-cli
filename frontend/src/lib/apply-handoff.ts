@@ -3,8 +3,17 @@ import { useSettings, type PendingApply } from "../stores/settings";
 import { ipv4 } from "./settings";
 
 const channel = "router-ui-apply-v1";
-let outgoing: { window: Window; nonce: string; pending: PendingApply } | null = null;
+let outgoing: {
+  window: Window;
+  nonce: string;
+  pending: PendingApply;
+  retry?: ReturnType<typeof setInterval>;
+} | null = null;
 let incoming: { origin: string; nonce: string; accepted: boolean } | null = null;
+
+function stopRetry() {
+  if (outgoing?.retry) clearInterval(outgoing.retry);
+}
 
 function validPending(value: unknown, source: string): value is PendingApply {
   if (!value || typeof value !== "object") return false;
@@ -60,6 +69,7 @@ export function registerApplyHandoff() {
         state.pending === outgoing.pending &&
         Date.now() < state.pending.deadline
       ) {
+        stopRetry();
         outgoing.window.postMessage(
           {
             channel,
@@ -71,9 +81,11 @@ export function registerApplyHandoff() {
           event.origin,
         );
       } else if (data.type === "confirmed") {
+        stopRetry();
         useSettings.getState().completedElsewhere(event.origin);
         outgoing = null;
       } else if (data.type === "restored") {
+        stopRetry();
         void useSettings.getState().rollback();
         outgoing = null;
       }
@@ -110,6 +122,7 @@ export function registerApplyHandoff() {
   return () => {
     window.removeEventListener("message", listener);
     if (timer) clearInterval(timer);
+    stopRetry();
   };
 }
 
@@ -118,10 +131,30 @@ export function openApplyAddress(pending: PendingApply) {
     byte.toString(16).padStart(2, "0"),
   ).join("");
   const fragment = encodeURIComponent(JSON.stringify({ from: window.location.origin, nonce }));
-  const popup = window.open(`${pending.newOrigin}/#apply=${fragment}`, `router-apply-${nonce}`);
+  const address = `${pending.newOrigin}/#apply=${fragment}`;
+  const popup = window.open(address, `router-apply-${nonce}`);
   if (!popup) throw new Error("浏览器阻止了新页面，请允许弹出窗口后重试；设备仍会在超时后恢复");
+  stopRetry();
   // fragment 只包含来源和随机标记，会话只通过严格校验来源的 postMessage 在内存中传递。
   outgoing = { window: popup, nonce, pending };
+  const transfer = outgoing;
+  // netifd 可能尚未完成改址。首次导航失败后，在设备计时结束前重试同一窗口。
+  transfer.retry = setInterval(() => {
+    if (
+      outgoing !== transfer ||
+      popup.closed ||
+      useSettings.getState().pending !== pending ||
+      Date.now() >= pending.deadline
+    ) {
+      if (transfer.retry) clearInterval(transfer.retry);
+      return;
+    }
+    try {
+      popup.location.href = address;
+    } catch {
+      /* 页面可能正在导航，下一轮再试；不会自动确认设置。 */
+    }
+  }, 8000);
 }
 
 export function notifyApplyComplete(confirmed: boolean) {
