@@ -23,13 +23,13 @@ jobs:
             role: router
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
       - name: Install configuration prerequisites
-        timeout-minutes: 8
+        timeout-minutes: 15
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 build-essential clang flex bison gawk gettext git \
@@ -48,7 +48,7 @@ jobs:
           bash scripts/configure-firmware.sh "$DEVICE" "$ROLE" eth1 2>&1 | tee build/artifacts/configure.log
       - name: Upload resolved configuration and source revisions
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: configuration-${{ matrix.device }}-${{ matrix.role }}
           path: |
