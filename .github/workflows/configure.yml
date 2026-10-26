@@ -1,26 +1,6 @@
 name: Verify firmware configurations
 
 on:
-  push:
-    paths:
-      - configs/**
-      - files/**
-      - package/router-ui/**
-      - scripts/firmware.py
-      - scripts/configure-firmware.sh
-      - scripts/build-firmware.sh
-      - .github/workflows/configure.yml
-      - .github/workflows/build.yml
-  pull_request:
-    paths:
-      - configs/**
-      - files/**
-      - package/router-ui/**
-      - scripts/firmware.py
-      - scripts/configure-firmware.sh
-      - scripts/build-firmware.sh
-      - .github/workflows/configure.yml
-      - .github/workflows/build.yml
   workflow_dispatch:
 
 permissions:

@@ -1,8 +1,6 @@
 name: Simulate OpenWrt installation
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
   workflow_call:
 
