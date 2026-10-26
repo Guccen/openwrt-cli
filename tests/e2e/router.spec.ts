@@ -257,6 +257,15 @@ test("AX1800 wireless form edits the disabled configuration fixture", async ({
 test("network backup previews, rejects the wrong role and restores DNS with confirmation", async ({
   page,
 }, testInfo) => {
+  // 真机读取比内存演示慢；新页面不能在旧快照上接受文件后被迟到的读取清空。
+  await page.route("**/ubus", async (route) => {
+    const params = route.request().postDataJSON()?.params;
+    if (params?.[1] === "uci" && params?.[2] === "get") {
+      const response = await route.fetch();
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      await route.fulfill({ response });
+    } else await route.continue();
+  });
   await loginPage(page);
   await navigate(page, "备份与恢复");
   const downloadEvent = page.waitForEvent("download");

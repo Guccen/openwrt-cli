@@ -32,9 +32,12 @@ export function SettingsSection({
   } = useSettings();
   const [candidate, setCandidate] = useState<{ plan: ConfigPlan; revision: number } | null>(null);
   const [invalid, setInvalid] = useState<{ message: string; revision: number } | null>(null);
+  const [initialRevision] = useState(revision);
+  const ready = revision > initialRevision;
   const plan = candidate?.revision === revision ? candidate.plan : null;
   const validation = invalid?.revision === revision ? invalid.message : null;
   useEffect(() => {
+    // 路由切换时先读取当前配置，避免用户输入被稍后到达的 revision 更新清空。
     if (session) void load();
   }, [load, session]);
   const review: SettingsFormProps["review"] = (makePlan) => {
@@ -67,8 +70,8 @@ export function SettingsSection({
           </AlertDescription>
         </Alert>
       )}
-      {!snapshot && !pending && !error && <Skeleton className="h-64" />}
-      {snapshot && !unsupported && (
+      {(!ready || !snapshot) && !pending && !error && <Skeleton className="h-64" />}
+      {ready && snapshot && !unsupported && (
         <div key={revision}>{children({ snapshot, disabled, review })}</div>
       )}
       <ApplyReviewDialog
