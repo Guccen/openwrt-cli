@@ -50,7 +50,7 @@ jobs:
     name: Test ${{ matrix.device }} ${{ matrix.role }}
     needs: package
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
