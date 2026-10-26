@@ -142,6 +142,17 @@ jobs:
             build/simulation-report/
           if-no-files-found: warn
           retention-days: 14
+      - name: Preserve N1 rootfs and package after failure
+        if: failure() && matrix.device == 'phicomm-n1'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: n1-build-recovery-${{ github.run_number }}
+          path: |
+            build/openwrt/bin/targets/armsr/armv8/*rootfs.tar.gz
+            build/openwrt/bin/targets/armsr/armv8/*.manifest
+            build/openwrt/bin/packages/**/router-ui-*.apk
+          if-no-files-found: warn
+          retention-days: 14
       - name: Publish versioned release
         if: inputs.publish
         env:
