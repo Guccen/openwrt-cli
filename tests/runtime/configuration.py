@@ -86,10 +86,14 @@ def run(address):
     if committed(address, "dhcp", section) != original_dns:
         raise AssertionError("手动恢复没有还原 DNS 配置")
 
-    api.set("dhcp", section, {"server": ["192.0.2.53"], "noresolv": "1"})
-    api.apply(4)
+    # 新版 rpcd 在应用期间重新登录会找回原会话。先创建另一会话，
+    # 再开始应用，才能真正验证不同会话之间的确认权限。
     other = Api(address)
     other.login()
+    if other.sid == api.sid:
+        raise AssertionError("应用前登录应创建独立会话")
+    api.set("dhcp", section, {"server": ["192.0.2.53"], "noresolv": "1"})
+    api.apply(6)
     try:
         other.call("uci", "confirm")
     except RpcFailure as error:
@@ -99,7 +103,7 @@ def run(address):
         raise AssertionError("另一个会话不应确认本次改动")
     other.call("session", "destroy")
     api.call("uci", "confirm")
-    time.sleep(5)
+    time.sleep(7)
     if "192.0.2.53" not in committed(address, "dhcp", section):
         raise AssertionError("确认后设置没有保留")
     # 恢复原有 DNS，再测试会话消失时仍然由设备负责回滚。
