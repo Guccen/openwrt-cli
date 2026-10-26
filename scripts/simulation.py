@@ -131,7 +131,8 @@ def network_down():
 
 def build_image(role):
     imagebuilder = ROOT / "build/simulation-tools/imagebuilder"
-    packages = "uhttpd uhttpd-mod-ubus rpcd libustream-openssl px5g-openssl ca-bundle -luci -luci-light -luci-ssl -wpad-basic-mbedtls -libustream-mbedtls -libustream-wolfssl"
+    # 官方仓库没有 fork 中的 px5g-openssl，测试系统使用 uhttpd 原生 OpenSSL 回退。
+    packages = "uhttpd uhttpd-mod-ubus rpcd libustream-openssl openssl-util ca-bundle -luci -luci-light -luci-ssl -wpad-basic-mbedtls -libustream-mbedtls -libustream-wolfssl"
     if role == "bypass":
         packages += " -ppp -ppp-mod-pppoe -odhcp6c -odhcpd-ipv6only"
     with (REPORT / "imagebuilder.log").open("w") as log:

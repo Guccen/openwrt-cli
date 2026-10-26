@@ -4,11 +4,11 @@ PKG_NAME:=router-ui
 PKG_VERSION:=0.1.0
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
-PKGARCH:=all
 
 include $(INCLUDE_DIR)/package.mk
 
 define Package/router-ui
+  PKGARCH:=all
   SECTION:=admin
   CATEGORY:=Administration
   TITLE:=轻量设备管理页面
