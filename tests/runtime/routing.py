@@ -21,14 +21,19 @@ def wait_wan(api, protocol):
     raise AssertionError(f"WAN 没有恢复为 {protocol} 上网")
 
 
-def wait_pool(address, start, end):
+def dnsmasq_pids(address):
+    return set(ssh(address, "pidof dnsmasq || true", capture_output=True, timeout=5).stdout.split())
+
+
+def wait_pool(address, start, end, previous_pids):
     deadline = time.monotonic() + 20
     while time.monotonic() < deadline:
         config = ssh(address, "grep -h '^dhcp-range=' /var/etc/dnsmasq.conf.* 2>/dev/null || true", capture_output=True, timeout=5).stdout
-        if f"{start},{end}," in config:
+        current_pids = dnsmasq_pids(address)
+        if f"{start},{end}," in config and current_pids and not current_pids.intersection(previous_pids):
             return
         time.sleep(0.5)
-    raise AssertionError("dnsmasq 没有加载预期的 DHCP 地址池")
+    raise AssertionError("dnsmasq 未完成重启或没有加载预期的 DHCP 地址池")
 
 
 def run(address, role):
@@ -56,16 +61,18 @@ def run(address, role):
     if committed(address, "network", "wan") != original_wan:
         raise AssertionError("静态 WAN 回滚后未恢复原有 DHCP 配置")
     api.set("dhcp", "lan", {"start": "50", "limit": "30", "leasetime": "5m"})
+    previous_pids = dnsmasq_pids(address)
     api.apply(120)
-    # dnsmasq 重载是异步的；等实际生成的新服务配置后再申请租约。
+    # 配置生成早于 procd 重启服务；必须同时等旧进程退出，否则仍可能取得旧租约。
     prefix = address.rsplit(".", 1)[0]
-    wait_pool(address, prefix + ".50", prefix + ".79")
+    wait_pool(address, prefix + ".50", prefix + ".79", previous_pids)
     test_network(role, address, expected_pool=(prefix + ".50", prefix + ".79"), report_name="dhcp-updated")
+    previous_pids = dnsmasq_pids(address)
     api.call("uci", "rollback")
     api.call("uci", "revert", {"config": "dhcp"})
     if committed(address, "dhcp", "lan") != original_dhcp:
         raise AssertionError("DHCP 回滚改变了原地址池或 IPv6 设置")
-    wait_pool(address, prefix + ".100", prefix + ".249")
+    wait_pool(address, prefix + ".100", prefix + ".249", previous_pids)
     test_network(role, address, expected_pool=(prefix + ".100", prefix + ".249"), report_name="routing-restored")
     if api.values("network").get("wan6") != network.get("wan6"):
         raise AssertionError("IPv6 接口不应被 WAN IPv4 设置覆盖")

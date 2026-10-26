@@ -16,9 +16,14 @@ export function WirelessPage() {
         const radios = wifiDrafts(props.snapshot);
         return radios.length ? (
           <div className="space-y-3">
-            {radios.map((radio) => (
-              <WifiForm key={radio.section} {...props} initial={radio} />
-            ))}
+            <p className="text-xs text-muted-foreground">
+              按频段分别设置名称和密码，每次只应用当前无线网络。
+            </p>
+            <div className="grid gap-3 xl:grid-cols-2">
+              {radios.map((radio) => (
+                <WifiForm key={radio.section} {...props} initial={radio} />
+              ))}
+            </div>
           </div>
         ) : (
           <Alert>

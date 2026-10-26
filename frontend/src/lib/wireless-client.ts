@@ -1,4 +1,5 @@
 import { RouterClient, RpcError } from "./rpc";
+import { wifiBand, type WifiBand } from "./wifi-band";
 
 export interface WirelessStation {
   mac: string;
@@ -24,7 +25,7 @@ export interface WirelessRadio {
   pending: boolean;
   disabled: boolean;
   failed: boolean;
-  band: string;
+  band: WifiBand;
   channel: string;
   interfaces: WirelessInterface[];
 }
@@ -124,7 +125,7 @@ export class WirelessClient {
             pending: row.pending === true,
             disabled: row.disabled === true,
             failed: row.retry_setup_failed === true,
-            band: text(config.band),
+            band: wifiBand(config, interfaces.find((item) => item.frequency)?.frequency),
             channel: String(config.channel ?? ""),
             interfaces,
           };

@@ -56,6 +56,21 @@ config wifi-iface 'default_radio0'
     option encryption 'none'
     option ssid 'CI configuration fixture'
     option disabled '1'
+
+config wifi-device 'radio1'
+    option type 'mac80211'
+    option path 'platform/ci-5g-configuration-fixture'
+    option band '5g'
+    option channel '36'
+    option disabled '1'
+
+config wifi-iface 'default_radio1'
+    option device 'radio1'
+    option network 'lan'
+    option mode 'ap'
+    option encryption 'none'
+    option ssid 'CI 5 GHz configuration fixture'
+    option disabled '1'
 """, encoding="utf-8")
     return metadata
 

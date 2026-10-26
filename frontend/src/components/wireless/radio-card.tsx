@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { WirelessRadio } from "@/lib/wireless-client";
 import { StationTable } from "./station-table";
+import { wifiBandLabel } from "@/lib/wifi-band";
 
 export function RadioCard({ radio }: { radio: WirelessRadio }) {
   const status = radio.disabled
@@ -17,11 +18,11 @@ export function RadioCard({ radio }: { radio: WirelessRadio }) {
     <Card size="sm">
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2">
-          {radio.name}
+          {wifiBandLabel(radio.band)} WiFi
           <Badge variant={radio.up ? "secondary" : "outline"}>{status}</Badge>
         </CardTitle>
         <CardDescription>
-          {radio.band || "未知频段"} · 配置信道 {radio.channel || "自动"}
+          {radio.name} · 配置信道 {radio.channel || "自动"}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

@@ -7,8 +7,8 @@ export function DeviceHeader() {
   const { device, snapshot } = useRouter();
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4 sm:px-6">
-      <SidebarTrigger aria-label="切换菜单" />
-      <Separator orientation="vertical" className="h-4!" />
+      <SidebarTrigger className="-ml-2 size-8 [&_svg]:size-4!" aria-label="切换菜单" />
+      <Separator orientation="vertical" className="h-4! self-center!" />
       <span className="truncate text-xs text-muted-foreground">
         {device?.model ?? snapshot?.board.model ?? "设备控制台"}
       </span>

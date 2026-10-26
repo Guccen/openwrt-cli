@@ -233,7 +233,7 @@ test("LAN form rejects invalid addresses before applying", async ({ page }, test
   await page.screenshot({ path: testInfo.outputPath("lan-validation.png"), fullPage: true });
 });
 
-test("AX1800 wireless form edits the disabled configuration fixture", async ({
+test("AX1800 separately edits 2.4 GHz and 5 GHz configuration fixtures", async ({
   page,
 }, testInfo) => {
   test.skip(
@@ -242,17 +242,29 @@ test("AX1800 wireless form edits the disabled configuration fixture", async ({
   );
   await loginPage(page);
   await navigate(page, "无线设置");
-  const field = page.getByLabel("WiFi 名称", { exact: true }).first();
-  await expect(field).toBeEnabled();
-  const original = await field.inputValue();
-  await field.fill("CI settings verified");
+  const card = (band: string) =>
+    page
+      .locator('[data-slot="card"]')
+      .filter({ has: page.getByText(band + " WiFi", { exact: true }) });
+  const low = card("2.4 GHz").getByLabel("WiFi 名称", { exact: true });
+  const high = card("5 GHz").getByLabel("WiFi 名称", { exact: true });
+  await expect(low).toBeEnabled();
+  await expect(high).toBeEnabled();
+  const originals = [await low.inputValue(), await high.inputValue()];
+  for (const [index, band] of ["2.4 GHz", "5 GHz"].entries()) {
+    const field = card(band).getByLabel("WiFi 名称", { exact: true });
+    await field.fill(`CI ${band} verified`);
+    await card(band).getByRole("button", { name: "应用无线设置", exact: true }).click();
+    await page.getByRole("button", { name: "应用并开始计时", exact: true }).click();
+    await confirmConnection(page);
+    await expect(field).toHaveValue(`CI ${band} verified`);
+    await expect(index === 0 ? high : low).toHaveValue(originals[1 - index]);
+    await field.fill(originals[index]);
+    await card(band).getByRole("button", { name: "应用无线设置", exact: true }).click();
+    await page.getByRole("button", { name: "应用并开始计时", exact: true }).click();
+    await confirmConnection(page);
+  }
   await page.screenshot({ path: testInfo.outputPath("wireless-settings.png"), fullPage: true });
-  await applyDialog(page, "应用无线设置");
-  await confirmConnection(page);
-  await expect(field).toHaveValue("CI settings verified");
-  await field.fill(original);
-  await applyDialog(page, "应用无线设置");
-  await confirmConnection(page);
 });
 
 test("network backup previews, rejects the wrong role and restores DNS and DHCP with confirmation", async ({

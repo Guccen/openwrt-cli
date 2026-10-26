@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { wifiPlan, type WifiDraft } from "@/lib/settings";
+import { wifiBandLabel } from "@/lib/wifi-band";
 import type { SettingsFormProps } from "./settings-section";
 
 export function WifiForm({
@@ -29,7 +31,15 @@ export function WifiForm({
   return (
     <Card size="sm">
       <CardHeader>
-        <CardTitle>{initial.ssid || "无线网络"}</CardTitle>
+        <CardTitle className="flex items-center justify-between gap-2">
+          <span>{wifiBandLabel(initial.band)} WiFi</span>
+          <Badge variant={draft.enabled ? "secondary" : "outline"}>
+            {draft.enabled ? "已启用" : "已关闭"}
+          </Badge>
+        </CardTitle>
+        <CardDescription>
+          {initial.ssid || "未命名网络"} · {initial.device}
+        </CardDescription>
         <CardDescription>
           {!initial.editable
             ? "此接口使用高级无线配置，请通过 SSH 管理。"

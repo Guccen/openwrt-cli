@@ -1,5 +1,6 @@
 import type { NetworkInterface } from "./types";
 import { ipv4, maskPrefix, poolRange } from "./ipv4";
+import { wifiBand, type WifiBand } from "./wifi-band";
 export { ipv4, maskPrefix } from "./ipv4";
 
 export type ConfigName = "network" | "dhcp" | "wireless";
@@ -34,6 +35,7 @@ export interface LanDraft {
 export interface WifiDraft {
   section: string;
   device: string;
+  band: WifiBand;
   enabled: boolean;
   ssid: string;
   encryption: string;
@@ -204,6 +206,7 @@ export function wifiDrafts(snapshot: SettingsSnapshot): WifiDraft[] {
       return {
         section: name,
         device,
+        band: wifiBand(snapshot.wireless[device] ?? {}),
         ssid: String(section.ssid ?? ""),
         encryption: ["psk2", "sae-mixed"].includes(encryption) ? encryption : "psk2",
         password: "",

@@ -5,7 +5,16 @@ import type { ConfigName, SettingsSnapshot } from "../frontend/src/lib/settings"
 const device = process.env.PREVIEW_DEVICE === "jdcloud-ax1800" ? "jdcloud-ax1800" : "phicomm-n1";
 const bypass = process.env.PREVIEW_ROLE === "bypass" && device === "phicomm-n1";
 const initial = settingsFixture(bypass);
-if (device === "jdcloud-ax1800") initial.network.lan.ipaddr = "192.168.68.1";
+if (device === "jdcloud-ax1800") {
+  initial.network.lan.ipaddr = "192.168.68.1";
+  initial.wireless.default_radio0.ssid = "OpenWrt-demo-2.4G";
+  initial.wireless.radio1 = { ...initial.wireless.radio0, band: "5g" };
+  initial.wireless.default_radio1 = {
+    ...initial.wireless.default_radio0,
+    device: "radio1",
+    ssid: "OpenWrt-demo-5G",
+  };
+}
 if (device === "phicomm-n1") initial.wireless = {};
 let committed = structuredClone(initial);
 const sessions = new Set<string>();
@@ -136,24 +145,33 @@ Bun.serve({
           0,
           device === "phicomm-n1"
             ? {}
-            : {
-                radio0: {
-                  up: committed.wireless.radio0.disabled !== "1",
-                  disabled: committed.wireless.radio0.disabled === "1",
-                  pending: false,
-                  config: { band: "2g", channel: "auto" },
-                  interfaces: [
-                    {
-                      section: "default_radio0",
-                      ifname: "phy0-ap0",
-                      config: { ssid: committed.wireless.default_radio0.ssid, mode: "ap" },
-                    },
-                  ],
-                },
-              },
+            : Object.fromEntries(
+                ["radio0", "radio1"].map((name, index) => [
+                  name,
+                  {
+                    up: committed.wireless[name].disabled !== "1",
+                    disabled: committed.wireless[name].disabled === "1",
+                    pending: false,
+                    config: { band: committed.wireless[name].band, channel: "auto" },
+                    interfaces: [
+                      {
+                        section: `default_${name}`,
+                        ifname: `phy${index}-ap0`,
+                        config: { ssid: committed.wireless[`default_${name}`].ssid, mode: "ap" },
+                      },
+                    ],
+                  },
+                ]),
+              ),
         ];
       }
-      if (object === "iwinfo" && method === "info") result = [0, { channel: 6, frequency: 2437 }];
+      if (object === "iwinfo" && method === "info")
+        result = [
+          0,
+          args.device === "phy1-ap0"
+            ? { channel: 36, frequency: 5180 }
+            : { channel: 6, frequency: 2437 },
+        ];
       if (object === "iwinfo" && method === "assoclist") result = [0, { results: [] }];
       if (object === "router.maintenance") {
         const configurationBusy = !!transaction || drafts.size > 0;

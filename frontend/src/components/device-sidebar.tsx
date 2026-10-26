@@ -27,7 +27,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarSeparator,
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
@@ -59,11 +58,11 @@ export function DeviceSidebar({
   items.push({ id: "system", icon: Wrench });
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="py-3">
+      <SidebarHeader className="h-12 shrink-0 justify-center border-b px-2 py-0">
         <div className="flex items-center gap-1">
           <SidebarMenu className="min-w-0">
             <SidebarMenuItem>
-              <SidebarMenuButton asChild size="lg" tooltip="设备控制台">
+              <SidebarMenuButton asChild tooltip="设备控制台">
                 <Link
                   href={pageRoutes.overview.path}
                   onClick={() => {
@@ -79,7 +78,6 @@ export function DeviceSidebar({
           <SidebarTrigger className="md:hidden" aria-label="关闭菜单" />
         </div>
       </SidebarHeader>
-      <SidebarSeparator />
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>设备管理</SidebarGroupLabel>
