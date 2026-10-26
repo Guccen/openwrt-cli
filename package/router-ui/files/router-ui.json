@@ -1,0 +1,17 @@
+{
+  "router-ui": {
+    "description": "读取系统、网络与当前会话权限，并退出当前会话",
+    "read": {
+      "ubus": {
+        "system": ["board", "info"],
+        "network.interface": ["dump"],
+        "session": ["access"]
+      }
+    },
+    "write": {
+      "ubus": {
+        "session": ["destroy"]
+      }
+    }
+  }
+}

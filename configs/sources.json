@@ -1,0 +1,40 @@
+{
+  "jdcloud-ax1800": {
+    "url": "https://github.com/LiBwrt/LibWrt.git",
+    "revision": "3a3d0b08595530070ad9cd8a20c0ae4ea3e77f70",
+    "version": "25.12-nss",
+    "feeds": {
+      "packages": {
+        "url": "https://github.com/immortalwrt/packages.git",
+        "revision": "6f8f6461e8a6a0bbc134592d12353700fe698506"
+      },
+      "nss_packages": {
+        "url": "https://github.com/qosmio/nss-packages.git",
+        "revision": "0d970dbf0185e3f53709bd803e8a466598023c57"
+      }
+    }
+  },
+  "phicomm-n1": {
+    "url": "https://github.com/immortalwrt/immortalwrt.git",
+    "revision": "4fc16f2985a358bd43bb522e43f05395fcbd6ed5",
+    "version": "v25.12.2",
+    "feeds": {
+      "packages": {
+        "url": "https://github.com/immortalwrt/packages.git",
+        "revision": "84bd86384928955b568988ca0e09e2c78c75173d"
+      }
+    }
+  },
+  "n1_packager": {
+    "url": "https://github.com/ophub/amlogic-s9xxx-openwrt.git",
+    "revision": "52ad5239e6720f5b56c9afafcd7080cbe3cf2881",
+    "kernel": "6.12.114",
+    "kernel_sha256": "4cf9646f4725817d4ec91a2b4889f42f30d2b2e1d584b4bfdba9bcc2477adae6",
+    "dependencies": {
+      "https://github.com/ophub/u-boot": "e06036570fc7a3ff810d7d5e8b4cb32f3a925f31",
+      "https://github.com/ophub/firmware": "a9d0e8337cc8aa2ca4b482acd7b19c74ce05860f",
+      "https://github.com/ophub/amlogic-s9xxx-armbian": "72621c6f32942e40757deb1a5de63dca575c7658",
+      "https://github.com/ophub/luci-app-amlogic": "16df300f86e5b4e48e955cd66f337c5872d27d3c"
+    }
+  }
+}

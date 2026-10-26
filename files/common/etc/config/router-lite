@@ -1,0 +1,2 @@
+config setup 'setup'
+	option initialized '0'

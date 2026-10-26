@@ -1,0 +1,33 @@
+name: Code and UI checks
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check code and UI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.0
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+      - name: Check and build frontend
+        run: bun run check
+      - name: Check firmware configuration and scripts
+        run: |
+          python3 -m unittest discover -s tests/firmware -v
+          python3 -m compileall -q scripts
+          for script in scripts/*.sh files/router-defaults.sh; do bash -n "$script"; done
+      - name: Validate browser test definitions
+        run: bunx playwright test --list

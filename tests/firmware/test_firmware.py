@@ -1,0 +1,153 @@
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+import firmware
+import n1_packer
+
+
+class FirmwareTests(unittest.TestCase):
+    def test_first_boot_is_idempotent_and_stops_on_failure(self):
+        bash = shutil.which("bash")
+        if not bash and Path("C:/Program Files/Git/bin/bash.exe").is_file():
+            bash = "C:/Program Files/Git/bin/bash.exe"
+        if not bash:
+            self.skipTest("需要 Bash 执行首次启动脚本测试")
+        for fail in (False, True):
+            with self.subTest(fail=fail), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp).resolve()
+                firmware.overlay(root / "overlay", "jdcloud-ax1800", "router")
+                script = root / "first-boot.sh"
+                text = (root / "overlay/etc/uci-defaults/zz-router-lite").read_text(encoding="utf-8")
+                text = text.replace("/sbin/wifi", (root / "no-wifi").as_posix())
+                text = text.replace("/etc/config/wireless", (root / "no-wireless").as_posix())
+                script.write_text(text, encoding="utf-8", newline="\n")
+                binaries = root / "bin"
+                binaries.mkdir()
+                mock = binaries / "uci"
+                mock.write_text("""#!/bin/sh
+printf '%s\\n' "$*" >> "$UCI_LOG"
+if [ "$1" = '-q' ]; then
+    [ -f "$UCI_STATE" ] || exit 1
+    printf '1\\n'
+    exit 0
+fi
+if [ "$*" = 'commit network' ] && [ "$UCI_FAIL" = '1' ]; then exit 1; fi
+if [ "$*" = 'set router-lite.setup.initialized=1' ]; then : > "$UCI_STATE"; fi
+exit 0
+""", encoding="utf-8", newline="\n")
+                mock.chmod(0o755)
+                log = root / "uci.log"
+                state = root / "initialized"
+                env = dict(os.environ, UCI_LOG=log.as_posix(), UCI_STATE=state.as_posix(), UCI_FAIL="1" if fail else "0")
+                env["PATH"] = str(binaries) + os.pathsep + env["PATH"]
+                result = subprocess.run([bash, script.as_posix()], env=env, capture_output=True, text=True)
+                if fail:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertFalse(state.exists())
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertTrue(state.exists())
+                    self.assertIn("set network.lan.ipaddr=192.168.68.1", log.read_text())
+                    log.write_text("")
+                    subprocess.run([bash, script.as_posix()], env=env, check=True)
+                    self.assertNotIn("set network", log.read_text())
+
+    def test_role_configuration(self):
+        bypass = firmware.merge_config("phicomm-n1", "bypass")
+        router = firmware.merge_config("phicomm-n1", "router")
+        self.assertIn("# CONFIG_PACKAGE_ppp is not set", bypass)
+        self.assertIn("CONFIG_PACKAGE_ppp=y", router)
+        self.assertNotIn("# CONFIG_PACKAGE_ppp is not set", router)
+        self.assertEqual(len(re.findall(r"^CONFIG_PACKAGE_ppp=", router, re.M)), 1)
+
+    def test_network_modes_are_isolated(self):
+        for role, address, ignore, ipv6 in [("bypass", "192.168.68.2", "1", "disabled"), ("router", "192.168.69.1", "0", "server")]:
+            with self.subTest(role=role), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                data = firmware.overlay(root, "phicomm-n1", role, "eth1")
+                self.assertEqual(data["address"], address)
+                network = (root / "etc/config/network").read_text()
+                dhcp = (root / "etc/config/dhcp").read_text()
+                self.assertIn(address, network)
+                lan = dhcp.split("config dhcp 'lan'")[1].split("config dhcp 'wan'")[0]
+                self.assertIn(f"option ignore '{ignore}'", lan)
+                self.assertIn(f"option ra '{ipv6}'", lan)
+                self.assertEqual("config interface 'wan'" in network, role == "router")
+                self.assertEqual("option device 'eth1'" in network, role == "router")
+                self.assertNotIn("@", (root / "etc/uci-defaults/zz-router-lite").read_text(encoding="utf-8").replace("@system", ""))
+
+    def test_reject_invalid_wan(self):
+        for wan in ("", "eth0", "lo", "br-lan", "eth1'; reboot", "eth1\n"):
+            with self.subTest(wan=wan), self.assertRaises(ValueError):
+                firmware.validate_role("phicomm-n1", "router", wan)
+
+    def test_makefile_assignment_handles_continuation(self):
+        source = "before\nDEFAULT_PACKAGES += first \\\n\tsecond \\\n\tthird\nafter\n"
+        self.assertEqual(firmware.assignment(source, "DEFAULT_PACKAGES", ["minimal"]), "before\nDEFAULT_PACKAGES += minimal\nafter\n")
+        with self.assertRaises(ValueError):
+            firmware.assignment("other := value\n", "DEFAULT_PACKAGES", [])
+
+    def test_missing_or_forbidden_packages_fail_validation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp)
+            (source / ".config").write_text(firmware.merge_config("phicomm-n1", "bypass"))
+            firmware.verify(source, "phicomm-n1", "bypass")
+            with (source / ".config").open("a") as output:
+                output.write("CONFIG_PACKAGE_luci-base=y\n")
+            with self.assertRaises(ValueError):
+                firmware.verify(source, "phicomm-n1", "bypass")
+            (source / ".config").write_text("CONFIG_TARGET_armsr=y\n")
+            with self.assertRaises(ValueError):
+                firmware.verify(source, "phicomm-n1", "bypass")
+
+    def test_web_permissions_are_read_only(self):
+        acl = json.loads((ROOT / "package/router-ui/files/router-ui.json").read_text(encoding="utf-8"))["router-ui"]
+        self.assertEqual(acl["write"]["ubus"], {"session": ["destroy"]})
+        self.assertNotIn("file", acl["read"]["ubus"])
+        self.assertNotIn("uci", acl["read"])
+        rpcd = (ROOT / "files/common/etc/config/rpcd").read_text(encoding="utf-8")
+        self.assertNotIn("'*'", rpcd)
+
+    def test_sources_and_feeds_use_fixed_revisions(self):
+        for device in firmware.DEVICES:
+            source = firmware.SOURCES[device]
+            self.assertRegex(source["revision"], r"^[a-f0-9]{40}$")
+            for feed in source["feeds"].values():
+                self.assertRegex(feed["revision"], r"^[a-f0-9]{40}$")
+        self.assertRegex(firmware.SOURCES["n1_packager"]["kernel_sha256"], r"^[a-f0-9]{64}$")
+
+    def test_packer_refuses_paths_outside_image(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with self.assertRaises(ValueError):
+                n1_packer.finalize(root / "packer", root / "overlay", root)
+            with self.assertRaises(ValueError):
+                n1_packer.bounded_remove(root / "image", root / "outside")
+
+    def test_n1_finalize_reapplies_overlay(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp) / "packer"
+            overlay = Path(temp) / "overlay"
+            rootfs = directory / "openwrt/tmp/6.12/s905d/rootfs"
+            rootfs.mkdir(parents=True)
+            firmware.overlay(overlay, "phicomm-n1", "bypass")
+            (rootfs / "lib/firmware/brcm").mkdir(parents=True)
+            (rootfs / "lib/firmware/rtl_nic").mkdir()
+            (rootfs / "lib/firmware/brcm/unused.bin").write_text("test")
+            n1_packer.finalize(directory, overlay, rootfs)
+            self.assertFalse((rootfs / "lib/firmware/brcm").exists())
+            self.assertTrue((rootfs / "lib/firmware/rtl_nic").is_dir())
+            self.assertEqual((rootfs / "etc/config/network").read_bytes(), (overlay / "etc/config/network").read_bytes())
+
+
+if __name__ == "__main__":
+    unittest.main()

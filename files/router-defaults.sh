@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+
+if [ "$(uci -q get router-lite.setup.initialized || true)" = '1' ]; then
+    exit 0
+fi
+
+uci set system.@system[0].hostname='@HOSTNAME@'
+uci set network.lan.ipaddr='@ADDRESS@'
+uci commit system
+uci commit network
+
+# 无线默认关闭，首次接入通过网线设置设备密码和无线参数。
+if [ -x /sbin/wifi ]; then
+    /sbin/wifi config
+fi
+if [ -f /etc/config/wireless ]; then
+    . /lib/functions.sh
+    disable_radio() {
+        uci set "wireless.$1.disabled=1"
+    }
+    config_load wireless
+    config_foreach disable_radio wifi-device
+    uci commit wireless
+fi
+
+uci set router-lite.setup.initialized='1'
+uci commit router-lite
+exit 0
