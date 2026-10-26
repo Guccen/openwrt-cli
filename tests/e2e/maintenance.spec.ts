@@ -36,3 +36,30 @@ test("exports a verified archive and cancels reboot without a write", async ({
     .toBe(true);
   await page.screenshot({ path: testInfo.outputPath("system-maintenance.png"), fullPage: true });
 });
+
+test("accepted reboot blocks configuration across page navigation", async ({ page }) => {
+  await loginPage(page);
+  await navigate(page, "系统维护");
+  // 此用例只验证页面互斥，不重启共享测试机；真实重启由独立运行时测试完成。
+  await page.route("**/ubus", async (route) => {
+    const body = route.request().postDataJSON();
+    if (body?.params?.[1] === "router.maintenance" && body.params[2] === "reboot")
+      await route.fulfill({
+        json: { jsonrpc: "2.0", id: body.id, result: [0, { ok: true, accepted: true }] },
+      });
+    else await route.continue();
+  });
+  await page.getByRole("button", { name: "重启设备", exact: true }).click();
+  await page.getByRole("button", { name: "确认重启", exact: true }).click();
+  await expect(
+    page.getByText("已发送重启请求，正在等待设备恢复连接…", { exact: true }),
+  ).toBeVisible();
+  await navigate(page, "LAN 设置");
+  await expect(page.getByLabel("LAN IPv4 地址", { exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "应用 LAN 设置", exact: true })).toBeDisabled();
+  await navigate(page, "系统维护");
+  await expect(
+    page.getByText("已发送重启请求，正在等待设备恢复连接…", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "导出系统配置", exact: true })).toBeDisabled();
+});

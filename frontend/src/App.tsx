@@ -1,18 +1,32 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Redirect, Route, Switch, useLocation, useSearch } from "wouter";
 import { DeviceLayout } from "@/components/layout/device-layout";
 import { loginPath, pageForPath, pageRoutes, returnPath } from "@/lib/routes";
 import { LoginPage } from "@/pages/login-page";
-import { OverviewPage } from "@/pages/overview-page";
-import { NetworkPage } from "@/pages/network-page";
-import { LanPage } from "@/pages/lan-page";
-import { DnsPage } from "@/pages/dns-page";
-import { WirelessPage } from "@/pages/wireless-page";
-import { BackupPage } from "@/pages/backup-page";
 import { NotFoundPage } from "@/pages/not-found-page";
-import { WirelessStatusPage } from "@/pages/wireless-status-page";
-import { SystemPage } from "@/pages/system-page";
+import { DeviceLoading } from "@/components/status/device-loading";
 import { useRouter } from "@/stores/router";
+
+const OverviewPage = lazy(() =>
+  import("@/pages/overview-page").then((page) => ({ default: page.OverviewPage })),
+);
+const NetworkPage = lazy(() =>
+  import("@/pages/network-page").then((page) => ({ default: page.NetworkPage })),
+);
+const LanPage = lazy(() => import("@/pages/lan-page").then((page) => ({ default: page.LanPage })));
+const DnsPage = lazy(() => import("@/pages/dns-page").then((page) => ({ default: page.DnsPage })));
+const WirelessPage = lazy(() =>
+  import("@/pages/wireless-page").then((page) => ({ default: page.WirelessPage })),
+);
+const BackupPage = lazy(() =>
+  import("@/pages/backup-page").then((page) => ({ default: page.BackupPage })),
+);
+const WirelessStatusPage = lazy(() =>
+  import("@/pages/wireless-status-page").then((page) => ({ default: page.WirelessStatusPage })),
+);
+const SystemPage = lazy(() =>
+  import("@/pages/system-page").then((page) => ({ default: page.SystemPage })),
+);
 
 export function App() {
   const session = useRouter((state) => state.session);
@@ -47,19 +61,21 @@ export function App() {
     return <Redirect key={pageRoutes[page].path} replace to={pageRoutes[page].path} />;
   return (
     <DeviceLayout>
-      <Switch>
-        <Route path={pageRoutes.overview.path} component={OverviewPage} />
-        <Route path={pageRoutes.network.path} component={NetworkPage} />
-        <Route path={pageRoutes.wirelessStatus.path} component={WirelessStatusPage} />
-        <Route path={pageRoutes.lan.path} component={LanPage} />
-        <Route path={pageRoutes.dns.path} component={DnsPage} />
-        <Route path={pageRoutes.wireless.path} component={WirelessPage} />
-        <Route path={pageRoutes.backup.path} component={BackupPage} />
-        <Route path={pageRoutes.system.path} component={SystemPage} />
-        <Route>
-          <NotFoundPage />
-        </Route>
-      </Switch>
+      <Suspense fallback={<DeviceLoading />}>
+        <Switch>
+          <Route path={pageRoutes.overview.path} component={OverviewPage} />
+          <Route path={pageRoutes.network.path} component={NetworkPage} />
+          <Route path={pageRoutes.wirelessStatus.path} component={WirelessStatusPage} />
+          <Route path={pageRoutes.lan.path} component={LanPage} />
+          <Route path={pageRoutes.dns.path} component={DnsPage} />
+          <Route path={pageRoutes.wireless.path} component={WirelessPage} />
+          <Route path={pageRoutes.backup.path} component={BackupPage} />
+          <Route path={pageRoutes.system.path} component={SystemPage} />
+          <Route>
+            <NotFoundPage />
+          </Route>
+        </Switch>
+      </Suspense>
     </DeviceLayout>
   );
 }

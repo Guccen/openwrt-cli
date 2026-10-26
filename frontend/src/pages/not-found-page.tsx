@@ -11,7 +11,7 @@ export function NotFoundPage({
   return (
     <Alert>
       <AlertDescription className="flex flex-wrap items-center gap-3">
-        {message}
+        <span>{message}</span>
         <Button variant="outline" size="sm" asChild>
           <Link href={pageRoutes.overview.path}>返回概览</Link>
         </Button>

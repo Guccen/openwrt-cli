@@ -69,7 +69,7 @@ bun run dev
 | `/settings/backup/`   | 网络设置备份与恢复  |
 | `/system/`            | 系统配置导出与重启  |
 
-使用 wouter 的 History 路由，侧栏为真实链接，支持前进、后退和直接访问。未登录访问页面时跳到登录页，登录后回到原地址；会话仍只保存在内存中，刷新后重新登录并返回当前页面。登录返回地址限制为已知页面。N1 不显示无线菜单，手动访问无线地址也不会开放配置表单。
+使用 wouter 的 History 路由，侧栏为真实链接，支持前进、后退和直接访问。管理页按路由延迟加载，共用布局和状态组件，打开页面时再加载对应代码。未登录访问页面时跳到登录页，登录后回到原地址；会话仍只保存在内存中，刷新后重新登录并返回当前页面。登录返回地址限制为已知页面。N1 不显示无线菜单，手动访问无线地址也不会开放配置表单。
 
 `App.tsx` 只负责登录判断和路由；`pages/` 保存各页面入口；`components/layout/` 保存主布局、标题和页脚；`components/overview/` 与 `components/network/` 保存状态组件；`components/settings/` 分别保存 LAN、DNS、无线、备份表单及共用的应用确认组件。路径和标题统一在 `lib/routes.ts` 维护。
 
@@ -79,7 +79,7 @@ bun run dev
 
 首次推送后，在 GitHub Actions 运行“Build lightweight firmware”。`device` 选择 `both` 或单台设备，`n1_role` 选择 `bypass` 或 `router`，`n1_wan` 默认 `eth1`，不可与 LAN 的 `eth0` 相同。`publish` 默认关闭，启用后创建包含设备、模式、运行编号的独立 Release。
 
-两台设备使用独立 Ubuntu 24.04 任务，先做检查再编译。始终保留 Artifact，不依赖 Release 发布成功。只缓存下载文件，不混用工具链。产物包含固件、独立前端包、最终配置、版本锁定、源码补丁、体积报告和 SHA-256。
+两台设备使用独立 Ubuntu 24.04 任务，先做检查再编译。始终保留 Artifact，不依赖 Release 发布成功。只缓存下载文件，不混用工具链。产物包含固件、独立前端包、最终配置、版本锁定、源码补丁、体积报告和 SHA-256。N1 明确选择 generic 设备的根文件系统并核对归档内标识；目标目录清单保存在 `target-files.json`。构建失败时额外保留已有根文件系统和 APK，避免因产物收集错误丢失编译结果。
 
 `Verify firmware configurations` 独立检查 AX1800、N1 主路由和 N1 旁路由：下载固定源码和 feeds，核对实际 Git 提交，执行 `make defconfig`，验证目标单选、必要包和轻量限制。配置相关变更自动触发，也可手动运行；无需等待 QEMU 或完整固件编译。`configuration-设备-模式` Artifact 保留解析配置、实际提交和日志。完整编译复用同一配置脚本。
 

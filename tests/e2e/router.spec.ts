@@ -102,9 +102,11 @@ test("real ubus login, permissions, interfaces and session invalidation", async 
       });
       expect(access.result).toEqual([0, { access: false }]);
     }
-    const wireless = await rpc(request, session, "network.wireless", "status");
-    expect(wireless.result[0]).toBe(0);
-    expect(typeof wireless.result[1]).toBe("object");
+    if (process.env.SIM_DEVICE === "jdcloud-ax1800") {
+      const wireless = await rpc(request, session, "network.wireless", "status");
+      expect(wireless.result?.[0], JSON.stringify(wireless.error)).toBe(0);
+      expect(typeof wireless.result[1]).toBe("object");
+    }
     const maintenance = await rpc(request, session, "router.maintenance", "status");
     expect(maintenance.result[1]).toMatchObject({ ok: true, operationBusy: false });
     for (const method of ["info", "assoclist"]) {
@@ -342,9 +344,10 @@ test("wireless runtime status refreshes on demand and stays unavailable on N1", 
     return;
   }
   await navigate(page, "无线状态");
+  await expect.poll(() => reads).toBeGreaterThan(0);
   await expect(page.getByRole("button", { name: "刷新", exact: true })).toBeEnabled();
-  expect(reads).toBeGreaterThan(0);
   const initial = reads;
+  await expect(page.getByRole("alert")).toHaveCount(0);
   await page.getByRole("button", { name: "刷新", exact: true }).click();
   await expect.poll(() => reads).toBe(initial + 1);
   await expect(page.getByRole("button", { name: "刷新", exact: true })).toBeEnabled();

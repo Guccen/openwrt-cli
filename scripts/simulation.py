@@ -169,10 +169,12 @@ def network_down():
         subprocess.run(["sudo", *command], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def build_image(role):
+def build_image(role, device):
     imagebuilder = ROOT / "build/simulation-tools/imagebuilder"
     # 官方仓库没有 fork 中的 px5g-openssl，测试系统使用 uhttpd 原生 OpenSSL 回退。
     packages = "uhttpd uhttpd-mod-ubus rpcd jsonfilter ucode ucode-mod-fs rpcd-mod-iwinfo libustream-openssl openssl-util ca-bundle -luci -luci-light -luci-ssl -wpad-basic-mbedtls -libustream-mbedtls -libustream-wolfssl"
+    if device == "jdcloud-ax1800":
+        packages += " wifi-scripts"
     if role == "bypass":
         packages += " -ppp -ppp-mod-pppoe -odhcp6c -odhcpd-ipv6only"
     with (REPORT / "imagebuilder.log").open("w") as log:
@@ -294,7 +296,7 @@ def main():
         metadata = prepare_overlay(args.device, args.role)
         address = metadata["address"]
         network_preflight(address)
-        kernel, disk = build_image(args.role)
+        kernel, disk = build_image(args.role, args.device)
         network_created = True
         network_up(address)
         wan_directory = WORK / "wan"
@@ -325,8 +327,8 @@ def main():
         test_network(args.role, address)
         run("python3", ROOT / "tests/runtime/configuration.py", "--address", address)
         env = dict(os.environ, SIM_BASE_URL=f"https://{address}", SIM_DEVICE=args.device, SIM_ROLE=args.role, SIM_ADDRESS=address)
-        run("bun", "run", "test:e2e", env=env)
         run("python3", ROOT / "tests/runtime/maintenance.py", env=env)
+        run("bun", "run", "test:e2e", env=env)
         success = True
     finally:
         if processes:
