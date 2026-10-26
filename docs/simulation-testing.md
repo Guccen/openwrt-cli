@@ -8,6 +8,10 @@
 
 普通 push / pull request 只自动执行快速代码检查，同分支新提交会取消尚未结束的旧检查。先在本地验证并集中推送，按需要手动运行固件配置、QEMU 模拟或完整固件构建；不再每次提交重复运行耗时任务。
 
+## QEMU 启动检查
+
+`simulate.sh` 在下载 ImageBuilder、生成镜像前执行 [qemu_host.py](../scripts/qemu_host.py)，用空 ROM 搜索目录检查 ARM64 TCG、VirtIO 磁盘、双网卡和随机数设备能否创建。测试直接通过 `-kernel` 启动，两张网卡都显式设置 `romfile=` 关闭 PXE ROM，避免精简安装依赖时因缺少 `efi-virtio.rom` 而退出。正式启动使用相同网卡参数；提前退出时会把 QEMU 错误直接写入任务日志。
+
 ## 覆盖范围
 
 每次分别测试 AX1800 主路由、N1 旁路由、N1 主路由三种配置：

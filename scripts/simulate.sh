@@ -7,6 +7,7 @@ DEVICE=${1:?Usage: simulate.sh DEVICE ROLE PACKAGE.apk}
 ROLE=${2:?Missing role}
 PACKAGE=${3:?Missing package}
 [[ "$PACKAGE" == *.apk && -s "$PACKAGE" ]] || { echo 'An OpenWrt 25.12 router-ui APK is required'; exit 1; }
+python3 scripts/qemu_host.py
 if [[ ! -d build/simulation-tools/imagebuilder ]]; then
     python3 scripts/simulation-tools.py imagebuilder
 fi

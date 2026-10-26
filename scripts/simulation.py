@@ -15,6 +15,7 @@ import urllib.request
 from pathlib import Path
 
 import firmware
+from qemu_host import network_device
 
 ROOT = firmware.ROOT
 REPORT = ROOT / "build/simulation-report"
@@ -83,7 +84,8 @@ def wait_for_guest(address, process, previous_boot=None):
     deadline = time.monotonic() + 240
     while time.monotonic() < deadline:
         if process.poll() is not None:
-            raise RuntimeError("QEMU 提前退出，请查看 qemu.log 和 console.log")
+            details = (REPORT / "qemu.log").read_text(encoding="utf-8", errors="replace").strip()
+            raise RuntimeError(f"QEMU 提前退出（{process.returncode}）：{details[:2000]}")
         try:
             command = "test \"$(uci -q get router-lite.setup.initialized)\" = 1 && ubus list system"
             if previous_boot:
@@ -325,8 +327,8 @@ def main():
             "qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a53", "-accel", "tcg", "-m", "512", "-smp", "2", "-display", "none", "-monitor", "none", "-serial", f"file:{REPORT / 'console.log'}",
             "-kernel", str(kernel), "-append", "root=/dev/vda rootwait console=ttyAMA0,115200",
             "-drive", f"file={disk},format=raw,if=virtio",
-            "-netdev", f"tap,id=lan,ifname={TAP},script=no,downscript=no", "-device", "virtio-net-pci,netdev=lan,mac=52:54:00:12:34:01",
-            "-netdev", "user,id=wan,net=10.0.2.0/24", "-device", "virtio-net-pci,netdev=wan,mac=52:54:00:12:34:02",
+            "-netdev", f"tap,id=lan,ifname={TAP},script=no,downscript=no", "-device", network_device("lan", "52:54:00:12:34:01"),
+            "-netdev", "user,id=wan,net=10.0.2.0/24", "-device", network_device("wan", "52:54:00:12:34:02"),
             "-object", "rng-random,filename=/dev/urandom,id=rng0", "-device", "virtio-rng-pci,rng=rng0",
         ], stdin=subprocess.DEVNULL, stdout=qemu_log, stderr=subprocess.STDOUT)
         processes.append(process)
