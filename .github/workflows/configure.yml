@@ -1,0 +1,78 @@
+name: Verify firmware configurations
+
+on:
+  push:
+    paths:
+      - configs/**
+      - files/**
+      - package/router-ui/**
+      - scripts/firmware.py
+      - scripts/configure-firmware.sh
+      - scripts/build-firmware.sh
+      - .github/workflows/configure.yml
+      - .github/workflows/build.yml
+  pull_request:
+    paths:
+      - configs/**
+      - files/**
+      - package/router-ui/**
+      - scripts/firmware.py
+      - scripts/configure-firmware.sh
+      - scripts/build-firmware.sh
+      - .github/workflows/configure.yml
+      - .github/workflows/build.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  configure:
+    name: Configure ${{ matrix.device }} ${{ matrix.role }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: jdcloud-ax1800
+            role: router
+          - device: phicomm-n1
+            role: bypass
+          - device: phicomm-n1
+            role: router
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.0
+      - name: Install configuration prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison gawk gettext git \
+            libncurses-dev libssl-dev python3 python3-setuptools rsync swig unzip zlib1g-dev file wget curl
+      - name: Build static frontend package
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+      - name: Resolve pinned firmware configuration
+        shell: bash
+        env:
+          DEVICE: ${{ matrix.device }}
+          ROLE: ${{ matrix.role }}
+        run: |
+          mkdir -p build/artifacts
+          bash scripts/configure-firmware.sh "$DEVICE" "$ROLE" eth1 2>&1 | tee build/artifacts/configure.log
+      - name: Upload resolved configuration and source revisions
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: configuration-${{ matrix.device }}-${{ matrix.role }}
+          path: |
+            build/artifacts/
+            build/openwrt/.config
+            build/openwrt/logs/
+          retention-days: 14
+          if-no-files-found: warn

@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -105,6 +106,9 @@ exit 0
                 output.write("CONFIG_PACKAGE_luci-base=y\n")
             with self.assertRaises(ValueError):
                 firmware.verify(source, "phicomm-n1", "bypass")
+            (source / ".config").write_text(firmware.merge_config("phicomm-n1", "bypass") + "CONFIG_TARGET_armsr_armv8_DEVICE_other=y\n")
+            with self.assertRaises(ValueError):
+                firmware.verify(source, "phicomm-n1", "bypass")
             (source / ".config").write_text("CONFIG_TARGET_armsr=y\n")
             with self.assertRaises(ValueError):
                 firmware.verify(source, "phicomm-n1", "bypass")
@@ -128,6 +132,24 @@ exit 0
             for feed in source["feeds"].values():
                 self.assertRegex(feed["revision"], r"^[a-f0-9]{40}$")
         self.assertRegex(firmware.SOURCES["n1_packager"]["kernel_sha256"], r"^[a-f0-9]{64}$")
+
+    def test_resolved_revisions_reject_feed_drift(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp)
+            feed = source / "feeds/packages"
+            feed.mkdir(parents=True)
+            revisions = []
+            for repository in (source, feed):
+                subprocess.run(["git", "init", "-q", str(repository)], check=True, capture_output=True)
+                subprocess.run(["git", "-C", str(repository), "-c", "user.name=Firmware Test", "-c", "user.email=firmware-test@example.invalid", "commit", "-q", "--allow-empty", "-m", "Pinned input"], check=True, capture_output=True)
+                revisions.append(subprocess.check_output(["git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip())
+            sources = {"phicomm-n1": {"revision": revisions[0], "feeds": {"packages": {"revision": revisions[1]}}}}
+            with patch.object(firmware, "SOURCES", sources):
+                firmware.verify_revisions(source, "phicomm-n1")
+                self.assertEqual(json.loads((source / "resolved-sources.json").read_text()), {"source": revisions[0], "packages": revisions[1]})
+                subprocess.run(["git", "-C", str(feed), "-c", "user.name=Firmware Test", "-c", "user.email=firmware-test@example.invalid", "commit", "-q", "--allow-empty", "-m", "Unexpected feed update"], check=True, capture_output=True)
+                with self.assertRaisesRegex(ValueError, "packages"):
+                    firmware.verify_revisions(source, "phicomm-n1")
 
     def test_packer_refuses_paths_outside_image(self):
         with tempfile.TemporaryDirectory() as temp:

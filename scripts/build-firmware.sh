@@ -9,18 +9,10 @@ SOURCE="$ROOT/build/openwrt"
 ARTIFACTS="$ROOT/build/artifacts"
 mkdir -p "$ARTIFACTS"
 
-python3 "$ROOT/scripts/firmware.py" fetch --device "$DEVICE" --role "$ROLE" --wan "$WAN" --source "$SOURCE"
-python3 "$ROOT/scripts/firmware.py" prepare --device "$DEVICE" --role "$ROLE" --wan "$WAN" --source "$SOURCE"
+bash "$ROOT/scripts/configure-firmware.sh" "$DEVICE" "$ROLE" "$WAN" 2>&1 | tee "$ARTIFACTS/configure.log"
 mkdir -p "$ROOT/build/downloads"
 ln -s "$ROOT/build/downloads" "$SOURCE/dl"
 cd "$SOURCE"
-./scripts/feeds update -a
-./scripts/feeds install -a
-make defconfig
-python3 "$ROOT/scripts/firmware.py" verify --device "$DEVICE" --role "$ROLE" --source "$SOURCE"
-cp .config "$ARTIFACTS/build.config"
-cp build-inputs.json "$ARTIFACTS/build-inputs.json"
-git diff -- include/target.mk target/linux feeds.conf.default > "$ARTIFACTS/source-changes.patch"
 
 make download -j4 2>&1 | tee "$ARTIFACTS/download.log"
 make -j"${BUILD_JOBS:-4}" 2>&1 | tee "$ARTIFACTS/build.log" || make -j1 V=s 2>&1 | tee -a "$ARTIFACTS/build.log"

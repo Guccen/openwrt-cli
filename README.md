@@ -61,6 +61,8 @@ bun run dev
 
 两台设备使用独立 Ubuntu 24.04 任务，先做检查再编译。始终保留 Artifact，不依赖 Release 发布成功。只缓存下载文件，不混用工具链。产物包含固件、独立前端包、最终配置、版本锁定、源码补丁、体积报告和 SHA-256。
 
+`Verify firmware configurations` 独立检查 AX1800、N1 主路由和 N1 旁路由：下载固定源码和 feeds，核对实际 Git 提交，执行 `make defconfig`，验证目标单选、必要包和轻量限制。配置相关变更自动触发，也可手动运行；无需等待 QEMU 或完整固件编译。`configuration-设备-模式` Artifact 保留解析配置、实际提交和日志。完整编译复用同一配置脚本。
+
 N1 启动镜像是 `phicomm-n1-模式-k版本.img.gz`。通用 `rootfs.tar.gz` 仅用于再次打包，不能直接刷入 N1。
 
 Linux 构建与 CI 使用相同脚本，依赖列表见 `.github/workflows/build.yml`。各设备和模式使用独立的干净 checkout：
@@ -68,6 +70,9 @@ Linux 构建与 CI 使用相同脚本，依赖列表见 `.github/workflows/build
 ```sh
 bun install --frozen-lockfile
 bun run build
+# 仅解析并检查配置，不下载工具链或编译固件
+bash scripts/configure-firmware.sh jdcloud-ax1800 router
+# 完整编译使用另一个干净 checkout
 # AX1800
 bash scripts/build-firmware.sh jdcloud-ax1800 router
 # N1 旁路由（另一个干净 checkout）
@@ -121,7 +126,7 @@ bash scripts/simulate.sh phicomm-n1 bypass build/simulation-package/router-ui.ap
 2. 网线接入 LAN，N1 主路由额外连接 USB WAN。
 3. 通过 SSH 登录，例如 `ssh root@192.168.68.1`，执行 `passwd` 设置自己的 root 密码。仓库不写入固定密码。
 4. 打开对应地址的 HTTPS 页面。证书由设备生成，首次访问由用户自行确认设备证书。
-5. AX1800 无线默认关闭，通过 SSH 设置自己的 SSID、加密与密码后启用。N1 首版不启用无线。
+5. AX1800 无线默认关闭，在“无线设置”填写自己的 SSID、加密与密码后启用，也可通过 SSH 配置。N1 首版不启用无线。
 
 初始化状态保存在 UCI 配置，保留配置升级不会再次关闭无线或重置 LAN 地址。切换设备或 N1 模式时不要沿用旧配置。
 

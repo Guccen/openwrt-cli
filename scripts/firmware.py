@@ -185,6 +185,19 @@ def prepare(source, device, role, wan):
     (source / "build-inputs.json").write_text(json.dumps({"device": metadata, "sources": config, "n1_packager": SOURCES["n1_packager"] if device == "phicomm-n1" else None}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def verify_revisions(source, device):
+    expected = SOURCES[device]
+    revisions = {"source": (source, expected["revision"])}
+    revisions.update({name: (source / "feeds" / name, feed["revision"]) for name, feed in expected["feeds"].items()})
+    resolved = {}
+    for name, (directory, revision) in revisions.items():
+        actual = subprocess.run(["git", "-C", str(directory), "rev-parse", "--verify", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+        if actual != revision:
+            raise ValueError(f"源码提交不匹配：{name}，预期 {revision}，实际 {actual}")
+        resolved[name] = actual
+    (source / "resolved-sources.json").write_text(json.dumps(resolved, indent=2) + "\n", encoding="utf-8")
+
+
 def verify(source, device, role):
     config = dict(re.findall(r"^(CONFIG_[^=\s]+)=(.+)$", (source / ".config").read_text(encoding="utf-8"), re.M))
     required = ["base-files", "busybox", "procd", "netifd", "logd", "uci", "router-ui", "dropbear", "dnsmasq", "firewall4", "rpcd", "uhttpd", "uhttpd-mod-ubus", "px5g-openssl", "libustream-openssl"]
@@ -199,14 +212,15 @@ def verify(source, device, role):
         required += ROUTING
     missing = [name for name in required if config.get(f"CONFIG_PACKAGE_{name}") != "y"]
     forbidden = [name.removeprefix("CONFIG_PACKAGE_") for name, value in config.items() if value in ("y", "m") and name.startswith("CONFIG_PACKAGE_") and name.removeprefix("CONFIG_PACKAGE_").startswith(FORBIDDEN)]
-    if config.get(target) != "y" or missing or forbidden:
-        raise ValueError(f"配置校验失败：目标={config.get(target)}，缺少={missing}，多余={forbidden}")
+    selected = [name for name, value in config.items() if value == "y" and re.fullmatch(r"CONFIG_TARGET_.+_DEVICE_.+", name)]
+    if selected != [target] or missing or forbidden:
+        raise ValueError(f"配置校验失败：目标={selected}，缺少={missing}，多余={forbidden}")
     print(f"配置通过：{device} / {role}；已选择 {sum(name.startswith('CONFIG_PACKAGE_') and value == 'y' for name, value in config.items())} 个内置包")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("fetch", "prepare", "verify", "overlay"))
+    parser.add_argument("command", choices=("fetch", "prepare", "verify", "verify-revisions", "overlay"))
     parser.add_argument("--device", choices=DEVICES, required=True)
     parser.add_argument("--role", choices=("router", "bypass"), default="router")
     parser.add_argument("--wan", default="eth1")
@@ -220,6 +234,8 @@ def main():
         prepare(source, args.device, args.role, args.wan)
     elif args.command == "verify":
         verify(source, args.device, args.role)
+    elif args.command == "verify-revisions":
+        verify_revisions(source, args.device)
     else:
         overlay(source, args.device, args.role, args.wan)
 
