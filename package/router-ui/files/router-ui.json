@@ -1,17 +1,21 @@
 {
   "router-ui": {
-    "description": "读取系统、网络与当前会话权限，并退出当前会话",
+    "description": "设备状态、LAN、DNS 与无线设置，以及应用确认和回滚",
     "read": {
       "ubus": {
         "system": ["board", "info"],
         "network.interface": ["dump"],
-        "session": ["access"]
-      }
+        "session": ["access"],
+        "uci": ["get", "changes"]
+      },
+      "uci": ["network", "dhcp", "wireless"]
     },
     "write": {
       "ubus": {
-        "session": ["destroy"]
-      }
+        "session": ["destroy"],
+        "uci": ["set", "delete", "revert", "apply", "confirm", "rollback"]
+      },
+      "uci": ["network", "dhcp", "wireless"]
     }
   }
 }

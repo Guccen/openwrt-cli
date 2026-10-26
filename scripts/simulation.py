@@ -40,6 +40,23 @@ def prepare_overlay(device, role):
     dropbear.mkdir(parents=True, exist_ok=True)
     run("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", WORK / "ssh-key")
     shutil.copyfile(WORK / "ssh-key.pub", dropbear / "authorized_keys")
+    if device == "jdcloud-ax1800":
+        # 只验证无线 UCI 表单与应用协议；虚拟机没有 AX1800 的射频硬件。
+        (overlay / "etc/config/wireless").write_text("""config wifi-device 'radio0'
+    option type 'mac80211'
+    option path 'platform/ci-configuration-fixture'
+    option band '2g'
+    option channel '1'
+    option disabled '1'
+
+config wifi-iface 'default_radio0'
+    option device 'radio0'
+    option network 'lan'
+    option mode 'ap'
+    option encryption 'none'
+    option ssid 'CI configuration fixture'
+    option disabled '1'
+""", encoding="utf-8")
     return metadata
 
 
@@ -78,6 +95,29 @@ def wait_for_https(address):
             pass
         time.sleep(1)
     raise TimeoutError("OpenWrt HTTPS 服务启动超时")
+
+
+def wait_for_network_services(address, role):
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        try:
+            services = json.loads(ssh(address, "ubus call service list '{\"name\":\"dnsmasq\"}'", capture_output=True, timeout=8).stdout)
+            instances = services.get("dnsmasq", {}).get("instances", {}).values()
+            if not any(instance.get("running") for instance in instances):
+                time.sleep(1)
+                continue
+            if role == "router":
+                wan = json.loads(ssh(address, "ubus call network.interface.wan status", capture_output=True, timeout=8).stdout)
+                if not wan.get("up"):
+                    time.sleep(1)
+                    continue
+                # dnsmasq 第一次可能只启动 DNS，LAN/WAN 稳定后才重载为 DHCP 服务。
+                ssh(address, "logread | grep -F 'DHCP, IP range ' >/dev/null", capture_output=True, timeout=8)
+            return
+        except (subprocess.SubprocessError, ValueError, OSError):
+            pass
+        time.sleep(1)
+    raise TimeoutError("DNS/DHCP 服务在启动后未就绪，请查看 system.log")
 
 
 def network_preflight(address):
@@ -279,7 +319,9 @@ def main():
         wait_for_guest(address, process, boot_id)
         wait_for_https(address)
         guest_policy(address, metadata)
+        wait_for_network_services(address, args.role)
         test_network(args.role, address)
+        run("python3", ROOT / "tests/runtime/configuration.py", "--address", address)
         env = dict(os.environ, SIM_BASE_URL=f"https://{address}", SIM_DEVICE=args.device, SIM_ROLE=args.role, SIM_ADDRESS=address)
         run("bun", "run", "test:e2e", env=env)
         success = True

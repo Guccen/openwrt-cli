@@ -1,4 +1,14 @@
-import { Activity, LogOut, Network, Router } from "lucide-react";
+import {
+  Activity,
+  Globe,
+  LogOut,
+  Network,
+  Router,
+  Settings2,
+  Wifi,
+  type LucideIcon,
+} from "lucide-react";
+import { useRouter } from "@/stores/router";
 import {
   Sidebar,
   SidebarContent,
@@ -16,22 +26,36 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-export type Page = "overview" | "network";
+export type Page = "overview" | "network" | "lan" | "dns" | "wireless";
+export const pageTitles: Record<Page, string> = {
+  overview: "系统概览",
+  network: "网络状态",
+  lan: "LAN 设置",
+  dns: "DNS 设置",
+  wireless: "无线设置",
+};
 
 export function DeviceSidebar({
   page,
   onNavigate,
   onLogout,
+  disabled = false,
 }: {
   page: Page;
   onNavigate: (page: Page) => void;
   onLogout: () => void;
+  disabled?: boolean;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
-  const items = [
+  const items: { id: Page; title: string; icon: LucideIcon }[] = [
     { id: "overview" as const, title: "系统概览", icon: Activity },
     { id: "network" as const, title: "网络状态", icon: Network },
+    { id: "lan" as const, title: "LAN 设置", icon: Settings2 },
+    { id: "dns" as const, title: "DNS 设置", icon: Globe },
   ];
+  const device = useRouter((state) => state.device);
+  if (device?.device === "jdcloud-ax1800")
+    items.push({ id: "wireless", title: "无线设置", icon: Wifi });
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="py-3">
@@ -85,6 +109,7 @@ export function DeviceSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton
               tooltip="退出登录"
+              disabled={disabled}
               onClick={() => {
                 setOpenMobile(false);
                 onLogout();

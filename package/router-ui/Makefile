@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=router-ui
-PKG_VERSION:=0.1.0
+PKG_VERSION:=0.2.0
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 
@@ -16,7 +16,7 @@ define Package/router-ui
 endef
 
 define Package/router-ui/description
-  提供登录、系统概览和网络状态，仅使用静态资源和受限的状态接口。
+  提供设备状态、LAN、DNS 和无线设置，使用受限接口并支持应用确认及超时回滚。
 endef
 
 define Build/Compile

@@ -21,7 +21,11 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { DeviceSidebar, type Page } from "@/components/device-sidebar";
+import { DeviceSidebar, pageTitles, type Page } from "@/components/device-sidebar";
+import { SettingsPage } from "@/components/settings-page";
+import { ApplyStatus } from "@/components/apply-status";
+import { registerApplyHandoff } from "@/lib/apply-handoff";
+import { useSettings } from "@/stores/settings";
 import {
   Table,
   TableBody,
@@ -156,6 +160,13 @@ export function App() {
     useRouter();
   const [password, setPassword] = useState("");
   const [page, setPage] = useState<Page>("overview");
+  const settings = useSettings();
+  const bindSettings = settings.bind;
+  const configurationPage = page === "lan" || page === "dns" || page === "wireless";
+  useEffect(() => registerApplyHandoff(), []);
+  useEffect(() => {
+    bindSettings(session);
+  }, [session, bindSettings]);
   useEffect(() => {
     void loadDevice();
   }, [loadDevice]);
@@ -223,7 +234,7 @@ export function App() {
           </Card>
           <p className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
             <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
-            首次使用请通过 SSH 设置 root 密码。此页面提供设备和网络状态查看。
+            首次使用请通过 SSH 设置 root 密码。网络设置应用后需确认连接，超时自动恢复。
           </p>
         </div>
       </main>
@@ -238,6 +249,7 @@ export function App() {
           onLogout={() => {
             void logout();
           }}
+          disabled={!!settings.pending || settings.loading}
         />
         <SidebarInset className="min-w-0">
           <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4 sm:px-6">
@@ -253,18 +265,19 @@ export function App() {
           <main className="mx-auto w-full max-w-6xl min-w-0 space-y-4 p-4 sm:p-6">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h1 className="text-base font-semibold">
-                  {page === "overview" ? "系统概览" : "网络状态"}
-                </h1>
+                <h1 className="text-base font-semibold">{pageTitles[page]}</h1>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {device?.model ?? snapshot?.board.model ?? "设备状态"}
                 </p>
               </div>
               <Button
                 variant="outline"
-                disabled={loading}
+                disabled={
+                  loading || settings.loading || !!settings.pending || !!settings.destination
+                }
                 onClick={() => {
-                  void refresh();
+                  if (configurationPage) void settings.load();
+                  else void refresh();
                 }}
               >
                 <RefreshCw className={loading ? "animate-spin" : ""} />
@@ -272,7 +285,10 @@ export function App() {
               </Button>
             </div>
             {message}
-            {snapshot ? (
+            <ApplyStatus />
+            {configurationPage ? (
+              <SettingsPage page={page} />
+            ) : snapshot ? (
               page === "overview" ? (
                 <Overview snapshot={snapshot} />
               ) : (
