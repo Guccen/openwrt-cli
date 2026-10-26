@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ErrorAlert } from "@/components/status/error-alert";
 import { useRouter } from "@/stores/router";
 import { maintenanceClient } from "@/stores/maintenance";
+import { useMaintenanceOperation } from "@/stores/maintenance-operation";
 
 export function SystemBackupCard({ disabled }: { disabled: boolean }) {
   const { session, device } = useRouter();
@@ -13,6 +14,8 @@ export function SystemBackupCard({ disabled }: { disabled: boolean }) {
   const [notice, setNotice] = useState<string | null>(null);
   async function download() {
     if (!session || disabled || busy) return;
+    const token = useMaintenanceOperation.getState().begin("backup");
+    if (!token) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -30,6 +33,7 @@ export function SystemBackupCard({ disabled }: { disabled: boolean }) {
       if (useRouter.getState().session === session)
         setError(e instanceof Error ? e.message : "系统备份失败");
     } finally {
+      useMaintenanceOperation.getState().finish(token);
       setBusy(false);
     }
   }

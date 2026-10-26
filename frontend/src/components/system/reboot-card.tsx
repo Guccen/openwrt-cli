@@ -19,12 +19,13 @@ import { loginPath, pageRoutes } from "@/lib/routes";
 import { RouterClient, RpcError } from "@/lib/rpc";
 import { useRouter } from "@/stores/router";
 import { maintenanceClient } from "@/stores/maintenance";
+import { useMaintenanceOperation } from "@/stores/maintenance-operation";
 
 const rpc = new RouterClient();
 export function RebootCard({ disabled }: { disabled: boolean }) {
   const session = useRouter((state) => state.session);
   const [open, setOpen] = useState(false);
-  const [waiting, setWaiting] = useState(false);
+  const waiting = useMaintenanceOperation((state) => state.kind === "reboot");
   const [expired, setExpired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -60,15 +61,17 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
   async function reboot() {
     setOpen(false);
     if (!session || disabled || waiting) return;
+    const token = useMaintenanceOperation.getState().begin("reboot");
+    if (!token) return;
     setError(null);
     try {
       await maintenanceClient.reboot(session);
-      if (useRouter.getState().session === session) setWaiting(true);
     } catch (e) {
       if (useRouter.getState().session !== session) return;
       setError(e instanceof Error ? e.message : "重启请求失败");
       // 响应可能在设备重启时丢失，不自动重发重启请求。
-      if (e instanceof RpcError && e.code === undefined) setWaiting(true);
+      if (!(e instanceof RpcError && e.code === undefined))
+        useMaintenanceOperation.getState().finish(token);
     }
   }
   return (

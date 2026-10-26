@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorAlert } from "@/components/status/error-alert";
 import { lanDraft, type ConfigPlan, type SettingsSnapshot } from "@/lib/settings";
 import { useSettings } from "@/stores/settings";
+import { useMaintenanceOperation } from "@/stores/maintenance-operation";
 import { ApplyReviewDialog } from "./apply-review-dialog";
 
 export interface SettingsFormProps {
@@ -31,6 +32,7 @@ export function SettingsSection({
     revision,
   } = useSettings();
   const [candidate, setCandidate] = useState<{ plan: ConfigPlan; revision: number } | null>(null);
+  const maintenance = useMaintenanceOperation((state) => state.kind);
   const [invalid, setInvalid] = useState<{ message: string; revision: number } | null>(null);
   const [initialRevision] = useState(revision);
   const ready = revision > initialRevision;
@@ -56,10 +58,15 @@ export function SettingsSection({
   } catch (e) {
     unsupported = e instanceof Error ? e.message : "无法读取配置";
   }
-  const disabled = loading || !!pending || staged || !!destination;
+  const disabled = loading || !!pending || staged || !!destination || !!maintenance;
   return (
     <div className="space-y-3">
       <ErrorAlert message={validation || error || unsupported} />
+      {maintenance && (
+        <Alert>
+          <AlertDescription>系统维护操作进行中，请等待完成后再修改设置。</AlertDescription>
+        </Alert>
+      )}
       {staged && !pending && (
         <Alert>
           <AlertDescription className="flex flex-wrap items-center gap-3">

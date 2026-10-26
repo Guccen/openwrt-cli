@@ -36,6 +36,7 @@ case "$1" in
                 directory=
                 archive=
                 trap '[ -z "$archive" ] || rm -f "$archive"; [ -z "$directory" ] || rmdir "$directory"; rmdir "$LOCK"' EXIT
+                trap 'exit 1' HUP INT TERM
                 busy_config && fail configuration_busy
                 directory=$(mktemp -d /tmp/router-ui-backup.XXXXXX) || fail backup_failed
                 archive="$directory/config.tar.gz"
@@ -46,9 +47,9 @@ case "$1" in
                 busy_config && fail configuration_busy
                 checksum=$(sha256sum "$archive")
                 checksum=${checksum%% *}
-                printf '{"ok":true,"size":%s,"sha256":"%s","data":"' "$size" "$checksum"
-                base64 "$archive" | tr -d '\n'
-                printf '"}\n'
+                # OpenWrt 默认未启用 BusyBox base64；复用 netifd 已依赖的 ucode。
+                encoded=$(ucode -e 'import { readfile } from "fs"; let data = readfile(ARGV[0], 131073); if (type(data) != "string" || length(data) > 131072) exit(1); print(b64enc(data));' "$archive") || fail backup_failed
+                printf '{"ok":true,"size":%s,"sha256":"%s","data":"%s"}\n' "$size" "$checksum" "$encoded"
                 ;;
             reboot)
                 confirmed=$(jsonfilter -e '@.confirm' 2>/dev/null) || fail confirmation_required

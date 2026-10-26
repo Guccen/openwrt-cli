@@ -200,7 +200,7 @@ def verify_revisions(source, device):
 
 def verify(source, device, role):
     config = dict(re.findall(r"^(CONFIG_[^=\s]+)=(.+)$", (source / ".config").read_text(encoding="utf-8"), re.M))
-    required = ["base-files", "busybox", "procd", "netifd", "logd", "uci", "router-ui", "dropbear", "dnsmasq", "firewall4", "rpcd", "uhttpd", "uhttpd-mod-ubus", "px5g-openssl", "libustream-openssl"]
+    required = ["base-files", "busybox", "procd", "netifd", "logd", "uci", "router-ui", "dropbear", "dnsmasq", "firewall4", "rpcd", "jsonfilter", "ucode", "ucode-mod-fs", "uhttpd", "uhttpd-mod-ubus", "px5g-openssl", "libustream-openssl"]
     if device == "jdcloud-ax1800":
         required += ["wpad-openssl", "rpcd-mod-iwinfo", "ath11k-firmware-ipq6018", "ipq-wifi-jdcloud_re-ss-01", "kmod-ath11k-ahb", "kmod-qca-nss-dp", "kmod-qca-nss-drv", "kmod-qca-nss-ecm", "nss-firmware-ipq60xx"]
         target = "CONFIG_TARGET_qualcommax_ipq60xx_DEVICE_jdcloud_re-ss-01"

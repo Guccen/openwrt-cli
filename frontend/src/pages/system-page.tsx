@@ -6,10 +6,12 @@ import { DeviceLoading } from "@/components/status/device-loading";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useMaintenance } from "@/stores/maintenance";
 import { useSettings } from "@/stores/settings";
+import { useMaintenanceOperation } from "@/stores/maintenance-operation";
 
 export function SystemPage() {
   const { session, load, snapshot, loading, error } = useMaintenance();
   const { pending, staged, loading: applying, destination } = useSettings();
+  const operation = useMaintenanceOperation((state) => state.kind);
   useEffect(() => {
     if (session) void load();
   }, [session, load]);
@@ -29,8 +31,8 @@ export function SystemPage() {
           <AlertDescription>请先完成或丢弃网络配置，等待其他维护操作结束后刷新。</AlertDescription>
         </Alert>
       )}
-      <SystemBackupCard disabled={!snapshot || loading || !!busy} />
-      <RebootCard disabled={!snapshot || loading || !!busy} />
+      <SystemBackupCard disabled={!snapshot || loading || !!busy || !!operation} />
+      <RebootCard disabled={!snapshot || loading || !!busy || !!operation} />
     </div>
   );
 }

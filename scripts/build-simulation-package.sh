@@ -11,7 +11,7 @@ cp -a build/router-ui "$SDK/package/router-ui"
 # 不拉取 LuCI 等额外 feeds，也不编译它们或重编整套固件。
 awk '$0 ~ /^src-git.* base / { print }' "$SDK/feeds.conf.default" > "$SDK/feeds.conf"
 test -s "$SDK/feeds.conf"
-(cd "$SDK" && ./scripts/feeds update -a && ./scripts/feeds install uhttpd rpcd jsonfilter)
+(cd "$SDK" && ./scripts/feeds update -a && ./scripts/feeds install uhttpd rpcd jsonfilter ucode)
 cat > "$SDK/.config" <<'EOF'
 # CONFIG_ALL is not set
 # CONFIG_ALL_KMODS is not set

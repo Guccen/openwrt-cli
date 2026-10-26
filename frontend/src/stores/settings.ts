@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useMaintenanceOperation } from "./maintenance-operation";
 import { APPLY_TIMEOUT, ConfigClient } from "../lib/config-client";
 import { RpcError } from "../lib/rpc";
 import {
@@ -109,6 +110,10 @@ export function createSettingsStore(client = new ConfigClient()) {
     apply: async (plan, origin) => {
       const { session, snapshot, pending, staged } = get();
       if (!session || !snapshot || pending || get().loading) return;
+      if (useMaintenanceOperation.getState().kind) {
+        set({ error: "系统维护操作进行中，请等待完成后再修改设置" });
+        return;
+      }
       if (!plan.edits.length) {
         set({ error: "没有需要应用的改动" });
         return;

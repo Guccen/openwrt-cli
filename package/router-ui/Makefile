@@ -12,7 +12,7 @@ define Package/router-ui
   SECTION:=admin
   CATEGORY:=Administration
   TITLE:=轻量设备管理页面
-  DEPENDS:=+uhttpd +uhttpd-mod-ubus +rpcd +jsonfilter
+  DEPENDS:=+uhttpd +uhttpd-mod-ubus +rpcd +jsonfilter +ucode +ucode-mod-fs
 endef
 
 define Package/router-ui/description
