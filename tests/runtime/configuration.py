@@ -27,10 +27,10 @@ class Api:
         self.context = ssl._create_unverified_context()
         self.sid = "0" * 32
 
-    def call(self, object_name, method, args=None):
+    def call(self, object_name, method, args=None, timeout=10):
         body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "call", "params": [self.sid, object_name, method, args or {}]}).encode()
         request = urllib.request.Request(f"https://{self.address}/ubus", data=body, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(request, context=self.context, timeout=10) as response:
+        with urllib.request.urlopen(request, context=self.context, timeout=timeout) as response:
             result = json.load(response)
         if result.get("error") or result.get("result", [None])[0] != 0:
             raise RpcFailure(f"{object_name}.{method}", result.get("error", {}).get("code") or result.get("result", [None])[0])

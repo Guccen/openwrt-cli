@@ -20,6 +20,7 @@ jobs:
         with:
           bun-version: 1.4.0
       - name: Install SDK prerequisites
+        timeout-minutes: 8
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential clang flex bison gawk gettext git \
@@ -73,6 +74,7 @@ jobs:
           name: simulation-package
           path: build/simulation-package
       - name: Install emulator and network test tools
+        timeout-minutes: 8
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential gawk libncurses-dev libssl-dev \
@@ -85,6 +87,7 @@ jobs:
           path: .cache/simulation-downloads
           key: simulation-imagebuilder-${{ hashFiles('configs/simulation.json') }}
       - name: Install browser test dependencies
+        timeout-minutes: 8
         run: |
           bun install --frozen-lockfile
           bun run build

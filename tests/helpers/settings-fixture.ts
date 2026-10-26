@@ -3,6 +3,12 @@ import type { SettingsSnapshot } from "../../frontend/src/lib/settings";
 export function settingsFixture(bypass = false): SettingsSnapshot {
   return {
     network: {
+      ...(!bypass
+        ? {
+            wan: { ".type": "interface", proto: "dhcp", device: "eth1" },
+            wan6: { ".type": "interface", proto: "dhcpv6", device: "@wan" },
+          }
+        : {}),
       lan: {
         ".type": "interface",
         proto: "static",

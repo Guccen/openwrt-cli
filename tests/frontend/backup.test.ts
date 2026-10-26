@@ -28,6 +28,42 @@ function encrypted() {
 }
 
 describe("本地网络备份", () => {
+  test("v2 恢复 LAN 与 DHCP 地址池，v1 备份保留当前地址池", () => {
+    const saved = settingsFixture();
+    Object.assign(saved.network.lan, { ipaddr: "192.168.70.1", netmask: "255.255.255.128" });
+    Object.assign(saved.dhcp.lan, { start: "50", limit: "30", leasetime: "30m" });
+    const backup = createBackup(saved, device),
+      current = settingsFixture();
+    expect(backup.version).toBe(2);
+    expect(backup.dhcp).toMatchObject({
+      start: "192.168.70.50",
+      end: "192.168.70.79",
+      lease: "30m",
+    });
+    const restored = restoreBackup(current, backup, device, []);
+    expect(restored.plan.edits).toContainEqual({
+      config: "dhcp",
+      section: "lan",
+      values: { start: "50", limit: "30", leasetime: "30m" },
+    });
+    expect(restored.changes.some((value) => value.label === "DHCP 地址分配")).toBe(true);
+    const { dhcp: _pool, ...previous } = createBackup(current, device);
+    const legacy = parseBackup(encode({ ...previous, version: 1 }), device);
+    current.dhcp.lan.start = "70";
+    expect(restoreBackup(current, legacy, device, []).plan.edits).toEqual([]);
+    expect(() => parseBackup(encode({ ...backup, version: 1 }), device)).toThrow("旧版");
+    expect(() =>
+      parseBackup(encode({ ...backup, dhcp: { ...backup.dhcp, commands: ["reboot"] } }), device),
+    ).toThrow("字段");
+    expect(() =>
+      restoreBackup(
+        current,
+        { ...backup, dhcp: { ...backup.dhcp!, start: "192.168.70.1" } },
+        device,
+        [],
+      ),
+    ).toThrow("路由器");
+  });
   test("同设备往返无改动，仅保存支持的字段和 WiFi 密钥", () => {
     const snapshot = encrypted();
     snapshot.network.wan = {

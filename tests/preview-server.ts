@@ -114,9 +114,17 @@ Bun.serve({
                     {
                       interface: "wan",
                       up: true,
-                      proto: "dhcp",
-                      device: "eth1",
-                      "ipv4-address": [{ address: "10.0.2.15", mask: 24 }],
+                      proto: String(committed.network.wan.proto),
+                      device: String(committed.network.wan.device),
+                      "ipv4-address": [
+                        {
+                          address:
+                            committed.network.wan.proto === "static"
+                              ? String(committed.network.wan.ipaddr)
+                              : "10.0.2.15",
+                          mask: 24,
+                        },
+                      ],
                     },
                   ]
                 : []),

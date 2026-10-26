@@ -11,7 +11,7 @@ config uhttpd 'main'
 	option ubus_prefix '/ubus'
 	option no_ubusauth '0'
 	option no_dirlists '1'
-	option script_timeout '15'
+	option script_timeout '30'
 	option network_timeout '20'
 	option http_keepalive '10'
 

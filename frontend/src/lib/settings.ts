@@ -1,9 +1,11 @@
 import type { NetworkInterface } from "./types";
+import { ipv4, maskPrefix, poolRange } from "./ipv4";
+export { ipv4, maskPrefix } from "./ipv4";
 
 export type ConfigName = "network" | "dhcp" | "wireless";
 export type UciSection = Record<string, string | string[] | number | boolean>;
 export type UciSections = Record<string, UciSection>;
-function hasControl(value: string) {
+export function hasControl(value: string) {
   return Array.from(value).some(
     (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
   );
@@ -39,20 +41,6 @@ export interface WifiDraft {
   hidden: boolean;
   hasPassword: boolean;
   editable: boolean;
-}
-
-export function ipv4(value: string): number | null {
-  const parts = value.split(".");
-  if (parts.length !== 4 || parts.some((part) => !/^(0|[1-9]\d{0,2})$/.test(part) || +part > 255))
-    return null;
-  return parts.reduce((total, part) => (total * 256 + +part) >>> 0, 0);
-}
-
-export function maskPrefix(value: string): number | null {
-  const mask = ipv4(value);
-  if (mask === null) return null;
-  const bits = mask.toString(2).padStart(32, "0");
-  return /^1+0*$/.test(bits) ? (bits.indexOf("0") === -1 ? 32 : bits.indexOf("0")) : null;
 }
 
 export function isDnsAddress(value: string) {
@@ -97,23 +85,48 @@ export function lanPlan(
   const prefix = maskPrefix(netmask);
   if (ip === null || ip >>> 24 === 0 || ip >>> 24 === 127 || ip >>> 24 >= 224)
     throw new Error("请输入有效的 LAN IPv4 地址");
-  if (mask === null || prefix === null || prefix < 8 || prefix > (bypass ? 30 : 24))
-    throw new Error(
-      bypass
-        ? "子网掩码需在 /8 至 /30 之间"
-        : "主路由子网掩码需在 /8 至 /24 之间，确保 DHCP 地址池可用",
-    );
+  if (mask === null || prefix === null || prefix < 8 || prefix > 30)
+    throw new Error("子网掩码需在 /8 至 /30 之间");
   const network = (ip & mask) >>> 0;
   const broadcast = (network | ~mask) >>> 0;
   if (ip === network || ip === broadcast) throw new Error("LAN 地址不能是网络地址或广播地址");
-  for (const item of interfaces.filter((item) => item.interface === "wan")) {
-    for (const wan of item["ipv4-address"] ?? []) {
-      const wanIp = ipv4(wan.address);
-      if (wanIp === null) continue;
-      const commonMask = (0xffffffff << (32 - Math.min(prefix, wan.mask))) >>> 0;
-      if ((ip & commonMask) >>> 0 === (wanIp & commonMask) >>> 0)
-        throw new Error("LAN 与 WAN 网段重叠，请选择其他网段");
+  if (!bypass) {
+    for (const [name, section] of Object.entries(snapshot.dhcp)) {
+      if (
+        section[".type"] !== "dhcp" ||
+        (section.interface !== "lan" && name !== "lan") ||
+        String(section.ignore ?? "0") === "1" ||
+        section.dhcpv4 === "disabled"
+      )
+        continue;
+      try {
+        poolRange(address, netmask, Number(section.start ?? 100), Number(section.limit ?? 150));
+      } catch (error) {
+        throw new Error(
+          `${error instanceof Error ? error.message : "地址池不正确"}；请先调整 DHCP 地址池，再修改 LAN。`,
+        );
+      }
     }
+  }
+  const wanAddresses = interfaces
+    .filter((item) => item.interface === "wan")
+    .flatMap((item) => item["ipv4-address"] ?? []);
+  const configuredWan = snapshot.network.wan;
+  if (
+    configuredWan?.proto === "static" &&
+    typeof configuredWan.ipaddr === "string" &&
+    typeof configuredWan.netmask === "string"
+  ) {
+    const configuredPrefix = maskPrefix(configuredWan.netmask);
+    if (configuredPrefix !== null)
+      wanAddresses.push({ address: configuredWan.ipaddr, mask: configuredPrefix });
+  }
+  for (const wan of wanAddresses) {
+    const wanIp = ipv4(wan.address);
+    if (wanIp === null) continue;
+    const commonMask = (0xffffffff << (32 - Math.min(prefix, wan.mask))) >>> 0;
+    if ((ip & commonMask) >>> 0 === (wanIp & commonMask) >>> 0)
+      throw new Error("LAN 与 WAN 网段重叠，请选择其他网段");
   }
   if (bypass) {
     const gw = ipv4(gateway);

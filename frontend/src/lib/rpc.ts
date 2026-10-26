@@ -22,14 +22,24 @@ export class RouterClient {
 
   constructor(private readonly http: AxiosInstance = axios.create({ timeout: 12000 })) {}
 
-  async call<T>(session: string, object: string, method: string, args: object = {}): Promise<T> {
+  async call<T>(
+    session: string,
+    object: string,
+    method: string,
+    args: object = {},
+    timeout?: number,
+  ): Promise<T> {
     try {
-      const { data } = await this.http.post("/ubus", {
-        jsonrpc: "2.0",
-        id: ++this.id,
-        method: "call",
-        params: [session, object, method, args],
-      });
+      const { data } = await this.http.post(
+        "/ubus",
+        {
+          jsonrpc: "2.0",
+          id: ++this.id,
+          method: "call",
+          params: [session, object, method, args],
+        },
+        timeout ? { timeout } : undefined,
+      );
       if (data?.error) {
         throw new RpcError("设备暂时无法完成请求", data.error.code);
       }

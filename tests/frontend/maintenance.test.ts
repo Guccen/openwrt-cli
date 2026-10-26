@@ -37,7 +37,7 @@ test("系统维护只使用固定 RPC，后端拒绝的事务不能当作操作�
   } as unknown as RouterClient;
   const client = new MaintenanceClient(rpc);
   await client.reboot("sid");
-  expect(calls[0]).toEqual(["sid", "router.maintenance", "reboot", { confirm: true }]);
+  expect(calls[0]).toEqual(["sid", "router.maintenance", "reboot", { confirm: true }, undefined]);
   await expect(client.backup("sid")).rejects.toThrow("待确认或暂存");
 });
 

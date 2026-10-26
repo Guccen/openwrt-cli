@@ -215,7 +215,7 @@ def install_package(address, package):
         ssh(address, "sha256sum -c -", input="\n".join(lines) + "\n", stdout=log, stderr=subprocess.STDOUT)
 
 
-def test_network(role, address):
+def test_network(role, address, expected_pool=None, report_name="network"):
     hook = WORK / "dhcp-hook.sh"
     hook.write_text("""#!/bin/sh
 set -eu
@@ -228,10 +228,11 @@ case "$1" in
 esac
 """, encoding="utf-8")
     hook.chmod(0o755)
-    with (REPORT / "dhcp.log").open("w") as log:
+    dhcp_log = "dhcp.log" if report_name == "network" else report_name + "-dhcp.log"
+    with (REPORT / dhcp_log).open("w") as log:
         result = subprocess.run(["sudo", "ip", "netns", "exec", NAMESPACE, "busybox", "udhcpc", "-i", "eth0", "-n", "-q", "-t", "4", "-T", "3", "-s", str(hook)], stdout=log, stderr=subprocess.STDOUT, timeout=35)
     if role == "bypass":
-        log = (REPORT / "dhcp.log").read_text()
+        log = (REPORT / dhcp_log).read_text()
         if result.returncode != 1 or "no lease, failing" not in log:
             raise AssertionError("旁路由应完成 DHCP 探测且收不到租约，请查看 dhcp.log")
         # 证明客户端连通性，防止因为虚拟链路断开而误判 DHCP 已关闭。
@@ -243,13 +244,15 @@ esac
     addresses = [item["local"] for link in data for item in link["addr_info"] if item["family"] == "inet"]
     if role == "router" and not any(value.startswith(address.rsplit(".", 1)[0] + ".") for value in addresses):
         raise AssertionError("DHCP 客户端没有取得正确 LAN 子网地址")
+    if expected_pool and not any(ipaddress.IPv4Address(expected_pool[0]) <= ipaddress.IPv4Address(value) <= ipaddress.IPv4Address(expected_pool[1]) for value in addresses):
+        raise AssertionError("DHCP 客户端取得的地址不在新地址池内")
     run("sudo", "ip", "netns", "exec", NAMESPACE, "curl", "--fail", "--silent", "--insecure", "--max-time", "15", f"https://{address}/device.json", stdout=subprocess.DEVNULL)
     if role == "router":
         # 10.0.2.2 是 QEMU WAN 侧宿主机，客户端只能经虚拟路由器的转发及 NAT 访问。
         result = run("sudo", "ip", "netns", "exec", NAMESPACE, "curl", "--fail", "--silent", "--max-time", "20", "http://10.0.2.2:18090/wan-marker", capture_output=True)
         if result.stdout != "router-ci-wan-ok\n":
             raise AssertionError("LAN 到 WAN 的 NAT 转发测试失败")
-    (REPORT / "network.json").write_text(json.dumps({"role": role, "client_addresses": addresses, "dhcp": "disabled" if role == "bypass" else "lease acquired", "lan_https": "passed", "wan_nat": "passed" if role == "router" else "not applicable"}, indent=2) + "\n")
+    (REPORT / (report_name + ".json")).write_text(json.dumps({"role": role, "client_addresses": addresses, "dhcp": "disabled" if role == "bypass" else "lease acquired", "lan_https": "passed", "wan_nat": "passed" if role == "router" else "not applicable"}, indent=2) + "\n")
 
 
 def guest_policy(address, metadata):
@@ -328,6 +331,7 @@ def main():
         run("python3", ROOT / "tests/runtime/configuration.py", "--address", address)
         env = dict(os.environ, SIM_BASE_URL=f"https://{address}", SIM_DEVICE=args.device, SIM_ROLE=args.role, SIM_ADDRESS=address)
         run("python3", ROOT / "tests/runtime/maintenance.py", env=env)
+        run("python3", ROOT / "tests/runtime/routing.py", env=env)
         run("bun", "run", "test:e2e", env=env)
         success = True
     finally:

@@ -11,6 +11,7 @@ import {
   type SettingsSnapshot,
 } from "./settings";
 import type { Device, NetworkInterface } from "./types";
+import { dhcpDraft, dhcpPlan, dhcpSection, type DhcpDraft } from "./dhcp-settings";
 
 export const BACKUP_LIMIT = 64 * 1024;
 interface WifiBackup {
@@ -24,7 +25,7 @@ interface WifiBackup {
 }
 export interface NetworkBackup {
   format: "router-ui-network";
-  version: 1;
+  version: 1 | 2;
   createdAt: string;
   device: Device["device"];
   role: Device["role"];
@@ -33,6 +34,7 @@ export interface NetworkBackup {
   dns: { servers: string[]; automatic: boolean };
   wireless: WifiBackup[];
   omittedWireless: string[];
+  dhcp?: DhcpDraft | null;
 }
 export interface RestoreChange {
   label: string;
@@ -121,11 +123,14 @@ export function parseBackup(input: string, target: Device): NetworkBackup {
       "dns",
       "wireless",
       "omittedWireless",
+      "dhcp",
     ],
     "备份",
   );
-  if (data.format !== "router-ui-network" || data.version !== 1)
+  if (data.format !== "router-ui-network" || ![1, 2].includes(data.version as number))
     throw new Error("不支持此备份格式或版本");
+  if (data.version === 1 && Object.hasOwn(data, "dhcp"))
+    throw new Error("旧版备份不能包含 DHCP 字段");
   if (data.device !== target.device || data.role !== target.role)
     throw new Error("备份的设备型号和主/旁路由模式必须与当前设备一致");
   const createdAt = text(data.createdAt, 64, "备份时间");
@@ -153,9 +158,23 @@ export function parseBackup(input: string, target: Device): NetworkBackup {
   if (new Set(wireless.map((radio) => radio.section)).size !== wireless.length)
     throw new Error("备份包含重复的无线接口");
   if (target.device === "phicomm-n1" && wireless.length) throw new Error("N1 备份不支持无线设置");
+  let dhcp: DhcpDraft | null = null;
+  if (data.version === 2) {
+    if (target.role === "bypass") {
+      if (data.dhcp !== null) throw new Error("旁路由备份不能包含 DHCP 服务配置");
+    } else {
+      const value = object(data.dhcp, ["enabled", "start", "end", "lease"], "DHCP 备份");
+      dhcp = {
+        enabled: flag(value.enabled, "DHCP 启用状态"),
+        start: text(value.start, 15, "DHCP 起始地址"),
+        end: text(value.end, 15, "DHCP 结束地址"),
+        lease: text(value.lease, 16, "DHCP 租期"),
+      };
+    }
+  }
   return {
     format: "router-ui-network",
-    version: 1,
+    version: data.version as 1 | 2,
     createdAt,
     device: target.device,
     role: target.role,
@@ -168,6 +187,7 @@ export function parseBackup(input: string, target: Device): NetworkBackup {
     dns: { servers, automatic },
     wireless,
     omittedWireless: data.omittedWireless.map(name),
+    ...(data.version === 2 ? { dhcp } : {}),
   };
 }
 
@@ -198,7 +218,7 @@ export function createBackup(snapshot: SettingsSnapshot, device: Device): Networ
   const backup = parseBackup(
     JSON.stringify({
       format: "router-ui-network",
-      version: 1,
+      version: 2,
       createdAt: new Date().toISOString(),
       device: device.device,
       role: device.role,
@@ -210,6 +230,7 @@ export function createBackup(snapshot: SettingsSnapshot, device: Device): Networ
       },
       wireless,
       omittedWireless,
+      dhcp: device.role === "router" ? dhcpDraft(snapshot) : null,
     }),
     device,
   );
@@ -225,9 +246,38 @@ export function restoreBackup(
 ) {
   // 再次校验，不能通过直接构造对象绕过文件校验。
   const backup = parseBackup(JSON.stringify(input), device);
-  const lan = lanPlan(snapshot, backup.lan, device.role === "bypass", interfaces);
-  const edits: ConfigEdit[] = [...lan.edits];
+  let dhcp: ConfigPlan | null = null;
+  let validationSnapshot = snapshot;
+  if (backup.dhcp) {
+    const projected = {
+      ...snapshot,
+      network: {
+        ...snapshot.network,
+        lan: { ...snapshot.network.lan, ipaddr: backup.lan.address, netmask: backup.lan.netmask },
+      },
+    };
+    dhcp = dhcpPlan(projected, backup.dhcp, device.role === "bypass");
+    // 地址池相对目标 LAN 子网计算，与 LAN 改址在同一个回滚事务中恢复。
+    const [section] = dhcpSection(snapshot);
+    validationSnapshot = {
+      ...snapshot,
+      dhcp: {
+        ...snapshot.dhcp,
+        [section]: { ...snapshot.dhcp[section], ...(dhcp.edits[0]?.values ?? {}) },
+      },
+    };
+  }
+  const lan = lanPlan(validationSnapshot, backup.lan, device.role === "bypass", interfaces);
+  const edits: ConfigEdit[] = [...lan.edits, ...(dhcp?.edits ?? [])];
   const changes: RestoreChange[] = [];
+  if (dhcp?.edits.length && backup.dhcp) {
+    const old = dhcpDraft(snapshot);
+    changes.push({
+      label: "DHCP 地址分配",
+      before: `${old.enabled ? "开启" : "关闭"} · ${old.start} — ${old.end} · ${old.lease}`,
+      after: `${backup.dhcp.enabled ? "开启" : "关闭"} · ${backup.dhcp.start} — ${backup.dhcp.end} · ${backup.dhcp.lease}`,
+    });
+  }
   if (lan.edits.length)
     changes.push({
       label: "LAN",

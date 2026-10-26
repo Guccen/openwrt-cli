@@ -16,7 +16,7 @@ from configuration import Api, RpcFailure, committed, wait_http
 
 
 def maintenance(api, method, args=None):
-    return api.call("router.maintenance", method, args)
+    return api.call("router.maintenance", method, args, timeout=30 if method == "backup" else 10)
 
 
 def expect_rejected(api, method, reason, args=None):

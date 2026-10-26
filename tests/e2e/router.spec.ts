@@ -255,7 +255,7 @@ test("AX1800 wireless form edits the disabled configuration fixture", async ({
   await confirmConnection(page);
 });
 
-test("network backup previews, rejects the wrong role and restores DNS with confirmation", async ({
+test("network backup previews, rejects the wrong role and restores DNS and DHCP with confirmation", async ({
   page,
 }, testInfo) => {
   // 真机读取比内存演示慢；新页面不能在旧快照上接受文件后被迟到的读取清空。
@@ -277,11 +277,14 @@ test("network backup previews, rejects the wrong role and restores DNS with conf
   const original = JSON.parse(await readFile(path, "utf8"));
   expect(original).toMatchObject({
     format: "router-ui-network",
-    version: 1,
+    version: 2,
     device: process.env.SIM_DEVICE,
     role: process.env.SIM_ROLE,
   });
   expect(original).not.toHaveProperty("password");
+  expect(original).not.toHaveProperty("wan");
+  if (process.env.SIM_ROLE === "bypass") expect(original.dhcp).toBeNull();
+  else expect(original.dhcp).toMatchObject({ enabled: true, lease: expect.any(String) });
   let writes = 0;
   page.on("request", (request) => {
     if (
@@ -305,7 +308,11 @@ test("network backup previews, rejects the wrong role and restores DNS with conf
   await upload(original);
   await expect(page.getByText("备份与当前设置一致，无需恢复。", { exact: true })).toBeVisible();
   const server = original.dns.servers?.[0] === "1.0.0.1" ? "9.9.9.9" : "1.0.0.1";
-  await upload({ ...original, dns: { servers: [server], automatic: false } });
+  const prefix = process.env.SIM_ADDRESS!.slice(0, process.env.SIM_ADDRESS!.lastIndexOf(".") + 1);
+  const dhcp = original.dhcp
+    ? { enabled: true, start: prefix + "50", end: prefix + "79", lease: "30m" }
+    : null;
+  await upload({ ...original, dhcp, dns: { servers: [server], automatic: false } });
   await expect(page.getByRole("cell", { name: server, exact: true })).toBeVisible();
   expect(writes).toBe(0);
   await page.screenshot({ path: testInfo.outputPath("backup-preview.png"), fullPage: true });
@@ -313,6 +320,12 @@ test("network backup previews, rejects the wrong role and restores DNS with conf
   await confirmConnection(page);
   await navigate(page, "DNS 设置");
   await expect(page.getByLabel("DNS 服务器", { exact: true })).toHaveValue(server);
+  if (dhcp) {
+    await navigate(page, "DHCP 设置");
+    await expect(page.getByLabel("DHCP 起始地址", { exact: true })).toHaveValue(dhcp.start);
+    await expect(page.getByLabel("DHCP 结束地址", { exact: true })).toHaveValue(dhcp.end);
+    await expect(page.getByLabel("DHCP 租期", { exact: true })).toHaveValue(dhcp.lease);
+  }
   await navigate(page, "备份与恢复");
   await upload(original);
   await applyDialog(page, "恢复这些设置");
@@ -321,6 +334,14 @@ test("network backup previews, rejects the wrong role and restores DNS with conf
   await expect(page.getByLabel("DNS 服务器", { exact: true })).toHaveValue(
     original.dns.servers.join("\n"),
   );
+  if (original.dhcp) {
+    await navigate(page, "DHCP 设置");
+    await expect(page.getByLabel("DHCP 起始地址", { exact: true })).toHaveValue(
+      original.dhcp.start,
+    );
+    await expect(page.getByLabel("DHCP 结束地址", { exact: true })).toHaveValue(original.dhcp.end);
+    await expect(page.getByLabel("DHCP 租期", { exact: true })).toHaveValue(original.dhcp.lease);
+  }
 });
 
 test("wireless runtime status refreshes on demand and stays unavailable on N1", async ({

@@ -23,6 +23,7 @@ export class MaintenanceClient {
       "router.maintenance",
       method,
       args,
+      method === "backup" ? 30000 : undefined,
     );
     if (!result || result.ok !== true)
       throw new Error(errors[String(result?.error)] ?? "设备未能完成维护操作");

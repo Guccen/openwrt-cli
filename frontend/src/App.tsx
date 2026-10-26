@@ -14,6 +14,10 @@ const NetworkPage = lazy(() =>
   import("@/pages/network-page").then((page) => ({ default: page.NetworkPage })),
 );
 const LanPage = lazy(() => import("@/pages/lan-page").then((page) => ({ default: page.LanPage })));
+const WanPage = lazy(() => import("@/pages/wan-page").then((page) => ({ default: page.WanPage })));
+const DhcpPage = lazy(() =>
+  import("@/pages/dhcp-page").then((page) => ({ default: page.DhcpPage })),
+);
 const DnsPage = lazy(() => import("@/pages/dns-page").then((page) => ({ default: page.DnsPage })));
 const WirelessPage = lazy(() =>
   import("@/pages/wireless-page").then((page) => ({ default: page.WirelessPage })),
@@ -67,6 +71,8 @@ export function App() {
           <Route path={pageRoutes.network.path} component={NetworkPage} />
           <Route path={pageRoutes.wirelessStatus.path} component={WirelessStatusPage} />
           <Route path={pageRoutes.lan.path} component={LanPage} />
+          <Route path={pageRoutes.wan.path} component={WanPage} />
+          <Route path={pageRoutes.dhcp.path} component={DhcpPage} />
           <Route path={pageRoutes.dns.path} component={DnsPage} />
           <Route path={pageRoutes.wireless.path} component={WirelessPage} />
           <Route path={pageRoutes.backup.path} component={BackupPage} />

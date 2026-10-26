@@ -108,12 +108,13 @@ export function BackupForm({
         <CardHeader>
           <CardTitle>网络设置备份</CardTitle>
           <CardDescription>
-            保存 LAN、上游 DNS 和支持的无线 AP 设置，文件下载到当前客户端。
+            保存 LAN、DHCP 地址池、上游 DNS 和支持的无线 AP 设置，文件下载到当前客户端。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs leading-relaxed text-muted-foreground">
-            备份包含明文 WiFi 密钥，请妥善保存。不包含 WAN、SSH 密钥、设备登录密码和其他系统设置。
+            备份包含明文 WiFi 密钥，请妥善保存。不包含 WAN、宽带账号、SSH
+            密钥、设备登录密码和其他系统设置。
           </p>
           <Button disabled={locked} onClick={download}>
             <Download />
