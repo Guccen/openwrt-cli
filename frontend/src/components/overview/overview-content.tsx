@@ -10,7 +10,7 @@ export function OverviewContent({ snapshot }: { snapshot: Snapshot }) {
     <>
       <SystemStats info={snapshot.info} />
       <ErrorAlert message={snapshot.telemetryError ?? null} />
-      <div className="grid items-start gap-3 lg:grid-cols-2">
+      <div className="grid items-stretch gap-3 lg:grid-cols-2">
         <DeviceInfoCard snapshot={snapshot} />
         {snapshot.telemetry && <HealthCard telemetry={snapshot.telemetry} />}
       </div>
