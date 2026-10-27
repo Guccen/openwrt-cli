@@ -8,9 +8,11 @@ export function createMaintenanceOperation() {
   let sequence = 0;
   return create<{
     session: string | null;
-    kind: "backup" | "reboot" | null;
+    kind: "backup" | "reboot" | "restore" | "upgrade" | "reset" | "upload" | null;
     bind: (session: string | null) => void;
-    begin: (kind: "backup" | "reboot") => OperationToken | null;
+    begin: (
+      kind: "backup" | "reboot" | "restore" | "upgrade" | "reset" | "upload",
+    ) => OperationToken | null;
     finish: (token: OperationToken) => void;
   }>((set, get) => ({
     session: null,

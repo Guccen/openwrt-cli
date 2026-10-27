@@ -1,9 +1,57 @@
 #!/bin/sh
-# rpcd 固定操作插件：不接受命令、文件路径、URL 或固件数据。
+# rpcd 固定操作插件：不接受命令、文件路径或 URL；上传只使用固定私有目录。
 set -e
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 077
 LOCK=/var/run/router-ui-maintenance.lock
+DATA=/usr/libexec/router-ui/maintenance-data.uc
+UPLOAD=/tmp/router-ui-upload
+
+upgrade_supported() {
+    [ "$(cat /tmp/sysinfo/board_name 2>/dev/null)" = 'jdcloud,re-ss-01' ] &&
+        [ -x /sbin/sysupgrade ]
+}
+reset_supported() {
+    upgrade_supported && [ -x /sbin/jffs2reset ] &&
+        grep -q ' /rom squashfs ' /proc/mounts && grep -q ' / overlay ' /proc/mounts
+}
+lock() {
+    [ "${1:-}" = cleanup ] || { busy_config && fail configuration_busy; }
+    mkdir "$LOCK" 2>/dev/null || fail operation_busy
+    trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
+    trap 'exit 1' HUP INT TERM
+    [ "${1:-}" = cleanup ] || { busy_config && fail configuration_busy; }
+    return 0
+}
+check_upload() {
+    request=$(ucode "$DATA" check) || { printf '%s\n' "$request"; exit 0; }
+    kind=$(printf '%s' "$request" | jsonfilter -e '@.kind')
+    expected=$(printf '%s' "$request" | jsonfilter -e '@.sha256')
+    actual=$(sha256sum "$UPLOAD/payload")
+    [ "${actual%% *}" = "$expected" ] || fail checksum_mismatch
+}
+validate_upload() {
+    case "$kind" in
+        restore)
+            # ulimit 防止压缩炸弹占满 tmpfs；独立检查 gzip 退出码。
+            (ulimit -f 4096; gzip -dc "$UPLOAD/payload" > "$UPLOAD/expanded" 2>/dev/null) || fail invalid_archive
+            archive_result=$(ucode "$DATA" archive) || { printf '%s\n' "$archive_result"; exit 0; }
+            ;;
+        upgrade)
+            upgrade_supported || fail unsupported_device
+            sysupgrade -T "$UPLOAD/payload" >/dev/null 2>&1 || fail invalid_firmware
+            ;;
+        *) fail invalid_upload ;;
+    esac
+}
+schedule_reboot() {
+    trap - EXIT
+    (
+        sleep 3
+        ubus call system reboot >/dev/null 2>&1 || true
+        rmdir "$LOCK" 2>/dev/null || true
+    ) </dev/null >/dev/null 2>&1 &
+}
 
 busy_config() {
     local entry
@@ -19,7 +67,7 @@ fail() {
 
 case "$1" in
     list)
-        printf '%s\n' '{"status":{},"backup":{},"reboot":{"confirm":true}}'
+        printf '%s\n' '{"status":{},"backup":{},"reboot":{"confirm":true},"upload_start":{"kind":"","size":0,"sha256":""},"upload_chunk":{"token":"","offset":0,"data":""},"upload_cancel":{"token":""},"inspect":{"token":""},"restore":{"token":"","confirm":true},"upgrade":{"token":"","confirm":true},"reset":{"confirm":true}}'
         ;;
     call)
         case "$2" in
@@ -28,20 +76,27 @@ case "$1" in
                 busy_config && configuration=true
                 operation=false
                 [ ! -d "$LOCK" ] || operation=true
-                printf '{"ok":true,"configurationBusy":%s,"operationBusy":%s,"backupLimit":131072}\n' "$configuration" "$operation"
+                upgrade=false
+                reset=false
+                upgrade_supported && upgrade=true
+                reset_supported && reset=true
+                printf '{"ok":true,"configurationBusy":%s,"operationBusy":%s,"backupLimit":131072,"upgradeSupported":%s,"resetSupported":%s,"firmwareLimit":33554432}\n' "$configuration" "$operation" "$upgrade" "$reset"
                 ;;
             backup)
                 busy_config && fail configuration_busy
                 mkdir "$LOCK" 2>/dev/null || fail operation_busy
                 directory=
                 archive=
-                trap '[ -z "$archive" ] || rm -f "$archive"; [ -z "$directory" ] || rmdir "$directory"; rmdir "$LOCK"' EXIT
+                trap '[ -z "$archive" ] || rm -f "$archive"; [ -z "$directory" ] || { rm -f "$directory/config.tar"; rmdir "$directory"; }; rmdir "$LOCK"' EXIT
                 trap 'exit 1' HUP INT TERM
                 busy_config && fail configuration_busy
                 directory=$(mktemp -d /tmp/router-ui-backup.XXXXXX) || fail backup_failed
                 archive="$directory/config.tar.gz"
                 # 限制临时文件与 ubus 响应体积；较大的自定义备份仍通过 SSH 导出。
                 (ulimit -f 256; sysupgrade -b "$archive" >/dev/null 2>&1) || fail backup_failed
+                (ulimit -f 4096; gzip -dc "$archive" > "$directory/config.tar") || fail backup_failed
+                ucode "$DATA" seal "$directory/config.tar" >/dev/null 2>&1 || fail backup_failed
+                (ulimit -f 256; gzip -c "$directory/config.tar" > "$archive") || fail backup_too_large
                 size=$(wc -c < "$archive")
                 [ "$size" -gt 0 ] && [ "$size" -le 131072 ] || fail backup_too_large
                 busy_config && fail configuration_busy
@@ -50,6 +105,72 @@ case "$1" in
                 # OpenWrt 默认未启用 BusyBox base64；复用 netifd 已依赖的 ucode。
                 encoded=$(ucode -e 'import { readfile } from "fs"; let data = readfile(ARGV[0], 131073); if (type(data) != "string" || length(data) > 131072) exit(1); print(b64enc(data));' "$archive") || fail backup_failed
                 printf '{"ok":true,"size":%s,"sha256":"%s","data":"%s"}\n' "$size" "$checksum" "$encoded"
+                ;;
+            upload_start)
+                lock
+                # 每个文件上限 32 MiB，另留 8 MiB 给系统和校验。
+                available=$(df -Pk /tmp | awk 'NR == 2 { print $4 }')
+                [ "${available:-0}" -ge 40960 ] || fail insufficient_space
+                ucode "$DATA" start || true
+                ;;
+            upload_chunk|upload_cancel)
+                mode=append
+                if [ "$2" = upload_cancel ]; then mode=cancel; lock cleanup; else lock; fi
+                ucode "$DATA" "$mode" || true
+                ;;
+            inspect|restore|upgrade)
+                lock
+                check_upload
+                [ "$2" = inspect ] || [ "$2" = "$kind" ] || fail invalid_upload
+                validate_upload
+                busy_config && fail configuration_busy
+                if [ "$2" = inspect ]; then
+                    if [ "$kind" = restore ]; then printf '%s\n' "$archive_result";
+                    else printf '%s\n' '{"ok":true,"verified":true}'; fi
+                    exit 0
+                fi
+                confirmed=$(printf '%s' "$request" | jsonfilter -e '@.confirm')
+                [ "$confirmed" = true ] || fail confirmation_required
+                if [ "$kind" = restore ]; then
+                    # 校验后仅用经过过滤的 etc 文件恢复；失败不安排重启。
+                    gzip -c "$UPLOAD/restore.tar" > "$UPLOAD/expanded" || fail restore_failed
+                    (ulimit -f 4096; sysupgrade -b "$UPLOAD/rescue.tar.gz" >/dev/null 2>&1) || fail backup_failed
+                    if ! sysupgrade -r "$UPLOAD/expanded" >/dev/null 2>&1; then
+                        sysupgrade -r "$UPLOAD/rescue.tar.gz" >/dev/null 2>&1 || fail restore_rollback_failed
+                        fail restore_failed
+                    fi
+                    rm -f "$UPLOAD/payload" "$UPLOAD/expanded" "$UPLOAD/restore.tar" "$UPLOAD/metadata" "$UPLOAD/rescue.tar.gz"
+                    rmdir "$UPLOAD"
+                    schedule_reboot
+                else
+                    # 不开放强制刷写或保留旧配置，延迟后再次校验哈希与事务状态。
+                    trap - EXIT
+                    (
+                        sleep 3
+                        checksum=$(sha256sum "$UPLOAD/payload")
+                        if ! busy_config && [ "${checksum%% *}" = "$expected" ]; then
+                            sysupgrade -n "$UPLOAD/payload" >/dev/null 2>&1 || true
+                        fi
+                        rmdir "$LOCK" 2>/dev/null || true
+                    ) </dev/null >/dev/null 2>&1 &
+                fi
+                printf '%s\n' '{"ok":true,"accepted":true}'
+                ;;
+            reset)
+                confirmed=$(jsonfilter -e '@.confirm' 2>/dev/null) || fail confirmation_required
+                [ "$confirmed" = true ] || fail confirmation_required
+                reset_supported || fail unsupported_device
+                lock
+                # jffs2reset 只用于经过检查的 squashfs/overlay AX1800。
+                trap - EXIT
+                (
+                    sleep 3
+                    if ! busy_config && reset_supported; then
+                        jffs2reset -y >/dev/null 2>&1 && ubus call system reboot >/dev/null 2>&1
+                    fi
+                    rmdir "$LOCK" 2>/dev/null || true
+                ) </dev/null >/dev/null 2>&1 &
+                printf '%s\n' '{"ok":true,"accepted":true}'
                 ;;
             reboot)
                 confirmed=$(jsonfilter -e '@.confirm' 2>/dev/null) || fail confirmation_required

@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=router-ui
-PKG_VERSION:=0.5.0
+PKG_VERSION:=0.6.0
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 
@@ -23,11 +23,12 @@ define Build/Compile
 endef
 
 define Package/router-ui/install
-	$(INSTALL_DIR) $(1)/www $(1)/usr/share/rpcd/acl.d $(1)/usr/share/licenses/router-ui $(1)/usr/libexec/rpcd
+	$(INSTALL_DIR) $(1)/www $(1)/usr/share/rpcd/acl.d $(1)/usr/share/licenses/router-ui $(1)/usr/libexec/rpcd $(1)/usr/libexec/router-ui
 	$(CP) ./htdocs/. $(1)/www/
 	$(INSTALL_DATA) ./files/router-ui.json $(1)/usr/share/rpcd/acl.d/router-ui.json
 	$(INSTALL_DATA) ./files/shadcn-ui.LICENSE $(1)/usr/share/licenses/router-ui/shadcn-ui.LICENSE
 	$(INSTALL_BIN) ./files/router.maintenance $(1)/usr/libexec/rpcd/router.maintenance
+	$(INSTALL_DATA) ./files/maintenance-data.uc $(1)/usr/libexec/router-ui/maintenance-data.uc
 endef
 
 $(eval $(call BuildPackage,router-ui))

@@ -16,7 +16,16 @@
     "write": {
       "ubus": {
         "session": ["destroy"],
-        "router.maintenance": ["reboot"],
+        "router.maintenance": [
+          "reboot",
+          "upload_start",
+          "upload_chunk",
+          "upload_cancel",
+          "inspect",
+          "restore",
+          "upgrade",
+          "reset"
+        ],
         "uci": ["set", "delete", "revert", "apply", "confirm", "rollback"]
       },
       "uci": ["network", "dhcp", "wireless"]

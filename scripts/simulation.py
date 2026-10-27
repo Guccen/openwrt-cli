@@ -228,6 +228,8 @@ def install_package(address, package):
     lines.append(f"{hashlib.sha256(acl.read_bytes()).hexdigest()}  /usr/share/rpcd/acl.d/router-ui.json")
     plugin = bundle / "files/router.maintenance"
     lines.append(f"{hashlib.sha256(plugin.read_bytes()).hexdigest()}  /usr/libexec/rpcd/router.maintenance")
+    data_helper = bundle / "files/maintenance-data.uc"
+    lines.append(f"{hashlib.sha256(data_helper.read_bytes()).hexdigest()}  /usr/libexec/router-ui/maintenance-data.uc")
     with (REPORT / "installed-files.log").open("w") as log:
         ssh(address, "sha256sum -c -", input="\n".join(lines) + "\n", stdout=log, stderr=subprocess.STDOUT)
 

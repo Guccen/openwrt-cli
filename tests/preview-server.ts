@@ -176,9 +176,19 @@ Bun.serve({
       if (object === "router.maintenance") {
         const configurationBusy = !!transaction || drafts.size > 0;
         if (method === "status")
-          result = [0, { ok: true, configurationBusy, operationBusy: false, backupLimit: 131072 }];
+          result = [
+            0,
+            {
+              ok: true,
+              configurationBusy,
+              operationBusy: false,
+              backupLimit: 131072,
+              upgradeSupported: device === "jdcloud-ax1800",
+              resetSupported: device === "jdcloud-ax1800",
+            },
+          ];
         // 演示模式不生成或操作真实系统归档，也不重启主机。
-        if (method === "backup" || method === "reboot")
+        if (method !== "status")
           result = [
             0,
             { ok: false, error: configurationBusy ? "configuration_busy" : "preview_only" },
