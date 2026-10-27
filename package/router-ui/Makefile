@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=router-ui
-PKG_VERSION:=0.7.0
+PKG_VERSION:=0.8.0
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 
@@ -50,6 +50,8 @@ define Package/router-ui/install
 	$(INSTALL_DATA) ./files/router-ui.json $(1)/usr/share/rpcd/acl.d/router-ui.json
 	$(INSTALL_DATA) ./files/shadcn-ui.LICENSE $(1)/usr/share/licenses/router-ui/shadcn-ui.LICENSE
 	$(INSTALL_BIN) ./files/router.maintenance $(1)/usr/libexec/rpcd/router.maintenance
+	$(INSTALL_BIN) ./files/router.status $(1)/usr/libexec/rpcd/router.status
+	$(INSTALL_DATA) ./files/status.uc $(1)/usr/libexec/router-ui/status.uc
 	$(INSTALL_DATA) ./files/maintenance-data.uc $(1)/usr/libexec/router-ui/maintenance-data.uc
 	$(INSTALL_DATA) ./files/password.uc $(1)/usr/libexec/router-ui/password.uc
 	$(INSTALL_DATA) ./files/led-policy.uc $(1)/usr/libexec/router-ui/led-policy.uc

@@ -11,6 +11,7 @@ import {
   Cable,
   ListFilter,
   Lightbulb,
+  Monitor,
   type LucideIcon,
 } from "lucide-react";
 import { useRouter } from "@/stores/router";
@@ -45,12 +46,13 @@ export function DeviceSidebar({
   const items: { id: Page; icon: LucideIcon }[] = [
     { id: "overview", icon: Activity },
     { id: "network", icon: Network },
+    { id: "clients", icon: Monitor },
     { id: "lan", icon: Settings2 },
     { id: "dns", icon: Globe },
   ];
   const device = useRouter((state) => state.device);
   if (device?.role === "router")
-    items.splice(3, 0, { id: "wan", icon: Cable }, { id: "dhcp", icon: ListFilter });
+    items.splice(4, 0, { id: "wan", icon: Cable }, { id: "dhcp", icon: ListFilter });
   if (device?.device === "jdcloud-ax1800") {
     items.splice(2, 0, { id: "wirelessStatus", icon: Wifi });
     items.push({ id: "wireless", icon: Wifi });

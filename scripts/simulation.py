@@ -229,6 +229,8 @@ def install_package(address, package):
     lines.append(f"{hashlib.sha256(acl.read_bytes()).hexdigest()}  /usr/share/rpcd/acl.d/router-ui.json")
     plugin = bundle / "files/router.maintenance"
     lines.append(f"{hashlib.sha256(plugin.read_bytes()).hexdigest()}  /usr/libexec/rpcd/router.maintenance")
+    for name, destination in {'router.status': '/usr/libexec/rpcd/router.status', 'status.uc': '/usr/libexec/router-ui/status.uc'}.items():
+        lines.append(f"{hashlib.sha256((bundle / 'files' / name).read_bytes()).hexdigest()}  {destination}")
     data_helper = bundle / "files/maintenance-data.uc"
     lines.append(f"{hashlib.sha256(data_helper.read_bytes()).hexdigest()}  /usr/libexec/router-ui/maintenance-data.uc")
     password_helper = bundle / "files/password.uc"
@@ -362,11 +364,12 @@ def main():
         env = dict(os.environ, SIM_BASE_URL=f"https://{address}", SIM_DEVICE=args.device, SIM_ROLE=args.role, SIM_ADDRESS=address)
         unit_env = dict(env, UCODE_TEST_COMMAND=shlex.join([sys.executable, str(ROOT / "tests/helpers/guest-ucode.py")]))
         with (REPORT / "ucode-tests.log").open("w") as log:
-            for suite in ("test_maintenance_data.py", "test_password.py", "test_led_policy.py"):
+            for suite in ("test_maintenance_data.py", "test_password.py", "test_led_policy.py", "test_status_data.py"):
                 run("python3", "-m", "unittest", "discover", "-s", ROOT / "tests/firmware", "-p", suite, "-v", env=unit_env, stdout=log, stderr=subprocess.STDOUT)
         run("python3", ROOT / "tests/runtime/maintenance.py", env=env)
         run("python3", ROOT / "tests/runtime/password.py", env=env)
         run("python3", ROOT / "tests/runtime/led.py", env=env)
+        run("python3", ROOT / "tests/runtime/status.py", env=env)
         run("python3", ROOT / "tests/runtime/routing.py", env=env)
         run("bun", "run", "test:e2e", env=env)
         success = True

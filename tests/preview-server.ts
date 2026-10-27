@@ -1,6 +1,7 @@
 // 仅用于本地页面开发；配置和网络变化均为内存演示，不修改真实设备。
 import { settingsFixture } from "./helpers/settings-fixture";
 import { ledFixture } from "./helpers/led-fixture";
+import { telemetryFixture, clientsFixture } from "./helpers/status-fixture";
 import { validateLedPolicy, type LedPolicy } from "../frontend/src/lib/led-client";
 import type { ConfigName, SettingsSnapshot } from "../frontend/src/lib/settings";
 
@@ -60,6 +61,9 @@ Bun.serve({
       sessions.add(session);
       result = [0, { ubus_rpc_session: session }];
     } else if (sessions.has(sid)) {
+      if (object === "router.status" && method === "summary") result = [0, telemetryFixture()];
+      if (object === "router.status" && method === "clients")
+        result = [0, bypass ? { ...clientsFixture(), ipv4: [], ipv6: [] } : clientsFixture()];
       if (object === "session" && method === "destroy") {
         sessions.delete(sid);
         drafts.delete(sid);
@@ -119,6 +123,12 @@ Bun.serve({
                 up: true,
                 proto: "static",
                 device: "br-lan",
+                ...(bypass
+                  ? {
+                      route: [{ target: "0.0.0.0", mask: 0, nexthop: "192.168.68.1" }],
+                      "dns-server": ["192.168.68.1"],
+                    }
+                  : {}),
                 "ipv4-address": [{ address: committed.network.lan.ipaddr, mask: 24 }],
               },
               ...(!bypass
@@ -128,6 +138,9 @@ Bun.serve({
                       up: true,
                       proto: String(committed.network.wan.proto),
                       device: String(committed.network.wan.device),
+                      uptime: 3600,
+                      route: [{ target: "0.0.0.0", mask: 0, nexthop: "10.0.2.2" }],
+                      "dns-server": ["10.0.2.3"],
                       "ipv4-address": [
                         {
                           address:

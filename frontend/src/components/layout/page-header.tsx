@@ -6,6 +6,7 @@ import { useSettings } from "@/stores/settings";
 import { useWireless } from "@/stores/wireless";
 import { useMaintenance } from "@/stores/maintenance";
 import { useLeds } from "@/stores/leds";
+import { useClients } from "@/stores/clients";
 
 export function PageHeader({ page }: { page: Page | null }) {
   const { device, snapshot, loading, refresh } = useRouter();
@@ -13,8 +14,14 @@ export function PageHeader({ page }: { page: Page | null }) {
   const wireless = useWireless();
   const maintenance = useMaintenance();
   const leds = useLeds();
+  const clients = useClients();
   const busy =
-    loading || settings.loading || wireless.loading || maintenance.loading || leds.loading;
+    loading ||
+    settings.loading ||
+    wireless.loading ||
+    maintenance.loading ||
+    leds.loading ||
+    clients.loading;
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
@@ -28,6 +35,7 @@ export function PageHeader({ page }: { page: Page | null }) {
         disabled={busy || !!settings.pending || !!settings.destination}
         onClick={() => {
           if (page === "wirelessStatus") void wireless.load();
+          else if (page === "clients") void clients.load();
           else if (page === "leds") void leds.load();
           else if (page === "system") void maintenance.load();
           else if (page && pageRoutes[page].settings) void settings.load();

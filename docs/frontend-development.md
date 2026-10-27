@@ -42,20 +42,21 @@ bun run dev
 
 ## 页面地址与组件
 
-| 地址                  | 页面                |
-| --------------------- | ------------------- |
-| `/login/`             | 登录                |
-| `/overview/`          | 系统概览            |
-| `/network/`           | 网络状态            |
-| `/wireless/`          | AX1800 无线运行状态 |
-| `/settings/lan/`      | LAN 设置            |
-| `/settings/wan/`      | WAN 上网设置        |
-| `/settings/dhcp/`     | DHCP 地址分配       |
-| `/settings/dns/`      | DNS 设置            |
-| `/settings/wireless/` | AX1800 无线设置     |
-| `/settings/backup/`   | 网络设置备份与恢复  |
-| `/system/`            | 系统备份恢复及维护  |
-| `/settings/leds/`     | 系统状态指示灯配置  |
+| 地址                  | 页面                 |
+| --------------------- | -------------------- |
+| `/login/`             | 登录                 |
+| `/overview/`          | 系统概览             |
+| `/network/`           | 网络状态             |
+| `/clients/`           | IPv4/IPv6 客户端租约 |
+| `/wireless/`          | AX1800 无线运行状态  |
+| `/settings/lan/`      | LAN 设置             |
+| `/settings/wan/`      | WAN 上网设置         |
+| `/settings/dhcp/`     | DHCP 地址分配        |
+| `/settings/dns/`      | DNS 设置             |
+| `/settings/wireless/` | AX1800 无线设置      |
+| `/settings/backup/`   | 网络设置备份与恢复   |
+| `/system/`            | 系统备份恢复及维护   |
+| `/settings/leds/`     | 系统状态指示灯配置   |
 
 使用 wouter 的 History 路由，侧栏为真实链接，支持前进、后退和直接访问。管理页按路由延迟加载，共用布局和状态组件，打开页面时再加载对应代码。未登录访问页面时跳到登录页，登录后回到原地址；会话仍只保存在内存中，刷新后重新登录并返回当前页面。登录返回地址限制为已知页面。N1 不显示无线菜单，旁路由隐藏 WAN、DHCP 菜单；直接访问这些地址也不会开放对应表单。
 
@@ -72,4 +73,4 @@ bun run check
 python3 -m unittest discover -s tests/firmware -v
 ```
 
-归档解析器的 4 项和密码处理的 3 项脚本测试使用真实 `ucode`；未安装时本机跳过，可通过 `UCODE_TEST_COMMAND` 指定解释器命令。QEMU 测试仍会通过设备实际 RPC 校验归档恢复、重启及密码修改，不能以本地页面测试代替。
+归档、密码、灯效和状态解析的 15 项脚本测试使用真实 `ucode`；未安装时本机跳过，可通过 `UCODE_TEST_COMMAND` 指定解释器命令。QEMU 同时运行原生 ucode 单测及实际 RPC 测试，不能以本地页面测试代替。

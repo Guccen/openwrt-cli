@@ -13,6 +13,9 @@ const OverviewPage = lazy(() =>
 const NetworkPage = lazy(() =>
   import("@/pages/network-page").then((page) => ({ default: page.NetworkPage })),
 );
+const ClientsPage = lazy(() =>
+  import("@/pages/clients-page").then((page) => ({ default: page.ClientsPage })),
+);
 const LanPage = lazy(() => import("@/pages/lan-page").then((page) => ({ default: page.LanPage })));
 const WanPage = lazy(() => import("@/pages/wan-page").then((page) => ({ default: page.WanPage })));
 const DhcpPage = lazy(() =>
@@ -70,6 +73,7 @@ export function App() {
         <Switch>
           <Route path={pageRoutes.overview.path} component={OverviewPage} />
           <Route path={pageRoutes.network.path} component={NetworkPage} />
+          <Route path={pageRoutes.clients.path} component={ClientsPage} />
           <Route path={pageRoutes.wirelessStatus.path} component={WirelessStatusPage} />
           <Route path={pageRoutes.lan.path} component={LanPage} />
           <Route path={pageRoutes.wan.path} component={WanPage} />

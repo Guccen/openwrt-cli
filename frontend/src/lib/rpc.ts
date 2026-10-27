@@ -1,5 +1,5 @@
 import axios, { type AxiosInstance } from "axios";
-import type { Board, Device, NetworkInterface, Snapshot, SystemInfo } from "./types";
+import type { Board, Device, NetworkInterface, Snapshot, SystemInfo, Telemetry } from "./types";
 
 const anonymous = "00000000000000000000000000000000";
 
@@ -86,14 +86,38 @@ export class RouterClient {
   }
 
   async snapshot(session: string): Promise<Snapshot> {
-    const [board, info, network] = await Promise.all([
+    let telemetryError: string | null = null;
+    const [board, info, network, telemetry] = await Promise.all([
       this.call<Board>(session, "system", "board"),
       this.call<SystemInfo>(session, "system", "info"),
       this.call<{ interface: NetworkInterface[] }>(session, "network.interface", "dump"),
+      this.call<Telemetry>(session, "router.status", "summary")
+        .then((value) => {
+          if (
+            !value?.ok ||
+            !Array.isArray(value.temperatures) ||
+            !Array.isArray(value.storage) ||
+            !Array.isArray(value.ports)
+          )
+            throw new RpcError("扩展状态数据不完整");
+          return value;
+        })
+        .catch((error: unknown) => {
+          if (error instanceof RpcError && error.sessionExpired) throw error;
+          telemetryError = "温度、存储与网口状态暂不可用，请稍后刷新或检查设备端状态组件。";
+          return null;
+        }),
     ]);
     if (!board?.release || !info?.memory || !Array.isArray(network?.interface)) {
       throw new RpcError("设备状态不完整，请稍后重试");
     }
-    return { board, info, interfaces: network.interface, updatedAt: Date.now() };
+    return {
+      board,
+      info,
+      interfaces: network.interface,
+      telemetry,
+      telemetryError,
+      updatedAt: Date.now(),
+    };
   }
 }

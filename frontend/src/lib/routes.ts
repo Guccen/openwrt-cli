@@ -1,6 +1,7 @@
 export const pageRoutes = {
   overview: { path: "/overview/", title: "系统概览", settings: false },
   network: { path: "/network/", title: "网络状态", settings: false },
+  clients: { path: "/clients/", title: "客户端租约", settings: false },
   wirelessStatus: { path: "/wireless/", title: "无线状态", settings: false },
   lan: { path: "/settings/lan/", title: "LAN 设置", settings: true },
   wan: { path: "/settings/wan/", title: "WAN 设置", settings: true },
