@@ -31,6 +31,11 @@ export interface NetworkInterface {
   route?: { target: string; mask: number; nexthop?: string }[];
   "dns-server"?: string[];
   "ipv6-prefix"?: { address: string; mask: number }[];
+  "ipv6-prefix-assignment"?: {
+    address: string;
+    mask: number;
+    "local-address"?: { address: string; mask: number };
+  }[];
   "ipv4-address"?: { address: string; mask: number }[];
   "ipv6-address"?: { address: string; mask: number }[];
 }

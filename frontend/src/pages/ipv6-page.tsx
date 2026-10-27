@@ -22,6 +22,16 @@ export function Ipv6Page() {
     return n !== null && n > 1n && n >> 118n !== 1018n;
   });
   const route = uplink && defaultRoutes(uplink).some((item) => item.target === "::");
+  const delegated =
+    !!uplink?.["ipv6-prefix"]?.length ||
+    !!snapshot?.interfaces.some(
+      (item) =>
+        item.interface === "lan" &&
+        item["ipv6-prefix-assignment"]?.some((prefix) => {
+          const value = ipv6Number(prefix.address);
+          return value !== null && value >> 121n !== 126n && value >> 118n !== 1018n;
+        }),
+    );
   return (
     <div className="space-y-3">
       <SettingsSection>
@@ -41,13 +51,13 @@ export function Ipv6Page() {
         <AlertDescription>
           {!uplink?.up
             ? "IPv6 接口尚未连接。请检查上网方式、光猫及上游 IPv6 服务。"
-            : !address
+            : !address && !delegated
               ? "尚未获取可用的 IPv6 地址，请检查上游地址分配。"
               : !route
                 ? "已获取 IPv6 地址，但没有默认 IPv6 路由。"
-                : !bypass && !uplink["ipv6-prefix"]?.length
+                : !bypass && !delegated
                   ? "已获取上游地址和默认路由；若使用自动分配且 LAN 无法上网，请检查前缀委派，或确认上游是否要求中继。"
-                  : "已获取上游 IPv6 地址及默认路由；仍需通过连通性诊断确认外网可达。"}
+                  : `${address ? "已获取上游 IPv6 地址" : "已获取 IPv6 委派前缀"}及默认路由；仍需通过连通性诊断确认外网可达。`}
         </AlertDescription>
       </Alert>
       {snapshot && <UpstreamCard snapshot={snapshot} />}

@@ -89,16 +89,14 @@ export function TimeCard({ disabled }: { disabled: boolean }) {
       </CardHeader>
       <CardContent className="space-y-3">
         <ErrorAlert message={error} />
-        {!settings && (
-          <Button
-            type="button"
-            variant="outline"
-            disabled={locked}
-            onClick={() => retry(attempt + 1)}
-          >
-            重新读取时间设置
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant="outline"
+          disabled={locked}
+          onClick={() => retry(attempt + 1)}
+        >
+          重新读取时间设置
+        </Button>
         {settings && (
           <form
             className="space-y-3"

@@ -153,3 +153,61 @@ test("新增配置检查返回名称，删除整节单独调用，IPv6 管理保
   );
   expect(store.getState().pending?.newOrigin).toBe("https://[fd12::1]");
 });
+
+test("IPv6 只改 DNS 保留上游前缀、地址请求及高级 LAN 通告，多个前缀只读", () => {
+  const snapshot = settingsFixture();
+  snapshot.network.wan6.reqaddress = "none";
+  snapshot.network.wan6.reqprefix = "52";
+  snapshot.network.wan6.ip6prefix = ["2001:db8:200::/56"];
+  snapshot.dhcp.lan.ra = "server";
+  snapshot.dhcp.lan.ra_slaac = "0";
+  snapshot.dhcp.lan.ra_flags = ["managed-config"];
+  const draft = { ...ipv6Draft(snapshot, false), autoDns: false, dns: "2606:4700:4700::1111" };
+  expect(draft.prefixHint).toBe("52");
+  expect(ipv6Plan(snapshot, draft, false).edits).toEqual([
+    { config: "network", section: "wan6", values: { peerdns: "0", dns: [draft.dns] }, remove: [] },
+  ]);
+  snapshot.network.wan6.ip6prefix = ["2001:db8:200::/56", "2001:db8:300::/56"];
+  expect(() => ipv6Draft(snapshot, false)).toThrow("多个");
+});
+
+test("静态 IPv6 拒绝 LAN 链路本地前缀与 WAN 重叠，中继防火墙随模式创建清理", () => {
+  const snapshot = settingsFixture();
+  const draft = {
+    ...ipv6Draft(snapshot, false),
+    mode: "static" as const,
+    lan: true,
+    address: "2001:db8:1::2/64",
+    gateway: "fe80::1",
+    prefix: "2001:db8:1::/64",
+  };
+  expect(() => ipv6Plan(snapshot, draft, false)).toThrow("重叠");
+  expect(() => ipv6Plan(snapshot, { ...draft, prefix: "fe80::/64" }, false)).toThrow("链路本地");
+  const relay = ipv6Plan(
+    snapshot,
+    { ...ipv6Draft(snapshot, false), mode: "relay", lan: true },
+    false,
+  );
+  const rule = relay.edits.find((edit) => edit.config === "firewall")!;
+  expect(rule).toMatchObject({
+    section: "router_ui_ipv6_relay",
+    add: "rule",
+    values: {
+      src: "wan",
+      family: "ipv6",
+      src_ip: "fe80::/10",
+      proto: "udp",
+      src_port: "547",
+      dest_port: "547",
+      target: "ACCEPT",
+    },
+  });
+  snapshot.firewall[rule.section] = { ".type": "rule", ...rule.values };
+  snapshot.dhcp.lan.ra = "relay";
+  const exit = ipv6Plan(snapshot, { ...ipv6Draft(snapshot, false), mode: "auto" }, false);
+  expect(exit.edits).toContainEqual({
+    config: "firewall",
+    section: rule.section,
+    deleteSection: true,
+  });
+});

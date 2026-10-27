@@ -4,6 +4,7 @@ import { RadioForm } from "@/components/settings/radio-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DeviceLoading } from "@/components/status/device-loading";
 import { wifiDrafts } from "@/lib/settings";
+import { radioDraft } from "@/lib/radio-settings";
 import { useRouter } from "@/stores/router";
 import { NotFoundPage } from "./not-found-page";
 
@@ -25,9 +26,18 @@ export function WirelessPage() {
                 <WifiForm key={radio.section} {...props} initial={radio} />
               ))}
             </div>
-            {[...new Set(radios.map((radio) => radio.device))].map((section) => (
-              <RadioForm key={section} {...props} section={section} />
-            ))}
+            {[...new Set(radios.map((radio) => radio.device))].map((section) => {
+              try {
+                radioDraft(props.snapshot, section);
+                return <RadioForm key={section} {...props} section={section} />;
+              } catch (error) {
+                return (
+                  <p className="text-xs text-muted-foreground" key={section}>
+                    {section}：{error instanceof Error ? error.message : "射频配置不可用"}
+                  </p>
+                );
+              }
+            })}
           </div>
         ) : (
           <Alert>

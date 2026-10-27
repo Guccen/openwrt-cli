@@ -168,6 +168,7 @@ def network_up(address):
     run("sudo", "ip", "link", "set", BRIDGE, "up")
     # GitHub runner 上 Docker 的 FORWARD=DROP 不应拦截这个独立桥中的测试客户端。
     run("sudo", "iptables", "-I", "FORWARD", "-i", BRIDGE, "-o", BRIDGE, "-j", "ACCEPT")
+    run("sudo", "ip6tables", "-I", "FORWARD", "-i", BRIDGE, "-o", BRIDGE, "-j", "ACCEPT")
     run("sudo", "ip", "tuntap", "add", "dev", TAP, "mode", "tap", "user", str(os.getuid()))
     run("sudo", "ip", "link", "set", TAP, "master", BRIDGE)
     run("sudo", "ip", "link", "set", TAP, "up")
@@ -192,6 +193,7 @@ def network_down():
         ("ip6tables", "-D", "INPUT", "-i", IPV6_TAP, "-p", "tcp", "--dport", "18093", "-j", "ACCEPT"),
         ("ip", "link", "delete", IPV6_TAP),
         ("iptables", "-D", "FORWARD", "-i", BRIDGE, "-o", BRIDGE, "-j", "ACCEPT"),
+        ("ip6tables", "-D", "FORWARD", "-i", BRIDGE, "-o", BRIDGE, "-j", "ACCEPT"),
         ("ip", "netns", "delete", NAMESPACE),
         ("ip", "link", "delete", "router-ci-host"),
         ("ip", "link", "delete", TAP),

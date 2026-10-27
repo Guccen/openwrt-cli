@@ -24,6 +24,7 @@ export const ipv6Modes: Record<Ipv6Mode, string> = {
   off: "关闭 IPv6 上网",
 };
 const relaySection = "router_ui_ipv6_uplink";
+const relayRule = "router_ui_ipv6_relay";
 export function ipv6Number(input: string): bigint | null {
   if (!input.includes(":") || !/^[a-f\d:.]+$/i.test(input)) return null;
   try {
@@ -83,11 +84,18 @@ export function ipv6Draft(snapshot: SettingsSnapshot, bypass: boolean): Ipv6Draf
         ].includes(String(current.device))))
   )
     throw new Error("IPv6 使用自定义接口或协议，当前页面不能覆盖该高级配置。");
-  if (current && list(current.ip6addr).length > 1)
-    throw new Error("当前 IPv6 使用多个静态地址，请通过 SSH 管理。");
+  if (
+    current &&
+    (list(current.ip6addr).length > 1 ||
+      list(current.ip6prefix).length > 1 ||
+      current.ifname !== undefined)
+  )
+    throw new Error("当前 IPv6 使用多个静态地址、前缀或旧式接口，请通过 SSH 管理。");
   const [, lan] = lanDhcp(snapshot);
   if (snapshot.dhcp[relaySection] && snapshot.dhcp[relaySection][".type"] !== "dhcp")
     throw new Error("IPv6 中继配置名称已被占用，请检查高级配置。");
+  if (snapshot.firewall[relayRule] && snapshot.firewall[relayRule][".type"] !== "rule")
+    throw new Error("IPv6 中继防火墙名称已被占用，请检查高级配置。");
   for (const [section, value] of Object.entries(snapshot.dhcp)) {
     if (section !== relaySection && String(value.master ?? "0") === "1")
       throw new Error("检测到自定义 IPv6 中继主接口，需先检查高级配置。");
@@ -101,9 +109,8 @@ export function ipv6Draft(snapshot: SettingsSnapshot, bypass: boolean): Ipv6Draf
           : current.proto === "static"
             ? "static"
             : "auto",
-    prefixHint: ["48", "56", "60", "64"].includes(String(current?.reqprefix))
-      ? String(current?.reqprefix)
-      : "auto",
+    prefixHint:
+      current?.reqprefix && current.reqprefix !== "no" ? String(current.reqprefix) : "auto",
     autoDns: String(current?.peerdns ?? "1") !== "0",
     dns: list(current?.dns).join("\n"),
     address: list(current?.ip6addr)[0] ?? "",
@@ -125,6 +132,8 @@ export function ipv6Plan(
   const edits: ConfigEdit[] = [],
     name = bypass ? "lan6" : "wan6",
     old = snapshot.network[name] ?? {};
+  const profileChanged =
+    !snapshot.network[name] || initial.mode !== draft.mode || initial.lan !== draft.lan;
   const values: Record<string, string | string[]> = {},
     remove: string[] = [];
   const set = (key: string, value: string | string[]) => {
@@ -133,15 +142,21 @@ export function ipv6Plan(
   const clear = (key: string) => {
     if (old[key] !== undefined) remove.push(key);
   };
-  set("proto", draft.mode === "off" ? "none" : draft.mode === "static" ? "static" : "dhcpv6");
-  set("auto", draft.mode === "off" ? "0" : "1");
-  set("device", bypass ? "@lan" : "@wan");
-  set("delegate", bypass || draft.mode === "off" || draft.mode === "relay" ? "0" : "1");
+  if (profileChanged) {
+    set("proto", draft.mode === "off" ? "none" : draft.mode === "static" ? "static" : "dhcpv6");
+    set("auto", draft.mode === "off" ? "0" : "1");
+    set("device", String(old.device ?? (bypass ? "@lan" : "@wan")));
+    set("delegate", bypass || draft.mode === "off" || draft.mode === "relay" ? "0" : "1");
+  }
   if (draft.mode === "auto" || draft.mode === "relay") {
-    if (!["auto", "48", "56", "60", "64"].includes(draft.prefixHint))
+    if (
+      draft.prefixHint !== initial.prefixHint &&
+      !["auto", "48", "56", "60", "64"].includes(draft.prefixHint)
+    )
       throw new Error("前缀请求长度只能是自动、48、56、60 或 64。");
-    set("reqaddress", "try");
-    set("reqprefix", bypass || draft.mode === "relay" ? "no" : draft.prefixHint);
+    if (profileChanged && old.reqaddress === undefined) set("reqaddress", "try");
+    if (profileChanged || draft.prefixHint !== initial.prefixHint)
+      set("reqprefix", bypass || draft.mode === "relay" ? "no" : draft.prefixHint);
   }
   if (draft.mode === "static") {
     if (!ipv6Cidr(draft.address) || !isIpv6Unicast(draft.gateway.trim()))
@@ -150,11 +165,21 @@ export function ipv6Plan(
       throw new Error("LAN 前缀需为网络边界对齐的 IPv6 前缀，长度为 /16 至 /64。");
     if (!bypass && draft.lan && !draft.prefix.trim())
       throw new Error("静态 IPv6 向 LAN 分配地址时，需填写运营商提供的 LAN 前缀。");
+    if (draft.prefix.trim()) {
+      const [prefix, length] = draft.prefix.trim().split("/"),
+        [address, mask] = draft.address.trim().split("/");
+      const network = ipv6Number(prefix)!,
+        ip = ipv6Number(address)!,
+        common = 128n - BigInt(Math.min(Number(length), Number(mask)));
+      if (network >> 118n === 1018n || network >> common === ip >> common)
+        throw new Error("LAN 前缀不能使用链路本地地址，也不能与 WAN IPv6 网段重叠。");
+    }
     set("ip6addr", [draft.address.trim()]);
     set("ip6gw", draft.gateway.trim());
     if (draft.prefix.trim()) set("ip6prefix", [draft.prefix.trim()]);
     else clear("ip6prefix");
-  } else if (draft.mode !== "off") for (const key of ["ip6addr", "ip6gw", "ip6prefix"]) clear(key);
+  } else if (draft.mode !== "off" && draft.mode !== initial.mode)
+    for (const key of ["ip6addr", "ip6gw", "ip6prefix"]) clear(key);
   if (draft.mode !== "off") {
     set("peerdns", draft.autoDns ? "1" : "0");
     if (draft.autoDns) clear("dns");
@@ -173,13 +198,13 @@ export function ipv6Plan(
       remove,
       ...(!snapshot.network[name] ? { add: "interface" } : {}),
     });
-  if (!bypass && snapshot.network.wan?.proto === "pppoe") {
+  if (profileChanged && !bypass && snapshot.network.wan?.proto === "pppoe") {
     const ipv6 = draft.mode === "off" ? "0" : "1";
     if (snapshot.network.wan.ipv6 !== ipv6)
       edits.push({ config: "network", section: "wan", values: { ipv6 } });
   }
   const [section, lan] = lanDhcp(snapshot);
-  if (!bypass) {
+  if (!bypass && profileChanged) {
     const enabled = draft.mode !== "off" && draft.lan,
       relay = enabled && draft.mode === "relay";
     const options: Record<string, string | string[]> = {
@@ -217,6 +242,31 @@ export function ipv6Plan(
         });
     } else if (snapshot.dhcp[relaySection])
       edits.push({ config: "dhcp", section: relaySection, deleteSection: true });
+  }
+  if (!bypass) {
+    const relay = draft.mode === "relay" && draft.lan;
+    if (relay) {
+      const prior = snapshot.firewall[relayRule];
+      const rule = {
+        name: "Router UI DHCPv6 relay",
+        src: "wan",
+        family: "ipv6",
+        proto: "udp",
+        src_ip: "fe80::/10",
+        src_port: "547",
+        dest_port: "547",
+        target: "ACCEPT",
+        enabled: "1",
+      };
+      if (!prior || Object.entries(rule).some(([key, value]) => prior[key] !== value))
+        edits.push({
+          config: "firewall",
+          section: relayRule,
+          values: rule,
+          ...(!prior ? { add: "rule" } : {}),
+        });
+    } else if (snapshot.firewall[relayRule])
+      edits.push({ config: "firewall", section: relayRule, deleteSection: true });
   }
   return {
     label: bypass ? "旁路由自身 IPv6" : "IPv6 设置",

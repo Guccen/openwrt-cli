@@ -1,13 +1,13 @@
 """在一次性真实 OpenWrt 虚拟机验证常用配置和数据通路；不连接真实运营商。"""
 import json
 import os
-import shlex
 import subprocess
 import time
 
 from configuration import Api, RpcFailure, committed
 from routing import wait_pool, dnsmasq_pids
 from simulation import REPORT, WORK, NAMESPACE, run, ssh, test_network
+from ipv6_relay import run_test as test_ipv6_relay
 
 
 def wait_until(check, message, timeout=35):
@@ -52,13 +52,12 @@ def main(address, role):
     report["diagnostics_native_commands"] = "passed"
     original_time = api.call("router.maintenance", "time_status")
     if not original_time.get("ok"): raise AssertionError(f"无法读取实际 UCI 时间设置：{original_time}")
-    before = committed(address, "system", "@system[0]")
     try:
         change = {**original_time["settings"], "zone": "Asia/Shanghai" if original_time["settings"]["zone"] != "Asia/Shanghai" else "UTC"}
         if not api.call("router.maintenance", "time_save", change).get("ok"): raise AssertionError("时间配置写入失败")
-        actual = ssh(address, "uci -q get system.@system[0].zonename; cat /tmp/TZ", capture_output=True).stdout
+        actual = ssh(address, "uci -q get system.@system[0].zonename; if [ -f /tmp/TZ ]; then cat /tmp/TZ; else readlink /tmp/localtime; fi", capture_output=True).stdout
         if change["zone"] not in actual: raise AssertionError("时区未落盘")
-        if change["zone"] == "Asia/Shanghai" and "CST-8" not in actual: raise AssertionError("时区未重载到运行系统")
+        if change["zone"] == "Asia/Shanghai" and "CST-8" not in actual and "/usr/share/zoneinfo/Asia/Shanghai" not in actual: raise AssertionError("时区未重载到运行系统")
     finally:
         if not api.call("router.maintenance", "time_save", original_time["settings"]).get("ok"): raise AssertionError("原时区未恢复")
     # 原配置可能没有显式 zonename/timezone；验证语义与读取值恢复，原文件可包含新显式值。
@@ -132,7 +131,8 @@ def main(address, role):
         try: process.wait(timeout=5)
         except subprocess.TimeoutExpired: process.kill(); process.wait()
         log.close()
-    report["isp_dhcpv6_pd_relay_and_pppoe"] = "requires provider or dedicated fixture; not claimed by static routing test"
+    report.update(test_ipv6_relay(api, address))
+    report["isp_dhcpv6_pd_and_pppoe"] = "requires provider or dedicated fixture; not claimed by static routing or relay exchange tests"
     api.call("session", "destroy")
     (REPORT / "router-basics.json").write_text(json.dumps(report, indent=2) + "\n")
     print("诊断、时间设置、固定租约、WAN 入站转发与静态 IPv6 数据通路验证完成")

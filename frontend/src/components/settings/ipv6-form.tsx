@@ -76,6 +76,11 @@ export function Ipv6Form({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  {!["auto", "48", "56", "60", "64"].includes(initial.prefixHint) && (
+                    <SelectItem value={initial.prefixHint}>
+                      当前高级请求：{initial.prefixHint}
+                    </SelectItem>
+                  )}
                   {["auto", "48", "56", "60", "64"].map((value) => (
                     <SelectItem key={value} value={value}>
                       {value === "auto" ? "自动（推荐）" : `/${value}`}
