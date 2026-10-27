@@ -38,6 +38,8 @@ class FirmwareTests(unittest.TestCase):
                 script.write_text(text, encoding="utf-8", newline="\n")
                 binaries = root / "bin"
                 binaries.mkdir()
+                (binaries / "ucode").write_text("#!/bin/sh\nprintf 'fd12:3456:789a::/48'\n", encoding="utf-8", newline="\n")
+                (binaries / "ucode").chmod(0o755)
                 mock = binaries / "uci"
                 mock.write_text("""#!/bin/sh
 printf '%s\\n' "$*" >> "$UCI_LOG"
@@ -126,13 +128,13 @@ exit 0
     def test_web_configuration_permissions_are_bounded(self):
         acl = json.loads((ROOT / "package/router-ui/files/router-ui.json").read_text(encoding="utf-8"))["router-ui"]
         self.assertEqual(set(acl["write"]["ubus"]), {"session", "uci", "router.maintenance"})
-        self.assertEqual(set(acl["write"]["ubus"]["router.maintenance"]), {"reboot", "upload_start", "upload_chunk", "upload_cancel", "inspect", "restore", "upgrade", "reset", "password", "led_save"})
-        self.assertEqual(acl["read"]["ubus"]["iwinfo"], ["info", "assoclist"])
+        self.assertEqual(set(acl["write"]["ubus"]["router.maintenance"]), {"reboot", "upload_start", "upload_chunk", "upload_cancel", "inspect", "restore", "upgrade", "reset", "password", "led_save", "time_save"})
+        self.assertEqual(acl["read"]["ubus"]["iwinfo"], ["info", "assoclist", "phyname", "freqlist", "countrylist"])
         self.assertEqual(acl["read"]["ubus"]["router.status"], ["summary", "clients"])
         self.assertNotIn("router.status", acl["write"]["ubus"])
-        self.assertEqual(set(acl["write"]["uci"]), {"network", "dhcp", "wireless"})
+        self.assertEqual(set(acl["write"]["uci"]), {"network", "dhcp", "wireless", "firewall"})
         self.assertNotIn("commit", acl["write"]["ubus"]["uci"])
-        self.assertNotIn("add", acl["write"]["ubus"]["uci"])
+        self.assertIn("add", acl["write"]["ubus"]["uci"])
         self.assertNotIn("*", acl["write"]["uci"])
         self.assertNotIn("file", acl["read"]["ubus"])
         self.assertNotIn("system", acl["write"]["uci"])

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { useMaintenanceOperation } from "./maintenance-operation";
-import { APPLY_TIMEOUT, ConfigClient } from "../lib/config-client";
+import { APPLY_TIMEOUT, CONFIGS, ConfigClient } from "../lib/config-client";
 import { RpcError } from "../lib/rpc";
 import {
   managementOrigin,
@@ -99,7 +99,7 @@ export function createSettingsStore(client = new ConfigClient()) {
       const request = generation;
       set({ loading: true, error: null });
       try {
-        await client.revert(session, ["network", "dhcp", "wireless"]);
+        await client.revert(session, CONFIGS);
         if (request !== generation) return;
         set({ loading: false, staged: false, snapshot: null, notice: "已丢弃暂存改动" });
         await get().load();
@@ -130,7 +130,10 @@ export function createSettingsStore(client = new ConfigClient()) {
         previousAddress: String(snapshot.network.lan.ipaddr),
         configs,
         oldOrigin: origin,
-        newOrigin: managementOrigin(plan.address, origin),
+        newOrigin:
+          plan.address === String(snapshot.network.lan.ipaddr)
+            ? origin
+            : managementOrigin(plan.address, origin),
         deadline: Date.now() + APPLY_TIMEOUT * 1000,
       };
       set({ phase: "staging", loading: true, error: null, notice: null, restoreRequested: false });

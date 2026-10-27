@@ -12,7 +12,8 @@ type OperationKind =
   | "reset"
   | "upload"
   | "password"
-  | "led";
+  | "led"
+  | "time";
 export function createMaintenanceOperation() {
   let sequence = 0;
   return create<{

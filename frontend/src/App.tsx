@@ -18,10 +18,16 @@ const ClientsPage = lazy(() =>
 );
 const LanPage = lazy(() => import("@/pages/lan-page").then((page) => ({ default: page.LanPage })));
 const WanPage = lazy(() => import("@/pages/wan-page").then((page) => ({ default: page.WanPage })));
+const Ipv6Page = lazy(() =>
+  import("@/pages/ipv6-page").then((page) => ({ default: page.Ipv6Page })),
+);
 const DhcpPage = lazy(() =>
   import("@/pages/dhcp-page").then((page) => ({ default: page.DhcpPage })),
 );
 const DnsPage = lazy(() => import("@/pages/dns-page").then((page) => ({ default: page.DnsPage })));
+const ForwardingPage = lazy(() =>
+  import("@/pages/forwarding-page").then((page) => ({ default: page.ForwardingPage })),
+);
 const WirelessPage = lazy(() =>
   import("@/pages/wireless-page").then((page) => ({ default: page.WirelessPage })),
 );
@@ -35,6 +41,9 @@ const SystemPage = lazy(() =>
   import("@/pages/system-page").then((page) => ({ default: page.SystemPage })),
 );
 const LedPage = lazy(() => import("@/pages/led-page").then((page) => ({ default: page.LedPage })));
+const DiagnosticsPage = lazy(() =>
+  import("@/pages/diagnostics-page").then((page) => ({ default: page.DiagnosticsPage })),
+);
 
 export function App() {
   const session = useRouter((state) => state.session);
@@ -77,12 +86,15 @@ export function App() {
           <Route path={pageRoutes.wirelessStatus.path} component={WirelessStatusPage} />
           <Route path={pageRoutes.lan.path} component={LanPage} />
           <Route path={pageRoutes.wan.path} component={WanPage} />
+          <Route path={pageRoutes.ipv6.path} component={Ipv6Page} />
           <Route path={pageRoutes.dhcp.path} component={DhcpPage} />
+          <Route path={pageRoutes.forwarding.path} component={ForwardingPage} />
           <Route path={pageRoutes.dns.path} component={DnsPage} />
           <Route path={pageRoutes.wireless.path} component={WirelessPage} />
           <Route path={pageRoutes.backup.path} component={BackupPage} />
           <Route path={pageRoutes.system.path} component={SystemPage} />
           <Route path={pageRoutes.leds.path} component={LedPage} />
+          <Route path={pageRoutes.diagnostics.path} component={DiagnosticsPage} />
           <Route>
             <NotFoundPage />
           </Route>

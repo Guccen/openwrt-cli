@@ -7,6 +7,12 @@ fi
 
 uci set system.@system[0].hostname='@HOSTNAME@'
 uci set network.lan.ipaddr='@ADDRESS@'
+# 每台设备首次启动时生成稳定的本地 IPv6 前缀，保留上游已有值。
+if [ -z "$(uci -q get network.globals.ula_prefix || true)" ]; then
+    prefix=$(ucode -e 'import { readfile } from "fs"; let h=hexenc(readfile("/dev/urandom",5)); if(length(h)!=10) exit(1); print(sprintf("fd%s:%s:%s::/48",substr(h,0,2),substr(h,2,4),substr(h,6,4)));')
+    uci set network.globals='globals'
+    uci set "network.globals.ula_prefix=$prefix"
+fi
 uci commit system
 uci commit network
 

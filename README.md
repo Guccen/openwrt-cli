@@ -2,7 +2,7 @@
 
 为京东云 AX1800 和斐讯 N1 分别构建轻量固件，共用基于 Vite、React 和 shadcn/ui 的管理前端。设备复用 OpenWrt 服务，不运行 Node.js、Bun 或新增常驻服务。
 
-支持设备概览、温度与存储、上游网络与网口状态、客户端租约、双频 WiFi 状态、LAN / WAN / DHCP / DNS / 无线配置、状态指示灯、网络及系统备份恢复、登录密码修改、重启，以及 AX1800 固件上传升级和恢复出厂。侧栏可折叠，适配桌面和手机；网络配置应用后有 120 秒确认，超时由设备回滚。
+支持设备概览、温度与存储、上游与网口、客户端租约、双频 WiFi 状态、LAN / WAN / IPv6 / DHCP / DNS / 无线配置、DHCP 地址保留、IPv4 端口转发、射频信道与带宽、WAN MTU/MAC、诊断和日志、时区与 NTP、状态灯、备份恢复、密码修改、重启，以及 AX1800 固件升级和恢复出厂。侧栏可折叠，适配桌面和手机；网络配置应用后有 120 秒确认，超时由设备回滚。功能与实机验收边界见[常用路由功能清单](docs/router-basics.md)。
 
 ## 支持设备
 
@@ -16,7 +16,7 @@ N1 使用完整启动镜像，升级与重置请按[刷机步骤](docs/flashing.
 
 ## 快速开始
 
-前端开发需要 Bun 1.4.0、Node.js 22.12 或以上版本：
+前端开发使用 Bun 1.4.4、Node.js 22.12 或以上版本：
 
 ```sh
 bun install --frozen-lockfile
@@ -28,19 +28,20 @@ bun run dev
 
 ## 文档
 
-| 文档                                         | 内容                                        |
-| -------------------------------------------- | ------------------------------------------- |
-| [设备与首次使用](docs/getting-started.md)    | 主/旁路由分工、接线、默认地址、初始化       |
-| [刷机步骤](docs/flashing.md)                 | AX1800 升级、N1 写卡、校验与防砖、回滚      |
-| [前端开发](docs/frontend-development.md)     | 技术栈、本地演示、页面路由、组件、资源预算  |
-| [固件构建](docs/firmware-build.md)           | Actions 参数、版本锁定、Linux 编译、N1 打包 |
-| [上游版本记录](docs/upstream-versions.md)    | 最新兼容分支、源码提交、内核及校验记录      |
-| [模拟安装与测试](docs/simulation-testing.md) | QEMU、浏览器测试、CI 触发、报告及验收范围   |
-| [网络配置与备份恢复](docs/configuration.md)  | LAN、WAN、DHCP、DNS、双频 WiFi、确认回滚    |
-| [系统维护与独立更新](docs/maintenance.md)    | 系统归档、重启、单独更新前端包              |
-| [状态指示灯](docs/leds.md)                   | 开机、正常、断网、故障灯效和探测规则        |
-| [系统与客户端状态](docs/system-status.md)    | 温度、存储、上游、网口及 IPv4/IPv6 租约     |
-| [开发进度](docs/development-status.md)       | 已实现功能、构建记录及未完成事项            |
+| 文档                                         | 内容                                         |
+| -------------------------------------------- | -------------------------------------------- |
+| [设备与首次使用](docs/getting-started.md)    | 主/旁路由分工、接线、默认地址、初始化        |
+| [刷机步骤](docs/flashing.md)                 | AX1800 升级、N1 写卡、校验与防砖、回滚       |
+| [前端开发](docs/frontend-development.md)     | 技术栈、本地演示、页面路由、组件、资源预算   |
+| [固件构建](docs/firmware-build.md)           | Actions 参数、版本锁定、Linux 编译、N1 打包  |
+| [上游版本记录](docs/upstream-versions.md)    | 最新兼容分支、源码提交、内核及校验记录       |
+| [模拟安装与测试](docs/simulation-testing.md) | QEMU、浏览器测试、CI 触发、报告及验收范围    |
+| [网络配置与备份恢复](docs/configuration.md)  | LAN、WAN、DHCP、DNS、双频 WiFi、确认回滚     |
+| [常用路由功能清单](docs/router-basics.md)    | IPv6、固定地址、端口转发、射频、诊断及缺失项 |
+| [系统维护与独立更新](docs/maintenance.md)    | 系统归档、重启、单独更新前端包               |
+| [状态指示灯](docs/leds.md)                   | 开机、正常、断网、故障灯效和探测规则         |
+| [系统与客户端状态](docs/system-status.md)    | 温度、存储、上游、网口及 IPv4/IPv6 租约      |
+| [开发进度](docs/development-status.md)       | 已实现功能、构建记录及未完成事项             |
 
 ## 上游与许可
 

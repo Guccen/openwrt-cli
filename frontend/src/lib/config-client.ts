@@ -2,7 +2,7 @@ import { RouterClient, RpcError } from "./rpc";
 import type { ConfigEdit, ConfigName, SettingsSnapshot, UciSections } from "./settings";
 
 export const APPLY_TIMEOUT = 120;
-export const CONFIGS: ConfigName[] = ["network", "dhcp", "wireless"];
+export const CONFIGS: ConfigName[] = ["network", "dhcp", "wireless", "firewall"];
 
 export class ConfigClient {
   constructor(readonly rpc = new RouterClient()) {}
@@ -17,9 +17,9 @@ export class ConfigClient {
         throw error;
       }
     };
-    const [network, dhcp, wireless] = await Promise.all(CONFIGS.map(get));
-    if (!network?.lan || !dhcp || !wireless) throw new Error("设备配置不完整");
-    return { network, dhcp, wireless };
+    const [network, dhcp, wireless, firewall] = await Promise.all(CONFIGS.map(get));
+    if (!network?.lan || !dhcp || !wireless || !firewall) throw new Error("设备配置不完整");
+    return { network, dhcp, wireless, firewall };
   }
 
   async changes(session: string) {
@@ -34,6 +34,23 @@ export class ConfigClient {
   async stage(session: string, edits: ConfigEdit[]) {
     for (const edit of edits) {
       if (!CONFIGS.includes(edit.config)) throw new Error("不支持此配置文件");
+      if (edit.deleteSection) {
+        await this.rpc.call(session, "uci", "delete", {
+          config: edit.config,
+          section: edit.section,
+        });
+        continue;
+      }
+      if (edit.add) {
+        const result = await this.rpc.call<{ section: string }>(session, "uci", "add", {
+          config: edit.config,
+          name: edit.section,
+          type: edit.add,
+          values: edit.values ?? {},
+        });
+        if (result?.section !== edit.section) throw new Error("设备返回的新配置名称不一致");
+        continue;
+      }
       if (edit.values && Object.keys(edit.values).length)
         await this.rpc.call(session, "uci", "set", {
           config: edit.config,

@@ -7,11 +7,11 @@ python3 scripts/simulation-tools.py sdk
 SDK="$ROOT/build/simulation-tools/sdk"
 mkdir -p build/simulation-package
 cp -a build/router-ui "$SDK/package/router-ui"
-# SDK 自带固定到发行提交的 base feed，包含 uhttpd/rpcd 的包定义。
-# 不拉取 LuCI 等额外 feeds，也不编译它们或重编整套固件。
-awk '$0 ~ /^src-git.* base / { print }' "$SDK/feeds.conf.default" > "$SDK/feeds.conf"
+# SDK 固定到发行提交的 base/packages feeds；packages 仅提供 coreutils-timeout。
+# 不拉取 LuCI，也不编译整套固件。
+awk '$0 ~ /^src-git.* (base|packages) / { print }' "$SDK/feeds.conf.default" > "$SDK/feeds.conf"
 test -s "$SDK/feeds.conf"
-(cd "$SDK" && ./scripts/feeds update -a && ./scripts/feeds install uhttpd rpcd jsonfilter ucode)
+(cd "$SDK" && ./scripts/feeds update -a && ./scripts/feeds install uhttpd rpcd jsonfilter ucode coreutils)
 cat > "$SDK/.config" <<'EOF'
 # CONFIG_ALL is not set
 # CONFIG_ALL_KMODS is not set

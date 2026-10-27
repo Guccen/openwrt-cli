@@ -1,5 +1,6 @@
 import { SettingsSection } from "@/components/settings/settings-section";
 import { WifiForm } from "@/components/settings/wifi-form";
+import { RadioForm } from "@/components/settings/radio-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DeviceLoading } from "@/components/status/device-loading";
 import { wifiDrafts } from "@/lib/settings";
@@ -24,6 +25,9 @@ export function WirelessPage() {
                 <WifiForm key={radio.section} {...props} initial={radio} />
               ))}
             </div>
+            {[...new Set(radios.map((radio) => radio.device))].map((section) => (
+              <RadioForm key={section} {...props} section={section} />
+            ))}
           </div>
         ) : (
           <Alert>

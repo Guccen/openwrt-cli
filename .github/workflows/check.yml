@@ -38,6 +38,6 @@ jobs:
         run: |
           python3 -m unittest discover -s tests/firmware -v
           python3 -m compileall -q scripts tests/runtime
-          for script in scripts/*.sh files/router-defaults.sh package/router-ui/files/router.maintenance package/router-ui/files/led-state package/router-ui/files/router-ui-led package/router-ui/files/router-ui-led-boot package/router-ui/files/led-hotplug package/router-ui/files/led-defaults; do bash -n "$script"; done
+          for script in scripts/*.sh files/router-defaults.sh package/router-ui/files/router.maintenance package/router-ui/files/router.status package/router-ui/files/router.diagnostics package/router-ui/files/led-state package/router-ui/files/router-ui-led package/router-ui/files/router-ui-led-boot package/router-ui/files/led-hotplug package/router-ui/files/led-defaults; do bash -n "$script"; done
       - name: Validate browser test definitions
         run: bunx playwright test --list

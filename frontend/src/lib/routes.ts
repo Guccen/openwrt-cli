@@ -5,12 +5,15 @@ export const pageRoutes = {
   wirelessStatus: { path: "/wireless/", title: "无线状态", settings: false },
   lan: { path: "/settings/lan/", title: "LAN 设置", settings: true },
   wan: { path: "/settings/wan/", title: "WAN 设置", settings: true },
+  ipv6: { path: "/settings/ipv6/", title: "IPv6 设置", settings: true },
   dhcp: { path: "/settings/dhcp/", title: "DHCP 设置", settings: true },
+  forwarding: { path: "/settings/forwarding/", title: "端口转发", settings: true },
   dns: { path: "/settings/dns/", title: "DNS 设置", settings: true },
   wireless: { path: "/settings/wireless/", title: "无线设置", settings: true },
   backup: { path: "/settings/backup/", title: "备份与恢复", settings: true },
   leds: { path: "/settings/leds/", title: "指示灯设置", settings: false },
   system: { path: "/system/", title: "系统维护", settings: false },
+  diagnostics: { path: "/diagnostics/", title: "诊断与日志", settings: false },
 } as const;
 export type Page = keyof typeof pageRoutes;
 export const loginPath = "/login/";

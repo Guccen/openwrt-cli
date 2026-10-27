@@ -24,6 +24,7 @@ REPORT = ROOT / "build/simulation-report"
 WORK = ROOT / "build/simulation-private"
 BRIDGE = "br-router-ci"
 TAP = "tap-router-ci"
+IPV6_TAP = "tap-router-v6"
 NAMESPACE = "router-ci-client"
 
 
@@ -141,7 +142,7 @@ def wait_for_network_services(address, role):
 
 def network_preflight(address):
     links = json.loads(run("ip", "-j", "addr", "show", capture_output=True).stdout)
-    reserved = {BRIDGE, TAP, "router-ci-host", "router-ci-peer"}
+    reserved = {BRIDGE, TAP, IPV6_TAP, "router-ci-host", "router-ci-peer"}
     if any(link["ifname"] in reserved for link in links):
         raise ValueError("模拟网桥或网口已存在，请先核对旧测试资源")
     namespaces = run("ip", "netns", "list", capture_output=True).stdout.splitlines()
@@ -154,6 +155,10 @@ def network_preflight(address):
                 existing = ipaddress.ip_network(f"{item['local']}/{item['prefixlen']}", strict=False)
                 if planned.overlaps(existing):
                     raise ValueError(f"模拟网段与本机已有网段重叠：{existing}，请在独立的 CI runner 运行")
+            elif item["family"] == "inet6":
+                existing = ipaddress.ip_network(f"{item['local']}/{item['prefixlen']}", strict=False)
+                if any(existing.overlaps(ipaddress.ip_network(prefix)) for prefix in ("2001:db8:100::/64", "2001:db8:200::/56")):
+                    raise ValueError("IPv6 模拟网段与宿主已有网络重叠")
 
 
 def network_up(address):
@@ -174,10 +179,18 @@ def network_up(address):
     run("sudo", "ip", "-n", NAMESPACE, "link", "set", "router-ci-peer", "name", "eth0")
     run("sudo", "ip", "-n", NAMESPACE, "link", "set", "eth0", "up")
     run("sudo", "ip", "-n", NAMESPACE, "link", "set", "lo", "up")
+    # 独立第三网卡仅用于 IPv6 路由联调，不修改宿主默认路由或真实网口。
+    run("sudo", "ip", "tuntap", "add", "dev", IPV6_TAP, "mode", "tap", "user", str(os.getuid()))
+    run("sudo", "ip", "link", "set", IPV6_TAP, "up")
+    run("sudo", "ip", "-6", "addr", "add", "2001:db8:100::1/64", "dev", IPV6_TAP)
+    run("sudo", "ip", "-6", "route", "add", "2001:db8:200::/56", "via", "2001:db8:100::2", "dev", IPV6_TAP)
+    run("sudo", "ip6tables", "-I", "INPUT", "-i", IPV6_TAP, "-p", "tcp", "--dport", "18093", "-j", "ACCEPT")
 
 
 def network_down():
     commands = [
+        ("ip6tables", "-D", "INPUT", "-i", IPV6_TAP, "-p", "tcp", "--dport", "18093", "-j", "ACCEPT"),
+        ("ip", "link", "delete", IPV6_TAP),
         ("iptables", "-D", "FORWARD", "-i", BRIDGE, "-o", BRIDGE, "-j", "ACCEPT"),
         ("ip", "netns", "delete", NAMESPACE),
         ("ip", "link", "delete", "router-ci-host"),
@@ -191,11 +204,11 @@ def network_down():
 def build_image(role, device):
     imagebuilder = ROOT / "build/simulation-tools/imagebuilder"
     # 官方仓库没有 fork 中的 px5g-openssl，测试系统使用 uhttpd 原生 OpenSSL 回退。
-    packages = "uhttpd uhttpd-mod-ubus rpcd jsonfilter ucode ucode-mod-fs ucode-mod-ubus rpcd-mod-iwinfo libustream-openssl openssl-util ca-bundle -luci -luci-light -luci-ssl -wpad-basic-mbedtls -libustream-mbedtls -libustream-wolfssl"
+    packages = "uhttpd uhttpd-mod-ubus rpcd jsonfilter ucode ucode-mod-fs ucode-mod-ubus ucode-mod-uci coreutils-timeout rpcd-mod-iwinfo libustream-openssl openssl-util ca-bundle -luci -luci-light -luci-ssl -wpad-basic-mbedtls -libustream-mbedtls -libustream-wolfssl"
     if device == "jdcloud-ax1800":
         packages += " wifi-scripts"
     if role == "bypass":
-        packages += " -ppp -ppp-mod-pppoe -odhcp6c -odhcpd-ipv6only"
+        packages += " -ppp -ppp-mod-pppoe -odhcpd-ipv6only"
     with (REPORT / "imagebuilder.log").open("w") as log:
         run("make", "-C", imagebuilder, "image", "PROFILE=generic", f"PACKAGES={packages}", f"FILES={WORK / 'overlay'}", f"BIN_DIR={WORK / 'images'}", "ROOTFS_PARTSIZE=128", stdout=log, stderr=subprocess.STDOUT)
     kernels = list((WORK / "images").glob("*-generic-kernel.bin"))
@@ -237,6 +250,9 @@ def install_package(address, package):
     password_helper = bundle / "files/password.uc"
     lines.append(f"{hashlib.sha256(password_helper.read_bytes()).hexdigest()}  /usr/libexec/router-ui/password.uc")
     for name, destination in {
+        'router.diagnostics': '/usr/libexec/rpcd/router.diagnostics',
+        'diagnostics.uc': '/usr/libexec/router-ui/diagnostics.uc',
+        'time-settings.uc': '/usr/libexec/router-ui/time-settings.uc',
         'led-policy.uc': '/usr/libexec/router-ui/led-policy.uc',
         'led-state': '/usr/libexec/router-ui/led-state',
         'router-ui-led': '/etc/init.d/router-ui-led',
@@ -344,7 +360,8 @@ def main():
             "-kernel", str(kernel), "-append", "root=/dev/vda rootwait console=ttyAMA0,115200",
             "-drive", f"file={disk},format=raw,if=virtio",
             "-netdev", f"tap,id=lan,ifname={TAP},script=no,downscript=no", "-device", network_device("lan", "52:54:00:12:34:01"),
-            "-netdev", "user,id=wan,net=10.0.2.0/24", "-device", network_device("wan", "52:54:00:12:34:02"),
+            "-netdev", "user,id=wan,net=10.0.2.0/24,hostfwd=tcp:127.0.0.1:18081-:18081", "-device", network_device("wan", "52:54:00:12:34:02"),
+            "-netdev", f"tap,id=ipv6,ifname={IPV6_TAP},script=no,downscript=no", "-device", network_device("ipv6", "52:54:00:12:34:03"),
             "-object", "rng-random,filename=/dev/urandom,id=rng0", "-device", "virtio-rng-pci,rng=rng0",
         ], stdin=subprocess.DEVNULL, stdout=qemu_log, stderr=subprocess.STDOUT)
         processes.append(process)
@@ -365,13 +382,14 @@ def main():
         env = dict(os.environ, SIM_BASE_URL=f"https://{address}", SIM_DEVICE=args.device, SIM_ROLE=args.role, SIM_ADDRESS=address)
         unit_env = dict(env, UCODE_TEST_COMMAND=shlex.join([sys.executable, str(ROOT / "tests/helpers/guest-ucode.py")]))
         with (REPORT / "ucode-tests.log").open("w") as log:
-            for suite in ("test_maintenance_data.py", "test_password.py", "test_led_policy.py", "test_status_data.py"):
+            for suite in ("test_maintenance_data.py", "test_password.py", "test_led_policy.py", "test_status_data.py", "test_router_basics.py"):
                 run("python3", "-m", "unittest", "discover", "-s", ROOT / "tests/firmware", "-p", suite, "-v", env=unit_env, stdout=log, stderr=subprocess.STDOUT)
         run("python3", ROOT / "tests/runtime/maintenance.py", env=env)
         run("python3", ROOT / "tests/runtime/password.py", env=env)
         run("python3", ROOT / "tests/runtime/led.py", env=env)
         run("python3", ROOT / "tests/runtime/status.py", env=env)
         run("python3", ROOT / "tests/runtime/routing.py", env=env)
+        run("python3", ROOT / "tests/runtime/router_basics.py", env=env)
         run("bun", "run", "test:e2e", env=env)
         success = True
     finally:

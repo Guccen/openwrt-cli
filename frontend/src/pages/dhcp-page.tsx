@@ -2,6 +2,7 @@ import { DeviceLoading } from "@/components/status/device-loading";
 import { ErrorAlert } from "@/components/status/error-alert";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { DhcpForm } from "@/components/settings/dhcp-form";
+import { ReservationsForm } from "@/components/settings/reservations-form";
 import { dhcpDraft } from "@/lib/dhcp-settings";
 import { useRouter } from "@/stores/router";
 import { NotFoundPage } from "./not-found-page";
@@ -15,7 +16,12 @@ export function DhcpPage() {
     <SettingsSection>
       {(props) => {
         try {
-          return <DhcpForm {...props} initial={dhcpDraft(props.snapshot)} />;
+          return (
+            <div className="space-y-3">
+              <DhcpForm {...props} initial={dhcpDraft(props.snapshot)} />
+              <ReservationsForm {...props} />
+            </div>
+          );
         } catch (error) {
           return (
             <ErrorAlert message={error instanceof Error ? error.message : "无法读取 DHCP 配置"} />

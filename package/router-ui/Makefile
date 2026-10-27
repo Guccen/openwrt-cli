@@ -1,8 +1,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=router-ui
-PKG_VERSION:=0.8.0
-PKG_RELEASE:=2
+PKG_VERSION:=0.9.0
+PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 
 include $(INCLUDE_DIR)/package.mk
@@ -12,7 +12,7 @@ define Package/router-ui
   SECTION:=admin
   CATEGORY:=Administration
   TITLE:=轻量设备管理页面
-  DEPENDS:=+uhttpd +uhttpd-mod-ubus +rpcd +jsonfilter +ucode +ucode-mod-fs +ucode-mod-ubus
+  DEPENDS:=+uhttpd +uhttpd-mod-ubus +rpcd +jsonfilter +ucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +coreutils-timeout
 endef
 
 define Package/router-ui/description
@@ -51,6 +51,9 @@ define Package/router-ui/install
 	$(INSTALL_DATA) ./files/shadcn-ui.LICENSE $(1)/usr/share/licenses/router-ui/shadcn-ui.LICENSE
 	$(INSTALL_BIN) ./files/router.maintenance $(1)/usr/libexec/rpcd/router.maintenance
 	$(INSTALL_BIN) ./files/router.status $(1)/usr/libexec/rpcd/router.status
+	$(INSTALL_BIN) ./files/router.diagnostics $(1)/usr/libexec/rpcd/router.diagnostics
+	$(INSTALL_DATA) ./files/diagnostics.uc $(1)/usr/libexec/router-ui/diagnostics.uc
+	$(INSTALL_DATA) ./files/time-settings.uc $(1)/usr/libexec/router-ui/time-settings.uc
 	$(INSTALL_DATA) ./files/status.uc $(1)/usr/libexec/router-ui/status.uc
 	$(INSTALL_DATA) ./files/maintenance-data.uc $(1)/usr/libexec/router-ui/maintenance-data.uc
 	$(INSTALL_DATA) ./files/password.uc $(1)/usr/libexec/router-ui/password.uc

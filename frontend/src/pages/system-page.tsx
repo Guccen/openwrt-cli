@@ -3,6 +3,7 @@ import { SystemBackupCard } from "@/components/system/system-backup-card";
 import { RebootCard } from "@/components/system/reboot-card";
 import { RecoveryCard } from "@/components/system/recovery-card";
 import { PasswordCard } from "@/components/system/password-card";
+import { TimeCard } from "@/components/system/time-card";
 import { ErrorAlert } from "@/components/status/error-alert";
 import { DeviceLoading } from "@/components/status/device-loading";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -34,6 +35,7 @@ export function SystemPage() {
         </Alert>
       )}
       <PasswordCard disabled={!snapshot || loading || !!busy || !!operation} />
+      <TimeCard disabled={!snapshot || loading || !!busy || !!operation} />
       <SystemBackupCard disabled={!snapshot || loading || !!busy || !!operation} />
       <RecoveryCard kind="restore" disabled={!snapshot || loading || !!busy || !!operation} />
       <RecoveryCard

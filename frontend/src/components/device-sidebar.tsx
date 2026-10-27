@@ -52,14 +52,26 @@ export function DeviceSidebar({
   ];
   const device = useRouter((state) => state.device);
   if (device?.role === "router")
-    items.splice(4, 0, { id: "wan", icon: Cable }, { id: "dhcp", icon: ListFilter });
+    items.splice(
+      4,
+      0,
+      { id: "wan", icon: Cable },
+      { id: "dhcp", icon: ListFilter },
+      { id: "forwarding", icon: Network },
+    );
   if (device?.device === "jdcloud-ax1800") {
     items.splice(2, 0, { id: "wirelessStatus", icon: Wifi });
     items.push({ id: "wireless", icon: Wifi });
   }
   items.push({ id: "backup", icon: ArchiveRestore });
+  items.splice(
+    items.findIndex((item) => item.id === "dns"),
+    0,
+    { id: "ipv6", icon: Globe },
+  );
   items.push({ id: "leds", icon: Lightbulb });
   items.push({ id: "system", icon: Wrench });
+  items.push({ id: "diagnostics", icon: Activity });
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="h-12 shrink-0 justify-center border-b px-2 py-0">

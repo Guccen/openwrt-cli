@@ -67,7 +67,7 @@ fail() {
 
 case "$1" in
     list)
-        printf '%s\n' '{"status":{},"backup":{},"reboot":{"confirm":true},"upload_start":{"kind":"","size":0,"sha256":""},"upload_chunk":{"token":"","offset":0,"data":""},"upload_cancel":{"token":""},"inspect":{"token":""},"restore":{"token":"","confirm":true},"upgrade":{"token":"","confirm":true},"reset":{"confirm":true},"password":{"current":"","password":"","confirmation":""},"led_status":{},"led_save":{"policy":""}}'
+        printf '%s\n' '{"status":{},"backup":{},"reboot":{"confirm":true},"upload_start":{"kind":"","size":0,"sha256":""},"upload_chunk":{"token":"","offset":0,"data":""},"upload_cancel":{"token":""},"inspect":{"token":""},"restore":{"token":"","confirm":true},"upgrade":{"token":"","confirm":true},"reset":{"confirm":true},"password":{"current":"","password":"","confirmation":""},"led_status":{},"led_save":{"policy":""},"time_status":{},"time_save":{"zone":"","enabled":true,"useDhcp":true,"servers":[]}}'
         ;;
     call)
         case "$2" in
@@ -108,6 +108,13 @@ case "$1" in
                 ;;
             led_status)
                 ucode /usr/libexec/router-ui/led-policy.uc status || true
+                ;;
+            time_status)
+                ucode /usr/libexec/router-ui/time-settings.uc status
+                ;;
+            time_save)
+                lock
+                ucode /usr/libexec/router-ui/time-settings.uc save
                 ;;
             led_save)
                 lock

@@ -38,8 +38,10 @@ export function PageHeader({ page }: { page: Page | null }) {
           else if (page === "clients") void clients.load();
           else if (page === "leds") void leds.load();
           else if (page === "system") void maintenance.load();
-          else if (page && pageRoutes[page].settings) void settings.load();
-          else void refresh();
+          else if (page && pageRoutes[page].settings) {
+            void settings.load();
+            if (page === "ipv6") void refresh();
+          } else void refresh();
         }}
       >
         <RefreshCw className={busy ? "animate-spin" : ""} />

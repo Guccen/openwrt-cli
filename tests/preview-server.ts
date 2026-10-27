@@ -8,6 +8,12 @@ import type { ConfigName, SettingsSnapshot } from "../frontend/src/lib/settings"
 const device = process.env.PREVIEW_DEVICE === "jdcloud-ax1800" ? "jdcloud-ax1800" : "phicomm-n1";
 const bypass = process.env.PREVIEW_ROLE === "bypass" && device === "phicomm-n1";
 const ledSettings = ledFixture(device);
+let timeSettings = {
+  zone: "UTC",
+  enabled: true,
+  useDhcp: true,
+  servers: ["0.openwrt.pool.ntp.org", "1.openwrt.pool.ntp.org"],
+};
 const initial = settingsFixture(bypass);
 if (device === "jdcloud-ax1800") {
   initial.network.lan.ipaddr = "192.168.68.1";
@@ -28,7 +34,7 @@ let transaction: {
   original: SettingsSnapshot;
   timer: ReturnType<typeof setTimeout>;
 } | null = null;
-const configs: ConfigName[] = ["network", "dhcp", "wireless"];
+const configs: ConfigName[] = ["network", "dhcp", "wireless", "firewall"];
 function restore() {
   if (!transaction) return;
   clearTimeout(transaction.timer);
@@ -62,6 +68,17 @@ Bun.serve({
       result = [0, { ubus_rpc_session: session }];
     } else if (sessions.has(sid)) {
       if (object === "router.status" && method === "summary") result = [0, telemetryFixture()];
+      if (object === "router.diagnostics" && method === "run")
+        result = [
+          0,
+          {
+            ok: true,
+            success: true,
+            code: 0,
+            output: "本地演示结果：未发起真实网络探测。",
+            limited: false,
+          },
+        ];
       if (object === "router.status" && method === "clients")
         result = [0, bypass ? { ...clientsFixture(), ipv4: [], ipv6: [] } : clientsFixture()];
       if (object === "session" && method === "destroy") {
@@ -79,6 +96,7 @@ Bun.serve({
                 : args.object === "uci" &&
                   [
                     "get",
+                    "add",
                     "changes",
                     "set",
                     "delete",
@@ -189,6 +207,44 @@ Bun.serve({
             : { channel: 6, frequency: 2437 },
         ];
       if (object === "iwinfo" && method === "assoclist") result = [0, { results: [] }];
+      if (object === "iwinfo" && method === "phyname")
+        result = [0, { phyname: args.section === "radio1" ? "phy1" : "phy0" }];
+      if (object === "iwinfo" && method === "freqlist")
+        result = [
+          0,
+          {
+            results: (args.device === "phy1"
+              ? [
+                  [36, 5180],
+                  [40, 5200],
+                  [149, 5745],
+                ]
+              : [
+                  [1, 2412],
+                  [6, 2437],
+                  [11, 2462],
+                ]
+            ).map(([channel, mhz]) => ({ channel, mhz, restricted: false })),
+          },
+        ];
+      if (object === "iwinfo" && method === "countrylist")
+        result = [
+          0,
+          {
+            results: [
+              { iso3166: "CN", country: "China" },
+              { iso3166: "US", country: "United States" },
+            ],
+          },
+        ];
+      if (object === "iwinfo" && method === "info" && /^phy[01]$/.test(String(args.device)))
+        result = [
+          0,
+          {
+            htmodes:
+              args.device === "phy1" ? ["HE20", "HE40", "HE80", "VHT80"] : ["HE20", "HE40", "HT20"],
+          },
+        ];
       if (object === "router.maintenance") {
         const configurationBusy = !!transaction || drafts.size > 0;
         if (method === "status")
@@ -205,6 +261,27 @@ Bun.serve({
           ];
         // 演示模式不生成或操作真实系统归档，也不重启主机。
         if (method === "led_status") result = [0, { ok: true, ...ledSettings }];
+        if (method === "time_status")
+          result = [
+            0,
+            {
+              ok: true,
+              settings: timeSettings,
+              zones: ["UTC", "Asia/Shanghai", "Asia/Hong_Kong", "Asia/Tokyo", "Asia/Singapore"],
+            },
+          ];
+        if (method === "time_save") {
+          if (configurationBusy) result = [0, { ok: false, error: "configuration_busy" }];
+          else {
+            timeSettings = {
+              zone: String(args.zone),
+              enabled: args.enabled === true,
+              useDhcp: args.useDhcp === true,
+              servers: args.servers as string[],
+            };
+            result = [0, { ok: true }];
+          }
+        }
         if (method === "led_save") {
           if (configurationBusy) result = [0, { ok: false, error: "configuration_busy" }];
           else {
@@ -221,7 +298,7 @@ Bun.serve({
             }
           }
         }
-        if (!["status", "led_status", "led_save"].includes(method))
+        if (!["status", "led_status", "led_save", "time_status", "time_save"].includes(method))
           result = [
             0,
             { ok: false, error: configurationBusy ? "configuration_busy" : "preview_only" },
@@ -248,13 +325,27 @@ Bun.serve({
               ),
             },
           ];
+        if (method === "add" && configs.includes(config) && !transaction) {
+          const draft = drafts.get(sid) ?? structuredClone(committed),
+            name = String(args.name);
+          if (draft[config][name]) result = [2];
+          else {
+            draft[config][name] = {
+              ".type": String(args.type),
+              ...(args.values as Record<string, string>),
+            };
+            drafts.set(sid, draft);
+            result = [0, { section: name }];
+          }
+        }
         if (["set", "delete"].includes(method) && configs.includes(config) && !transaction) {
           const draft = drafts.get(sid) ?? structuredClone(committed);
           const section = draft[config][String(args.section)];
           if (!section) result = [4];
           else {
             if (method === "set") Object.assign(section, args.values);
-            else delete section[String(args.option)];
+            else if (args.option !== undefined) delete section[String(args.option)];
+            else delete draft[config][String(args.section)];
             drafts.set(sid, draft);
             result = [0];
           }
