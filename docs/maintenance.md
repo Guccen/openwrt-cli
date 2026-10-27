@@ -36,10 +36,10 @@
 
 ## 独立更新前端包
 
-`router-ui` 0.6.0 可单独更新静态资源、ACL 和维护插件，安装后重启 rpcd，刷新页面并重新登录以取得新接口和权限。AX1800 的无线运行详情还需要安装固件来源匹配的 `rpcd-mod-iwinfo`。仅使用自己构建且已核对 SHA-256 的包，在没有暂存或待确认配置时更新，例如：
+`router-ui` 0.7.0 可单独更新静态资源、ACL 和维护插件，安装后重启 rpcd，刷新页面并重新登录以取得新接口和权限。AX1800 的无线运行详情还需要安装固件来源匹配的 `rpcd-mod-iwinfo`。仅使用自己构建且已核对 SHA-256 的包，在没有暂存或待确认配置时更新，例如：
 
 ```sh
-scp -O router-ui-0.6.0-r2.apk root@192.168.68.1:/tmp/router-ui.apk
+scp -O router-ui-0.7.0-r1.apk root@192.168.68.1:/tmp/router-ui.apk
 ssh root@192.168.68.1 'apk add --allow-untrusted /tmp/router-ui.apk && /etc/init.d/rpcd restart'
 ```
 

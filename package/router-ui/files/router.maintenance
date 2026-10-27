@@ -67,7 +67,7 @@ fail() {
 
 case "$1" in
     list)
-        printf '%s\n' '{"status":{},"backup":{},"reboot":{"confirm":true},"upload_start":{"kind":"","size":0,"sha256":""},"upload_chunk":{"token":"","offset":0,"data":""},"upload_cancel":{"token":""},"inspect":{"token":""},"restore":{"token":"","confirm":true},"upgrade":{"token":"","confirm":true},"reset":{"confirm":true},"password":{"current":"","password":"","confirmation":""}}'
+        printf '%s\n' '{"status":{},"backup":{},"reboot":{"confirm":true},"upload_start":{"kind":"","size":0,"sha256":""},"upload_chunk":{"token":"","offset":0,"data":""},"upload_cancel":{"token":""},"inspect":{"token":""},"restore":{"token":"","confirm":true},"upgrade":{"token":"","confirm":true},"reset":{"confirm":true},"password":{"current":"","password":"","confirmation":""},"led_status":{},"led_save":{"policy":""}}'
         ;;
     call)
         case "$2" in
@@ -105,6 +105,15 @@ case "$1" in
                 # OpenWrt 默认未启用 BusyBox base64；复用 netifd 已依赖的 ucode。
                 encoded=$(ucode -e 'import { readfile } from "fs"; let data = readfile(ARGV[0], 131073); if (type(data) != "string" || length(data) > 131072) exit(1); print(b64enc(data));' "$archive") || fail backup_failed
                 printf '{"ok":true,"size":%s,"sha256":"%s","data":"%s"}\n' "$size" "$checksum" "$encoded"
+                ;;
+            led_status)
+                ucode /usr/libexec/router-ui/led-policy.uc status || true
+                ;;
+            led_save)
+                lock
+                result=$(ucode /usr/libexec/router-ui/led-policy.uc save) || { printf '%s\n' "$result"; exit 0; }
+                /usr/libexec/router-ui/led-state configure >/dev/null 2>&1 || fail led_apply_failed
+                printf '%s\n' "$result"
                 ;;
             password)
                 lock

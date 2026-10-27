@@ -1,9 +1,12 @@
 // 仅用于本地页面开发；配置和网络变化均为内存演示，不修改真实设备。
 import { settingsFixture } from "./helpers/settings-fixture";
+import { ledFixture } from "./helpers/led-fixture";
+import { validateLedPolicy, type LedPolicy } from "../frontend/src/lib/led-client";
 import type { ConfigName, SettingsSnapshot } from "../frontend/src/lib/settings";
 
 const device = process.env.PREVIEW_DEVICE === "jdcloud-ax1800" ? "jdcloud-ax1800" : "phicomm-n1";
 const bypass = process.env.PREVIEW_ROLE === "bypass" && device === "phicomm-n1";
+const ledSettings = ledFixture(device);
 const initial = settingsFixture(bypass);
 if (device === "jdcloud-ax1800") {
   initial.network.lan.ipaddr = "192.168.68.1";
@@ -188,7 +191,24 @@ Bun.serve({
             },
           ];
         // 演示模式不生成或操作真实系统归档，也不重启主机。
-        if (method !== "status")
+        if (method === "led_status") result = [0, { ok: true, ...ledSettings }];
+        if (method === "led_save") {
+          if (configurationBusy) result = [0, { ok: false, error: "configuration_busy" }];
+          else {
+            try {
+              const policy = JSON.parse(String(args.policy)) as LedPolicy;
+              validateLedPolicy(policy, ledSettings.leds);
+              ledSettings.policy = policy;
+              ledSettings.current = policy.enabled
+                ? { state: "normal", checkedAt: Math.floor(Date.now() / 1000) }
+                : null;
+              result = [0, { ok: true }];
+            } catch {
+              result = [0, { ok: false, error: "led_invalid" }];
+            }
+          }
+        }
+        if (!["status", "led_status", "led_save"].includes(method))
           result = [
             0,
             { ok: false, error: configurationBusy ? "configuration_busy" : "preview_only" },

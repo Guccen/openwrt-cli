@@ -31,6 +31,7 @@ const WirelessStatusPage = lazy(() =>
 const SystemPage = lazy(() =>
   import("@/pages/system-page").then((page) => ({ default: page.SystemPage })),
 );
+const LedPage = lazy(() => import("@/pages/led-page").then((page) => ({ default: page.LedPage })));
 
 export function App() {
   const session = useRouter((state) => state.session);
@@ -77,6 +78,7 @@ export function App() {
           <Route path={pageRoutes.wireless.path} component={WirelessPage} />
           <Route path={pageRoutes.backup.path} component={BackupPage} />
           <Route path={pageRoutes.system.path} component={SystemPage} />
+          <Route path={pageRoutes.leds.path} component={LedPage} />
           <Route>
             <NotFoundPage />
           </Route>

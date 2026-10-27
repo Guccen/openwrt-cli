@@ -1,0 +1,5 @@
+#!/bin/sh /etc/rc.common
+START=99
+STOP=01
+start() { /usr/libexec/router-ui/led-state start; }
+stop() { /usr/libexec/router-ui/led-state stop; }

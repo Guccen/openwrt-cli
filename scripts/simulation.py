@@ -9,6 +9,7 @@ import shlex
 import shutil
 import ssl
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -232,6 +233,14 @@ def install_package(address, package):
     lines.append(f"{hashlib.sha256(data_helper.read_bytes()).hexdigest()}  /usr/libexec/router-ui/maintenance-data.uc")
     password_helper = bundle / "files/password.uc"
     lines.append(f"{hashlib.sha256(password_helper.read_bytes()).hexdigest()}  /usr/libexec/router-ui/password.uc")
+    for name, destination in {
+        'led-policy.uc': '/usr/libexec/router-ui/led-policy.uc',
+        'led-state': '/usr/libexec/router-ui/led-state',
+        'router-ui-led': '/etc/init.d/router-ui-led',
+        'router-ui-led-boot': '/etc/init.d/router-ui-led-boot',
+        'led-hotplug': '/etc/hotplug.d/iface/95-router-ui-led',
+    }.items():
+        lines.append(f"{hashlib.sha256((bundle / 'files' / name).read_bytes()).hexdigest()}  {destination}")
     with (REPORT / "installed-files.log").open("w") as log:
         ssh(address, "sha256sum -c -", input="\n".join(lines) + "\n", stdout=log, stderr=subprocess.STDOUT)
 
@@ -351,8 +360,13 @@ def main():
         test_network(args.role, address)
         run("python3", ROOT / "tests/runtime/configuration.py", "--address", address)
         env = dict(os.environ, SIM_BASE_URL=f"https://{address}", SIM_DEVICE=args.device, SIM_ROLE=args.role, SIM_ADDRESS=address)
+        unit_env = dict(env, UCODE_TEST_COMMAND=shlex.join([sys.executable, str(ROOT / "tests/helpers/guest-ucode.py")]))
+        with (REPORT / "ucode-tests.log").open("w") as log:
+            for suite in ("test_maintenance_data.py", "test_password.py", "test_led_policy.py"):
+                run("python3", "-m", "unittest", "discover", "-s", ROOT / "tests/firmware", "-p", suite, "-v", env=unit_env, stdout=log, stderr=subprocess.STDOUT)
         run("python3", ROOT / "tests/runtime/maintenance.py", env=env)
         run("python3", ROOT / "tests/runtime/password.py", env=env)
+        run("python3", ROOT / "tests/runtime/led.py", env=env)
         run("python3", ROOT / "tests/runtime/routing.py", env=env)
         run("bun", "run", "test:e2e", env=env)
         success = True

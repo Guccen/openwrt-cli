@@ -7,7 +7,7 @@
         "network.interface": ["dump"],
         "network.wireless": ["status"],
         "iwinfo": ["info", "assoclist"],
-        "router.maintenance": ["status", "backup"],
+        "router.maintenance": ["status", "backup", "led_status"],
         "session": ["access"],
         "uci": ["get", "changes"]
       },
@@ -25,7 +25,8 @@
           "restore",
           "upgrade",
           "reset",
-          "password"
+          "password",
+          "led_save"
         ],
         "uci": ["set", "delete", "revert", "apply", "confirm", "rollback"]
       },

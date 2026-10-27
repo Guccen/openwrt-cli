@@ -10,6 +10,7 @@ import {
   Wrench,
   Cable,
   ListFilter,
+  Lightbulb,
   type LucideIcon,
 } from "lucide-react";
 import { useRouter } from "@/stores/router";
@@ -55,6 +56,7 @@ export function DeviceSidebar({
     items.push({ id: "wireless", icon: Wifi });
   }
   items.push({ id: "backup", icon: ArchiveRestore });
+  items.push({ id: "leds", icon: Lightbulb });
   items.push({ id: "system", icon: Wrench });
   return (
     <Sidebar collapsible="icon">

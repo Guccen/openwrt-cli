@@ -1,6 +1,6 @@
 // 密码只通过标准输入传递；固定修改 root，不接受用户名或命令。
 import { fdopen, popen } from 'fs';
-import { connect } from 'ubus';
+import { connect, error as busError } from 'ubus';
 
 function fail(reason) { die(reason); }
 function controls(value) {
@@ -39,8 +39,10 @@ try {
     let revoked = true;
     for (let session in sessions) {
         if (session.data?.username == 'root' && session.ubus_rpc_session) {
-            if (bus.call('session', 'destroy', { ubus_rpc_session: session.ubus_rpc_session }) == null)
-                revoked = false;
+            bus.call('session', 'destroy', { ubus_rpc_session: session.ubus_rpc_session });
+            // destroy 成功时没有响应体；应检查 ubus 状态码，已过期也视为清理完成。
+            let status = busError(true);
+            if (status && status != 4) revoked = false;
         }
     }
     bus.disconnect();

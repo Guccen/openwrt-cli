@@ -21,6 +21,7 @@ class PasswordTests(unittest.TestCase):
         data = json.dumps({"current": current, "password": password, "confirmation": confirmation}).encode().hex()
         prefix = """
 let calls = [], writes = [];
+function busError() { return null; }
 function fdopen() { return { read: () => hexdec(DATA) }; }
 function popen(command, mode) {
     push(calls, [command, mode]);
@@ -31,12 +32,12 @@ function connect() {
         push(calls, [object, method]);
         if (method == 'login') return args.password == 'current-password' ? {ubus_rpc_session:'verifier'} : null;
         if (method == 'list') return [{ubus_rpc_session:'first',data:{username:'root'}},{ubus_rpc_session:'second',data:{username:'root'}}];
-        if (method == 'destroy') { push(calls, ['destroy',args.ubus_rpc_session]); return {}; }
+        if (method == 'destroy') { push(calls, ['destroy',args.ubus_rpc_session]); return null; }
     }};
 }
 """.replace("DATA", json.dumps(data)).replace("STATUS", "1" if fail_write else "0")
         source = (ROOT / "package/router-ui/files/password.uc").read_text(encoding="utf-8")
-        source = source.replace("import { fdopen, popen } from 'fs';", "").replace("import { connect } from 'ubus';", "")
+        source = source.replace("import { fdopen, popen } from 'fs';", "").replace("import { connect, error as busError } from 'ubus';", "")
         source = source.replace("sleep(250);", "")
         source += "\nprint('\\n', {calls, writes});"
         result = subprocess.run([*self.command, "-e", prefix + source], capture_output=True, encoding="utf-8", timeout=10)

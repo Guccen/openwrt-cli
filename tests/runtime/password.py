@@ -47,7 +47,7 @@ def run(address):
     try:
         result = maintenance(api, "password", args)
         if not result.get("changed") or result.get("sessionsRevoked") is not True:
-            raise AssertionError("设备没有完成密码修改及旧会话清理")
+            raise AssertionError(f"设备没有完成密码修改及旧会话清理：ok={result.get('ok')}, changed={result.get('changed')}, revoked={result.get('sessionsRevoked')}, error={result.get('error')}")
         expect_expired(api)
         expect_expired(other)
         try:
