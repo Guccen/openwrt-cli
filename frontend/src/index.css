@@ -132,3 +132,67 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 }
+
+@media (hover: hover) and (pointer: fine) and (forced-colors: none) {
+  *,
+  [data-slot="select-content"] [data-radix-select-viewport] {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--foreground) 42%, var(--background)) transparent;
+  }
+
+  html,
+  [data-slot="sidebar-content"] {
+    scrollbar-gutter: stable;
+  }
+
+  /* Radix already reserves the scrollbar gap while a dialog or select is open. */
+  html:has(body[data-scroll-locked]) {
+    scrollbar-gutter: auto;
+  }
+
+  @supports selector(::-webkit-scrollbar) {
+    *,
+    [data-slot="select-content"] [data-radix-select-viewport] {
+      scrollbar-width: auto;
+      scrollbar-color: auto;
+    }
+
+    ::-webkit-scrollbar,
+    [data-slot="select-content"] [data-radix-select-viewport]::-webkit-scrollbar {
+      display: block;
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-track,
+    ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      min-height: 32px;
+      border: 2px solid transparent;
+      border-radius: 9999px;
+      background: color-mix(in oklch, var(--foreground) 42%, var(--background));
+      background-clip: padding-box;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: color-mix(in oklch, var(--foreground) 62%, var(--background));
+    }
+
+    ::-webkit-scrollbar-thumb:active {
+      background-color: var(--muted-foreground);
+    }
+  }
+}
+
+@media (forced-colors: active) {
+  [data-slot="sidebar-content"] {
+    scrollbar-width: auto;
+  }
+
+  [data-slot="sidebar-content"]::-webkit-scrollbar {
+    display: block;
+  }
+}
