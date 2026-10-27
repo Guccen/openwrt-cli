@@ -252,17 +252,17 @@ export function ipv6Plan(
         src: "wan",
         family: "ipv6",
         proto: "udp",
-        src_ip: "fe80::/10",
         src_port: "547",
         dest_port: "547",
         target: "ACCEPT",
         enabled: "1",
       };
-      if (!prior || Object.entries(rule).some(([key, value]) => prior[key] !== value))
+      if (!prior || prior.src_ip !== undefined || Object.entries(rule).some(([key, value]) => prior[key] !== value))
         edits.push({
           config: "firewall",
           section: relayRule,
           values: rule,
+          remove: prior?.src_ip !== undefined ? ["src_ip"] : [],
           ...(!prior ? { add: "rule" } : {}),
         });
     } else if (snapshot.firewall[relayRule])

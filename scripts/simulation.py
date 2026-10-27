@@ -79,8 +79,40 @@ config wifi-iface 'default_radio1'
     return metadata
 
 
+def ssh_handshake_failure(error, address):
+    # 只识别 OpenSSH 在运行远程命令前产生的固定连接/密钥交换错误。
+    # client_loop、通道中断、远程退出码和已有标准输出都不能证明命令尚未执行。
+    if error.returncode != 255 or error.stdout or not isinstance(error.stderr, str):
+        return False
+    lines = error.stderr.strip().splitlines()
+    kex = {
+        "kex_exchange_identification: read: Connection reset by peer",
+        "kex_exchange_identification: Connection reset by peer",
+        "kex_exchange_identification: Connection closed by remote host",
+        "kex_exchange_identification: read: Connection closed by remote host",
+    }
+    if lines and lines[0] in kex:
+        return len(lines) == 1 or (len(lines) == 2 and lines[1] in {
+            f"Connection reset by {address} port 22",
+            f"Connection closed by {address} port 22",
+        })
+    return len(lines) == 1 and lines[0] in {
+        f"ssh: connect to host {address} port 22: Connection refused",
+        f"ssh: connect to host {address} port 22: No route to host",
+        f"ssh: connect to host {address} port 22: Connection timed out",
+    }
+
+
 def ssh(address, command, **kwargs):
-    return run("ssh", "-i", WORK / "ssh-key", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", f"UserKnownHostsFile={WORK / 'known_hosts'}", "-o", "ConnectTimeout=3", "-o", "LogLevel=ERROR", f"root@{address}", command, **kwargs)
+    args = ("ssh", "-i", WORK / "ssh-key", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", f"UserKnownHostsFile={WORK / 'known_hosts'}", "-o", "ConnectTimeout=3", "-o", "LogLevel=ERROR", f"root@{address}", command)
+    captured_stderr = kwargs.get("capture_output") or kwargs.get("stderr") == subprocess.PIPE
+    for attempt in range(3):
+        try:
+            return run(*args, **kwargs)
+        except subprocess.CalledProcessError as error:
+            if attempt == 2 or not captured_stderr or not ssh_handshake_failure(error, address):
+                raise
+            time.sleep(0.5 * (attempt + 1))
 
 
 def wait_for_guest(address, process, previous_boot=None):

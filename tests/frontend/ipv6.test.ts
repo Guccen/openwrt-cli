@@ -195,7 +195,6 @@ test("静态 IPv6 拒绝 LAN 链路本地前缀与 WAN 重叠，中继防火墙�
     values: {
       src: "wan",
       family: "ipv6",
-      src_ip: "fe80::/10",
       proto: "udp",
       src_port: "547",
       dest_port: "547",
@@ -203,6 +202,7 @@ test("静态 IPv6 拒绝 LAN 链路本地前缀与 WAN 重叠，中继防火墙�
     },
   });
   snapshot.firewall[rule.section] = { ".type": "rule", ...rule.values };
+  expect(rule.values).not.toHaveProperty("src_ip");
   snapshot.dhcp.lan.ra = "relay";
   const exit = ipv6Plan(snapshot, { ...ipv6Draft(snapshot, false), mode: "auto" }, false);
   expect(exit.edits).toContainEqual({

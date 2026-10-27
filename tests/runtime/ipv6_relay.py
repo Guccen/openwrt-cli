@@ -93,7 +93,8 @@ def udp_socket(interface, port):
 
 def server_worker():
     """短时上游服务：仅接收中继封装，不直接与 LAN 客户端通信。"""
-    source = link_local(IPV6_TAP)
+    link_local(IPV6_TAP)
+    source = "2001:db8:100::1"
     with udp_socket(IPV6_TAP, 547)[0] as sock:
         index = socket.if_nametoindex(IPV6_TAP)
         for group in ("ff02::1:2", "ff05::1:3"):
@@ -101,7 +102,7 @@ def server_worker():
                 socket.IPPROTO_IPV6, socket.IPV6_JOIN_GROUP,
                 socket.inet_pton(socket.AF_INET6, group) + struct.pack("@I", index),
             )
-        # Linux IPV6_PKTINFO 显式选择源地址，确保命中 fe80::/10 的托管规则。
+        # 上游可能用全局地址回包，不能错误地把 WAN 入站规则限制为链路本地源。
         pktinfo = socket.inet_pton(socket.AF_INET6, source) + struct.pack("@I", index)
         print(json.dumps({"ready": True, "source": source, "pid": os.getpid()}), flush=True)
         replies = 0
@@ -221,7 +222,7 @@ def run_test(api, address):
                 api.call("uci", "delete", {"config": "network", "section": section, "option": key})
         api.set("dhcp", "lan", {"ra": "relay", "dhcpv6": "relay", "ndp": "relay"})
         stage_section(api, "dhcp", "router_ui_ipv6_uplink", "dhcp", {"interface": "wan6", "master": "1", "ra": "relay", "dhcpv6": "relay", "ndp": "relay"})
-        stage_section(api, "firewall", "router_ui_ipv6_relay", "rule", {"name": RULE_NAME, "src": "wan", "family": "ipv6", "proto": "udp", "src_ip": "fe80::/10", "src_port": "547", "dest_port": "547", "target": "ACCEPT", "enabled": "1"})
+        stage_section(api, "firewall", "router_ui_ipv6_relay", "rule", {"name": RULE_NAME, "src": "wan", "family": "ipv6", "proto": "udp", "src_port": "547", "dest_port": "547", "target": "ACCEPT", "enabled": "1"})
         applied = True
         api.apply(120)
         deadline = time.monotonic() + 25
@@ -249,8 +250,8 @@ def run_test(api, address):
             _, errors = worker.communicate(timeout=2)
             raise AssertionError("DHCPv6 relay upstream worker failed: " + errors[-2000:])
         ready = json.loads(ready_line)
-        if not ready.get("ready") or not ipaddress.IPv6Address(ready["source"]).is_link_local:
-            raise AssertionError("Upstream worker did not bind a link-local source")
+        if not ready.get("ready") or ready["source"] != "2001:db8:100::1":
+            raise AssertionError("Upstream worker did not bind the test global source")
         worker_pid = ready["pid"]
         client = subprocess.run(["sudo", "-n", "ip", "netns", "exec", NAMESPACE, "python3", "-u", script, "--client"], capture_output=True, text=True, timeout=38)
         if client.returncode:
