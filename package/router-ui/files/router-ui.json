@@ -24,7 +24,8 @@
           "inspect",
           "restore",
           "upgrade",
-          "reset"
+          "reset",
+          "password"
         ],
         "uci": ["set", "delete", "revert", "apply", "confirm", "rollback"]
       },

@@ -6,10 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ErrorAlert } from "@/components/status/error-alert";
+import { useSearch } from "wouter";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useRouter } from "@/stores/router";
 
 export function LoginPage() {
   const { device, loading, error, login } = useRouter();
+  const query = new URLSearchParams(useSearch());
   const [password, setPassword] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,6 +38,15 @@ export function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {query.get("passwordChanged") === "1" && (
+              <Alert className="mb-4">
+                <AlertDescription>
+                  {query.get("revokeFailed") === "1"
+                    ? "密码已修改，请使用新密码登录。部分旧会话清理失败，请重启设备使其失效。"
+                    : "密码已修改，请使用新密码重新登录。"}
+                </AlertDescription>
+              </Alert>
+            )}
             <form onSubmit={(event) => void submit(event)} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="username">用户名</Label>

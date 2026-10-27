@@ -17,6 +17,7 @@ test("exports a verified archive and cancels reboot without a write", async ({
   await page.getByRole("button", { name: "重启设备", exact: true }).click();
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await page.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
   expect(reboots).toBe(0);
   if (process.env.SIM_BASE_URL?.startsWith("https://")) {
     const downloadEvent = page.waitForEvent("download");
@@ -34,6 +35,7 @@ test("exports a verified archive and cancels reboot without a write", async ({
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     .toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath("system-maintenance.png"), fullPage: true });
 });
 

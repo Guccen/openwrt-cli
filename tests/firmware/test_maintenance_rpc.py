@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class MaintenanceRpcTests(unittest.TestCase):
     def run_rpc(self, method, *, board="jdcloud,re-ss-01", mounts="", busy=False,
-                accepted=True, checksum=True, confirmed=True):
+                accepted=True, checksum=True, confirmed=True, kind="upgrade", restore_fails=False, rollback_fails=False):
         bash = shutil.which("bash") or "C:/Program Files/Git/bin/bash.exe"
         if not Path(bash).is_file():
             self.skipTest("需要 Bash")
@@ -27,18 +27,28 @@ class MaintenanceRpcTests(unittest.TestCase):
             (root / "upload").mkdir()
             (root / "upload/payload").write_bytes(b"firmware-fixture")
             digest = hashlib.sha256(b"firmware-fixture").hexdigest() if checksum else "0" * 64
-            info = json.dumps({"ok": True, "kind": "upgrade", "sha256": digest, "confirm": confirmed})
+            info = json.dumps({"ok": True, "kind": kind, "sha256": digest, "confirm": confirmed})
             mock = r'''
 sysupgrade() {
     printf '%s\n' "$*" >> "$TEST_LOG"
+    if [ "$1" = '-r' ]; then
+        case "$2" in
+            */expanded) [ "$TEST_RESTORE_FAILS" != yes ]; return;;
+            */rescue.tar.gz) [ "$TEST_ROLLBACK_FAILS" != yes ]; return;;
+        esac
+    fi
     [ "$1" != '-T' ] || [ "$TEST_ACCEPTED" = yes ]
 }
 ubus() { printf 'reboot\n' >> "$TEST_LOG"; }
 jffs2reset() { printf 'reset\n' >> "$TEST_LOG"; }
-ucode() { printf '%s\n' "$TEST_INFO"; }
+ucode() {
+    if [ "$2" = archive ]; then printf '{"ok":true,"files":4}';
+    else printf '%s\n' "$TEST_INFO"; fi
+}
+gzip() { printf 'checked-archive-fixture'; }
 jsonfilter() {
     case "$2" in
-        '@.kind') printf 'upgrade';;
+        '@.kind') printf '%s' "$TEST_KIND";;
         '@.sha256') printf '%s' "$TEST_DIGEST";;
         '@.confirm') printf '%s' "$TEST_CONFIRM";;
     esac
@@ -60,7 +70,8 @@ jsonfilter() {
             script += "\nwait\n"
             (root / "rpc.sh").write_text(script, encoding="utf-8", newline="\n")
             env = dict(os.environ, TEST_LOG=path + "/commands", TEST_INFO=info, TEST_DIGEST=digest,
-                       TEST_CONFIRM="true" if confirmed else "false", TEST_ACCEPTED="yes" if accepted else "no")
+                       TEST_CONFIRM="true" if confirmed else "false", TEST_ACCEPTED="yes" if accepted else "no", TEST_KIND=kind,
+                       TEST_RESTORE_FAILS="yes" if restore_fails else "no", TEST_ROLLBACK_FAILS="yes" if rollback_fails else "no")
             result = subprocess.run([bash, path + "/rpc.sh", "call", method], input="{}", capture_output=True, text=True, env=env, timeout=10)
             self.assertEqual(result.returncode, 0, result.stderr)
             commands = (root / "commands").read_text() if (root / "commands").exists() else ""
@@ -97,6 +108,21 @@ jsonfilter() {
         result, commands = self.run_rpc("reset", mounts="/dev/root /rom squashfs ro 0 0\noverlayfs:/overlay / overlay rw 0 0\n")
         self.assertTrue(result["accepted"])
         self.assertEqual(commands, "reset\nreboot\n")
+
+    def test_restore_success_reboots_and_failure_attempts_rescue_without_reboot(self):
+        result, commands = self.run_rpc("restore", kind="restore")
+        self.assertTrue(result["accepted"])
+        self.assertIn("reboot", commands)
+        for rollback_fails, reason in [(False, "restore_failed"), (True, "restore_rollback_failed")]:
+            result, commands = self.run_rpc("restore", kind="restore", restore_fails=True, rollback_fails=rollback_fails)
+            self.assertEqual(result["error"], reason)
+            self.assertIn("/rescue.tar.gz", commands)
+            self.assertNotIn("reboot", commands)
+
+    def test_upload_cancellation_is_possible_during_staged_configuration(self):
+        result, commands = self.run_rpc("upload_cancel", busy=True)
+        self.assertTrue(result["ok"])
+        self.assertEqual(commands, "")
 
 
 if __name__ == "__main__":

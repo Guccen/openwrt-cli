@@ -4,6 +4,7 @@ import {
   MaintenanceClient,
   decodeSystemBackup,
   SYSTEM_BACKUP_LIMIT,
+  validatePasswordChange,
 } from "../../frontend/src/lib/maintenance-client";
 import type { RouterClient } from "../../frontend/src/lib/rpc";
 import { createMaintenanceOperation } from "../../frontend/src/stores/maintenance-operation";
@@ -130,4 +131,44 @@ test("缺少设备能力字段时默认拒绝刷写与恢复出厂", async () =>
   } as unknown as RouterClient);
   expect((await client.read("sid")).upgradeSupported).toBe(false);
   expect((await client.read("sid")).resetSupported).toBe(false);
+});
+
+test("修改登录密码校验当前密码、两次确认、字节上限与控制字符", () => {
+  validatePasswordChange("current-password", "new-password", "new-password");
+  for (const values of [
+    ["", "new-password", "new-password"],
+    ["old", "short", "short"],
+    ["old", "new-password", "different"],
+    ["old-password", "old-password", "old-password"],
+    ["old", "new\npassword", "new\npassword"],
+    ["old", " ".repeat(12), " ".repeat(12)],
+    ["old", "字".repeat(43), "字".repeat(43)],
+  ] as const)
+    expect(() => validatePasswordChange(...values)).toThrow();
+});
+
+test("密码修改只调用受限接口，不把拒绝或不完整响应当成修改成功", async () => {
+  const calls: unknown[] = [];
+  const client = new MaintenanceClient({
+    call: async (...args: unknown[]) => {
+      calls.push(args);
+      return { ok: true, changed: true, sessionsRevoked: true };
+    },
+  } as unknown as RouterClient);
+  expect(
+    await client.changePassword("sid", "current-password", "new-password", "new-password"),
+  ).toBe(true);
+  expect(calls[0]).toEqual([
+    "sid",
+    "router.maintenance",
+    "password",
+    { current: "current-password", password: "new-password", confirmation: "new-password" },
+    undefined,
+  ]);
+  const rejected = new MaintenanceClient({
+    call: async () => ({ ok: false, error: "current_password_incorrect" }),
+  } as unknown as RouterClient);
+  await expect(
+    rejected.changePassword("sid", "wrong", "new-password", "new-password"),
+  ).rejects.toThrow("当前登录密码");
 });

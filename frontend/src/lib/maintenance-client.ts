@@ -38,6 +38,11 @@ const errors: Record<string, string> = {
   invalid_firmware: "固件未通过设备兼容性检查，请选择匹配 AX1800 的 sysupgrade 镜像。",
   restore_failed: "配置恢复失败，已尝试还原原配置。请通过 SSH 检查后再重启。",
   restore_rollback_failed: "配置恢复及原配置还原失败，请保持设备通电并通过 SSH 修复。",
+  invalid_password: "新密码需要 8–128 字节，密码不能包含控制字符或全部为空白。",
+  password_mismatch: "两次输入的新密码不一致。",
+  password_unchanged: "新密码不能与当前密码相同。",
+  current_password_incorrect: "当前登录密码不正确。",
+  password_failed: "修改密码未完成，请检查设备状态；连接中断时请先尝试新密码登录，勿反复提交。",
 };
 export class MaintenanceClient {
   constructor(readonly rpc = new RouterClient()) {}
@@ -129,6 +134,28 @@ export class MaintenanceClient {
     const result = await this.call(session, kind, { confirm: true, ...(token ? { token } : {}) });
     if (result.accepted !== true) throw new Error("设备未接受维护请求");
   }
+  async changePassword(session: string, current: string, password: string, confirmation: string) {
+    validatePasswordChange(current, password, confirmation);
+    const result = await this.call(session, "password", { current, password, confirmation });
+    if (result.changed !== true) throw new Error(errors.password_failed);
+    return result.sessionsRevoked === true;
+  }
+}
+
+export function validatePasswordChange(current: string, password: string, confirmation: string) {
+  const bytes = (value: string) => new TextEncoder().encode(value).length;
+  if (!current || bytes(current) > 512) throw new Error("请输入当前登录密码。");
+  if (
+    bytes(password) < 8 ||
+    bytes(password) > 128 ||
+    !password.trim() ||
+    Array.from(current + password).some(
+      (char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127,
+    )
+  )
+    throw new Error(errors.invalid_password);
+  if (password !== confirmation) throw new Error(errors.password_mismatch);
+  if (password === current) throw new Error(errors.password_unchanged);
 }
 
 export async function decodeSystemBackup(result: Record<string, unknown>) {

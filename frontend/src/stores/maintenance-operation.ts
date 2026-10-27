@@ -4,15 +4,14 @@ interface OperationToken {
   session: string;
   sequence: number;
 }
+type OperationKind = "backup" | "reboot" | "restore" | "upgrade" | "reset" | "upload" | "password";
 export function createMaintenanceOperation() {
   let sequence = 0;
   return create<{
     session: string | null;
-    kind: "backup" | "reboot" | "restore" | "upgrade" | "reset" | "upload" | null;
+    kind: OperationKind | null;
     bind: (session: string | null) => void;
-    begin: (
-      kind: "backup" | "reboot" | "restore" | "upgrade" | "reset" | "upload",
-    ) => OperationToken | null;
+    begin: (kind: OperationKind) => OperationToken | null;
     finish: (token: OperationToken) => void;
   }>((set, get) => ({
     session: null,
