@@ -198,11 +198,8 @@ test("direct page URLs preserve login destination, browser history and reload", 
   await page.goForward();
   await expect(page.getByRole("heading", { name: "LAN 设置", exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByText("登录设备", { exact: true })).toBeVisible();
-  await expect(page).toHaveURL((url) => url.searchParams.get("next") === pageRoutes.lan.path);
-  await page.getByLabel("设备密码").fill(password!);
-  await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(page.getByRole("heading", { name: "LAN 设置", exact: true })).toBeVisible();
+  await expect(page.getByText("登录设备", { exact: true })).toHaveCount(0);
   await expect(page).toHaveURL((url) => url.pathname === pageRoutes.lan.path);
 });
 
@@ -424,7 +421,9 @@ test("LAN address handoff confirms at the new origin and restores the initial ad
   expect(newAddressAttempts).toBeGreaterThanOrEqual(2);
   expect(next.url()).not.toContain("apply=");
   expect(await next.evaluate(() => localStorage.length)).toBe(0);
-  expect(await next.evaluate(() => sessionStorage.length)).toBe(0);
+  expect(await next.evaluate(() => sessionStorage.getItem("router-ui-session"))).toMatch(
+    /^[a-f0-9]{32}$/,
+  );
   await navigate(next, "LAN 设置");
   await expect(next.getByLabel("LAN IPv4 地址", { exact: true })).toHaveValue(address);
   await next.screenshot({ path: testInfo.outputPath("lan-new-address.png"), fullPage: true });

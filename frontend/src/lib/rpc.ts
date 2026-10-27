@@ -2,6 +2,13 @@ import axios, { type AxiosInstance } from "axios";
 import type { Board, Device, NetworkInterface, Snapshot, SystemInfo, Telemetry } from "./types";
 
 const anonymous = "00000000000000000000000000000000";
+const sessionRejections = new Set<(session: string) => void>();
+export function onSessionRejection(listener: (session: string) => void) {
+  sessionRejections.add(listener);
+  return () => {
+    sessionRejections.delete(listener);
+  };
+}
 
 export class RpcError extends Error {
   constructor(
@@ -51,7 +58,11 @@ export class RouterClient {
       }
       return data.result[1] as T;
     } catch (error) {
-      if (error instanceof RpcError) throw error;
+      if (error instanceof RpcError) {
+        if (error.sessionExpired && session !== anonymous)
+          for (const listener of sessionRejections) listener(session);
+        throw error;
+      }
       throw new RpcError("连接设备失败，请检查网络后重试");
     }
   }

@@ -31,7 +31,7 @@ export function PasswordCard({ disabled }: { disabled: boolean }) {
       const revoked = await maintenanceClient.changePassword(session, ...values);
       const active = useRouter.getState().session;
       if (active && active !== session) return;
-      useRouter.setState({ session: null, snapshot: null });
+      useRouter.getState().forgetSession();
       window.location.assign(`${loginPath}?passwordChanged=1${revoked ? "" : "&revokeFailed=1"}`);
     } catch (e) {
       if (useRouter.getState().session === session)

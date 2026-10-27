@@ -93,18 +93,19 @@ Bun.serve({
             access:
               args.scope === "uci"
                 ? configs.includes(args.object as ConfigName)
-                : args.object === "uci" &&
-                  [
-                    "get",
-                    "add",
-                    "changes",
-                    "set",
-                    "delete",
-                    "revert",
-                    "apply",
-                    "confirm",
-                    "rollback",
-                  ].includes(String(args.function)),
+                : (args.object === "system" && ["board", "info"].includes(String(args.function))) ||
+                  (args.object === "uci" &&
+                    [
+                      "get",
+                      "add",
+                      "changes",
+                      "set",
+                      "delete",
+                      "revert",
+                      "apply",
+                      "confirm",
+                      "rollback",
+                    ].includes(String(args.function))),
           },
         ];
       if (object === "system" && method === "board")

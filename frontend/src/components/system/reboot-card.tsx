@@ -50,7 +50,7 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
         if (e instanceof RpcError && e.sessionExpired) {
           try {
             const device = await rpc.device();
-            if (!cancelled && device) useRouter.setState({ session: null, snapshot: null });
+            if (!cancelled && device) useRouter.getState().forgetSession();
           } catch {
             /* 设备 HTTP 服务尚未恢复，下次继续探测。 */
           }
@@ -108,7 +108,7 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
           <Button asChild variant="outline">
             <Link
               href={`${loginPath}?next=${encodeURIComponent(pageRoutes.system.path)}`}
-              onClick={() => useRouter.setState({ session: null, snapshot: null })}
+              onClick={() => useRouter.getState().forgetSession()}
             >
               重新登录
             </Link>

@@ -106,7 +106,7 @@ export function registerApplyHandoff() {
       incoming.accepted = true;
       window.history.replaceState(null, "", window.location.pathname + window.location.search);
       useSettings.getState().adopt(data.session, data.pending);
-      useRouter.setState({ session: data.session, snapshot: null, loading: false, error: null });
+      useRouter.getState().adoptSession(data.session);
       void useRouter.getState().refresh();
     }
   };

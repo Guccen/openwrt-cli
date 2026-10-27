@@ -257,7 +257,11 @@ export function ipv6Plan(
         target: "ACCEPT",
         enabled: "1",
       };
-      if (!prior || prior.src_ip !== undefined || Object.entries(rule).some(([key, value]) => prior[key] !== value))
+      if (
+        !prior ||
+        prior.src_ip !== undefined ||
+        Object.entries(rule).some(([key, value]) => prior[key] !== value)
+      )
         edits.push({
           config: "firewall",
           section: relayRule,

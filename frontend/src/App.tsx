@@ -5,6 +5,8 @@ import { loginPath, pageForPath, pageRoutes, returnPath } from "@/lib/routes";
 import { LoginPage } from "@/pages/login-page";
 import { NotFoundPage } from "@/pages/not-found-page";
 import { DeviceLoading } from "@/components/status/device-loading";
+import { Button } from "@/components/ui/button";
+import { ErrorAlert } from "@/components/status/error-alert";
 import { useRouter } from "@/stores/router";
 
 const OverviewPage = lazy(() =>
@@ -47,12 +49,35 @@ const DiagnosticsPage = lazy(() =>
 
 export function App() {
   const session = useRouter((state) => state.session);
+  const sessionReady = useRouter((state) => state.sessionReady);
+  const sessionRestoreError = useRouter((state) => state.sessionRestoreError);
+  const restoreSession = useRouter((state) => state.restoreSession);
   const loadDevice = useRouter((state) => state.loadDevice);
   const [location] = useLocation();
   const search = useSearch();
   useEffect(() => {
     void loadDevice();
-  }, [loadDevice]);
+    void restoreSession();
+  }, [loadDevice, restoreSession]);
+  if (!sessionReady)
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-muted/30 p-5">
+        <div className="w-full max-w-sm space-y-4" aria-live="polite">
+          {sessionRestoreError ? (
+            <>
+              <ErrorAlert message={sessionRestoreError} />
+              <Button className="w-full" onClick={() => void restoreSession()}>
+                重试登录状态检查
+              </Button>
+            </>
+          ) : (
+            <output className="block text-center text-sm text-muted-foreground">
+              正在检查登录状态…
+            </output>
+          )}
+        </div>
+      </main>
+    );
   const atLogin = location.replace(/\/$/, "") === loginPath.replace(/\/$/, "");
   if (!session)
     return atLogin ? (
