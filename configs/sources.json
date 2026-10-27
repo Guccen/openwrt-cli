@@ -16,20 +16,20 @@
   },
   "phicomm-n1": {
     "url": "https://github.com/immortalwrt/immortalwrt.git",
-    "revision": "4fc16f2985a358bd43bb522e43f05395fcbd6ed5",
-    "version": "v25.12.2",
+    "revision": "84b665b5de552e297d0f7d755b88a46fc0cfeb13",
+    "version": "openwrt-25.12",
     "feeds": {
       "packages": {
         "url": "https://github.com/immortalwrt/packages.git",
-        "revision": "84bd86384928955b568988ca0e09e2c78c75173d"
+        "revision": "6f8f6461e8a6a0bbc134592d12353700fe698506"
       }
     }
   },
   "n1_packager": {
     "url": "https://github.com/ophub/amlogic-s9xxx-openwrt.git",
     "revision": "52ad5239e6720f5b56c9afafcd7080cbe3cf2881",
-    "kernel": "6.12.114",
-    "kernel_sha256": "4cf9646f4725817d4ec91a2b4889f42f30d2b2e1d584b4bfdba9bcc2477adae6",
+    "kernel": "6.18.58",
+    "kernel_sha256": "a73f560d56fb2a179e35e308b51e4a1c6b14a114585cebe7e0ad4294dbc44ce0",
     "dependencies": {
       "https://github.com/ophub/u-boot": "e06036570fc7a3ff810d7d5e8b4cb32f3a925f31",
       "https://github.com/ophub/firmware": "a9d0e8337cc8aa2ca4b482acd7b19c74ce05860f",

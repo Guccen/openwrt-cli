@@ -34,6 +34,7 @@ bun run dev
 | [刷机步骤](docs/flashing.md)                 | AX1800 升级、N1 写卡、校验与防砖、回滚      |
 | [前端开发](docs/frontend-development.md)     | 技术栈、本地演示、页面路由、组件、资源预算  |
 | [固件构建](docs/firmware-build.md)           | Actions 参数、版本锁定、Linux 编译、N1 打包 |
+| [上游版本记录](docs/upstream-versions.md)    | 最新兼容分支、源码提交、内核及校验记录      |
 | [模拟安装与测试](docs/simulation-testing.md) | QEMU、浏览器测试、CI 触发、报告及验收范围   |
 | [网络配置与备份恢复](docs/configuration.md)  | LAN、WAN、DHCP、DNS、双频 WiFi、确认回滚    |
 | [系统维护与独立更新](docs/maintenance.md)    | 系统归档、重启、单独更新前端包              |

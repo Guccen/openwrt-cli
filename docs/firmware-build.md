@@ -2,7 +2,7 @@
 
 [返回项目首页](../README.md) · [设备接线与初始化](getting-started.md) · [模拟测试](simulation-testing.md)
 
-源码、feeds 和 N1 内核版本固定在 [sources.json](../configs/sources.json)。已生成的镜像与待验收事项见[开发进度](development-status.md)。
+源码、feeds 和 N1 内核版本固定在 [sources.json](../configs/sources.json)。最近一次上游核对及兼容分支选择见[上游版本记录](upstream-versions.md)。已生成的镜像与待验收事项见[开发进度](development-status.md)。
 
 ## 构建约束
 

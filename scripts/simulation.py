@@ -19,6 +19,7 @@ import firmware
 from qemu_host import network_device
 
 ROOT = firmware.ROOT
+SIMULATION_VERSION = json.loads((ROOT / "configs/simulation.json").read_text(encoding="utf-8"))["version"]
 REPORT = ROOT / "build/simulation-report"
 WORK = ROOT / "build/simulation-private"
 BRIDGE = "br-router-ci"
@@ -391,7 +392,7 @@ def main():
         wan_log.close()
         if network_created:
             network_down()
-        (REPORT / "summary.json").write_text(json.dumps({"device": args.device, "role": args.role, "runtime": "OpenWrt 25.12.2 ARM64 / QEMU virt", "package_sha256": hashlib.sha256(args.package.read_bytes()).hexdigest(), "passed": success, "hardware_emulated": False}, indent=2) + "\n")
+        (REPORT / "summary.json").write_text(json.dumps({"device": args.device, "role": args.role, "runtime": f"OpenWrt {SIMULATION_VERSION} ARM64 / QEMU virt", "package_sha256": hashlib.sha256(args.package.read_bytes()).hexdigest(), "passed": success, "hardware_emulated": False}, indent=2) + "\n")
         shutil.rmtree(WORK)
     if not success:
         raise RuntimeError("模拟测试失败")
