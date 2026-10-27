@@ -31,6 +31,7 @@ bun run dev
 | 文档                                         | 内容                                        |
 | -------------------------------------------- | ------------------------------------------- |
 | [设备与首次使用](docs/getting-started.md)    | 主/旁路由分工、接线、默认地址、初始化       |
+| [刷机步骤](docs/flashing.md)                 | AX1800 升级、N1 写卡、校验与防砖、回滚      |
 | [前端开发](docs/frontend-development.md)     | 技术栈、本地演示、页面路由、组件、资源预算  |
 | [固件构建](docs/firmware-build.md)           | Actions 参数、版本锁定、Linux 编译、N1 打包 |
 | [模拟安装与测试](docs/simulation-testing.md) | QEMU、浏览器测试、CI 触发、报告及验收范围   |
