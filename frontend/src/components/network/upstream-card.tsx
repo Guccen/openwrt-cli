@@ -18,7 +18,7 @@ export function UpstreamCard({ snapshot }: { snapshot: Snapshot }) {
           <div key={iface.interface} className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{iface.interface}</span>
-              <Badge variant={iface.up ? "secondary" : "outline"}>
+              <Badge variant={iface.up ? "success" : "warning"}>
                 {iface.up ? "接口已连接" : "接口未连接"}
               </Badge>
               <span className="text-muted-foreground">

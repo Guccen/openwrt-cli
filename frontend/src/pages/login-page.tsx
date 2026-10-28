@@ -26,9 +26,7 @@ export function LoginPage() {
         <div className="flex items-center gap-2">
           <img src="/icon.svg" alt="" className="size-7 rounded-lg" />
           <span className="text-sm font-semibold">设备控制台</span>
-          <Badge variant="outline" className="ml-auto">
-            轻量版
-          </Badge>
+          <Badge className="ml-auto">轻量版</Badge>
         </div>
         <Card size="sm">
           <CardHeader>

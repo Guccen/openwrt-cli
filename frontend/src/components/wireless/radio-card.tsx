@@ -14,12 +14,21 @@ export function RadioCard({ radio }: { radio: WirelessRadio }) {
         : radio.up
           ? "运行中"
           : "未运行";
+  const variant = radio.disabled
+    ? "outline"
+    : radio.pending
+      ? "warning"
+      : radio.failed
+        ? "destructive"
+        : radio.up
+          ? "success"
+          : "outline";
   return (
     <Card size="sm">
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2">
           {wifiBandLabel(radio.band)} WiFi
-          <Badge variant={radio.up ? "secondary" : "outline"}>{status}</Badge>
+          <Badge variant={variant}>{status}</Badge>
         </CardTitle>
         <CardDescription>
           {radio.name} · 配置信道 {radio.channel || "自动"}

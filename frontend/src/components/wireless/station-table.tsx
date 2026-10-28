@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/table";
 import type { WirelessStation } from "@/lib/wireless-client";
 import { uptime } from "@/lib/format";
+import { Badge } from "@/components/ui/badge";
 
 const rate = (value: number | null) => (value ? `${(value / 1000).toFixed(1)} Mbps` : "—");
 export function StationTable({ stations }: { stations: WirelessStation[] | null }) {
@@ -31,7 +32,13 @@ export function StationTable({ stations }: { stations: WirelessStation[] | null 
           <TableRow key={`${item.mac}-${index}`}>
             <TableCell className="font-mono text-xs">{item.mac || "—"}</TableCell>
             <TableCell>
-              {item.authorized === null ? "—" : item.authorized ? "已授权" : "待授权"}
+              {item.authorized === null ? (
+                "—"
+              ) : (
+                <Badge variant={item.authorized ? "success" : "warning"}>
+                  {item.authorized ? "已授权" : "待授权"}
+                </Badge>
+              )}
             </TableCell>
             <TableCell>{item.signal === null ? "—" : `${item.signal} dBm`}</TableCell>
             <TableCell>

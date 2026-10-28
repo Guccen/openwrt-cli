@@ -32,7 +32,7 @@ export function NetworkTable({ snapshot }: { snapshot: Snapshot }) {
                 </div>
               </TableCell>
               <TableCell>
-                <Badge variant={item.up ? "secondary" : "outline"}>
+                <Badge variant={item.up ? "success" : "outline"}>
                   {item.up ? "已连接" : "未连接"}
                 </Badge>
               </TableCell>

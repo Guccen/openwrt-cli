@@ -12,7 +12,10 @@ export function DeviceHeader() {
       <span className="truncate text-xs text-muted-foreground">
         {device?.model ?? snapshot?.board.model ?? "设备控制台"}
       </span>
-      <Badge variant="secondary" className="ml-auto shrink-0">
+      <Badge
+        variant={device?.role === "bypass" ? "secondary" : "default"}
+        className="ml-auto shrink-0"
+      >
         {device?.role === "bypass" ? "旁路由" : "主路由"}
       </Badge>
     </header>

@@ -37,7 +37,7 @@ export function WanForm({
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center justify-between gap-2">
           上网方式
-          <Badge variant="outline">
+          <Badge variant="secondary">
             {station
               ? "无线连接上游"
               : String(snapshot.network.wan.device ?? snapshot.network.wan.ifname ?? "由系统管理")}

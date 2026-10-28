@@ -39,7 +39,7 @@ export function WifiForm({
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2">
           <span>{wifiBandLabel(initial.band)} WiFi</span>
-          <Badge variant={draft.enabled ? "secondary" : "outline"}>
+          <Badge variant={draft.enabled ? "success" : "outline"}>
             {draft.enabled ? "已启用" : "已关闭"}
           </Badge>
         </CardTitle>

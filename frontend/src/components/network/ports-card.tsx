@@ -19,7 +19,7 @@ export function PortsCard({ ports }: { ports: Telemetry["ports"] }) {
             <div key={port.name} className="min-w-0 rounded-lg border p-3 text-xs space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium break-all">{port.name}</span>
-                <Badge variant={port.link ? "secondary" : "outline"}>
+                <Badge variant={port.link ? "success" : "outline"}>
                   {port.link === null ? "未知" : port.link ? "已连接" : "未连接"}
                 </Badge>
               </div>

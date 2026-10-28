@@ -20,6 +20,7 @@ import {
 import { wifiBand, wifiBandLabel, type WifiBand } from "@/lib/wifi-band";
 import { useRouter } from "@/stores/router";
 import type { SettingsFormProps } from "./settings-section";
+import { RadioAdvice } from "./radio-advice";
 const client = new RadioClient();
 export function RadioForm({
   snapshot,
@@ -217,9 +218,17 @@ export function RadioForm({
             </div>
           </div>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            HE 为 WiFi 6，VHT 为 WiFi 5。带宽已按当前信道的驱动限制筛选，切换频段默认使用 20
-            MHz。带宽越大不一定越快；DFS 信道可能等待雷达检测后才出现，修改地区后请重新读取信道。
+            HE 为 WiFi 6，VHT 为 WiFi 5。带宽已按当前信道的驱动限制筛选。DFS
+            信道可能等待雷达检测后才出现，修改地区后请重新读取信道。
           </p>
+          {caps && draft.country === radioDraft(snapshot, section).country && (
+            <RadioAdvice
+              caps={caps}
+              band={band}
+              channel={draft.channel}
+              singleRadio={singleRadio}
+            />
+          )}
           <Button disabled={locked}>应用射频参数</Button>
         </form>
       </CardContent>
