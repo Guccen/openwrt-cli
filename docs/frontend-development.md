@@ -2,13 +2,13 @@
 
 [返回项目首页](../README.md) · [模拟测试](simulation-testing.md) · [开发进度](development-status.md)
 
-## 技术栈与资源预算
+## 技术栈与资源统计
 
 - 前端使用 Vite、React、shadcn/ui Mira、Axios、Zustand、wouter、Bun、Oxfmt、Oxlint。通过 `bunx --bun shadcn@latest init -t vite` 初始化，界面组件均来自 shadcn/ui。
 - 桌面侧栏可折叠为图标栏，小于 768px 切换为抽屉菜单，选中页面后自动收起。
 - 菜单按状态概览、网络配置、系统管理分组；`HelpTip` 统一字段说明，支持悬停、键盘聚焦和触摸点击。保存结果与关键错误直接显示。
 - 使用系统字体和按需图标，不加载外部字体或 CDN。设备通过静态资源、OpenWrt 接口和按需执行的受限 rpcd 插件提供功能，不运行 Bun、Node.js 或新增常驻服务。
-- 资源预算：原始静态资源不超过 768 KiB，按文件计算的 gzip 合计不超过 256 KiB。生产构建不输出源代码映射。
+- 图表使用 shadcn/ui Chart 与 Recharts，单独分块并随概况页加载。按用户要求取消静态资源体积的硬性上限，继续记录原始体积与逐文件 gzip 合计；生产构建不输出源代码映射。
 
 ## 开发环境与本地演示
 
@@ -20,7 +20,7 @@ bun run check
 bun run dev
 ```
 
-`check` 执行 Oxlint、Oxfmt、测试、TypeScript、生产构建和体积校验。`dist/` 是静态资源，`build/router-ui/` 是安装包目录，`build/ui-size.json` 记录资源体积。
+`check` 执行 Oxlint、Oxfmt、测试、TypeScript、生产构建和体积统计。`dist/` 是静态资源，`build/router-ui/` 是安装包目录，`build/ui-size.json` 记录资源体积。
 
 本地演示使用两个终端，数据标记为“本地演示”，密码为 `preview-only`：
 
@@ -63,7 +63,7 @@ bun run dev
 
 `App.tsx` 只负责登录判断和路由；`pages/` 保存各页面入口；`components/layout/` 保存主布局、标题和页脚；`components/overview/` 与 `components/network/` 保存状态组件；`components/settings/` 分别保存 LAN、WAN、DHCP、DNS、无线、备份表单及共用的应用确认组件。路径和标题统一在 `lib/routes.ts` 维护。
 
-构建时为每个地址生成一个小的目录首页，全部共用同一份 JS/CSS，入口文件也纳入体积预算。uhttpd 可直接提供这些文件，深层地址刷新不依赖额外服务器或 URL 重写。测试会检查所有入口返回 200、资源使用绝对路径，以及不存在的资源仍返回 404。
+构建时为每个地址生成一个小的目录首页，全部共用同一份 JS/CSS，入口文件也纳入体积统计。uhttpd 可直接提供这些文件，深层地址刷新不依赖额外服务器或 URL 重写。测试会检查所有入口返回 200、资源使用绝对路径，以及不存在的资源仍返回 404。
 
 ## 目录与本地验证
 

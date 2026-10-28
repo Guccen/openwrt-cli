@@ -6,6 +6,7 @@ import {
   type SessionStorageAdapter,
 } from "../lib/session-storage";
 import type { Device, Snapshot } from "../lib/types";
+import { appendOverviewSample, type OverviewSample } from "../lib/overview-history";
 
 interface RouterState {
   session: string | null;
@@ -13,6 +14,7 @@ interface RouterState {
   sessionRestoreError: string | null;
   device: Device | null;
   snapshot: Snapshot | null;
+  history: OverviewSample[];
   loading: boolean;
   error: string | null;
   loadDevice: () => Promise<void>;
@@ -49,6 +51,7 @@ export function createRouterStore(client = new RouterClient(), storage?: Session
     sessionRestoreError: null,
     device: null,
     snapshot: null,
+    history: [],
     loading: false,
     error: null,
     loadDevice: async () => set({ device: await client.device() }),
@@ -60,6 +63,7 @@ export function createRouterStore(client = new RouterClient(), storage?: Session
         sessionReady: true,
         sessionRestoreError: null,
         snapshot: null,
+        history: [],
         loading: false,
         error: message ?? null,
       });
@@ -73,6 +77,7 @@ export function createRouterStore(client = new RouterClient(), storage?: Session
         sessionReady: true,
         sessionRestoreError: null,
         snapshot: null,
+        history: [],
         loading: false,
         error: null,
       });
@@ -135,6 +140,7 @@ export function createRouterStore(client = new RouterClient(), storage?: Session
         sessionReady: true,
         sessionRestoreError: null,
         snapshot: null,
+        history: [],
         loading: true,
         error: null,
       });
@@ -176,7 +182,8 @@ export function createRouterStore(client = new RouterClient(), storage?: Session
       set({ loading: true, error: null });
       try {
         const snapshot = await client.snapshot(session);
-        if (request === generation) set({ snapshot, loading: false });
+        if (request === generation)
+          set({ snapshot, history: appendOverviewSample(get().history, snapshot), loading: false });
       } catch (error) {
         if (request !== generation) return;
         if (error instanceof RpcError && error.code === 6) {

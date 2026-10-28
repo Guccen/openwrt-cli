@@ -24,11 +24,17 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: false,
     target: "es2022",
-    // 合并共享依赖以提高压缩率，业务页面继续按路由加载，保持固件资源预算。
+    // 图表单独分块且不递归吸收公共依赖，避免登录页提前加载图表。
     rolldownOptions: {
       output: {
         codeSplitting: {
           groups: [
+            {
+              name: "charts",
+              test: /[\\/]node_modules[\\/](recharts|recharts-scale|victory-vendor|d3-[^\\/]+|@reduxjs|react-redux|redux|immer)[\\/]/,
+              priority: 20,
+              includeDependenciesRecursively: false,
+            },
             { name: "vendor", test: /[\\/]node_modules[\\/]/ },
             { name: "shared", minShareCount: 2, includeDependenciesRecursively: false },
           ],

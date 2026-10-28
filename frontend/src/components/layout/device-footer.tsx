@@ -29,7 +29,9 @@ export function DeviceFooter() {
     <footer className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
       <CircleCheck className="size-3" />
       {updated ? `更新于 ${new Date(updated).toLocaleTimeString("zh-CN")}` : "等待设备状态"}
-      <span className="ml-auto">手动刷新 · 按需读取</span>
+      <span className="ml-auto">
+        {page === "overview" ? "每 5 秒自动刷新 · 后台暂停" : "手动刷新 · 按需读取"}
+      </span>
     </footer>
   );
 }

@@ -28,10 +28,7 @@ for (const file of files) {
   raw += (await stat(file)).size;
   compressed += gzipSync(await Bun.file(file).arrayBuffer()).length;
 }
-// 防止后续添加组件或字体时无意扩大固件资源。
-if (raw > 768 * 1024 || compressed > 256 * 1024) {
-  throw new Error(`前端资源超过预算：原始 ${raw} 字节，压缩 ${compressed} 字节`);
-}
+// 按用户要求不设置体积上限，继续输出逐文件压缩统计以便比较构建结果。
 const target = resolve(root, "build/router-ui");
 if (relative(resolve(root, "build"), target) !== "router-ui") throw new Error("安装包输出路径无效");
 await rm(target, { recursive: true, force: true });
@@ -43,6 +40,7 @@ await cp(
   resolve(target, "files/shadcn-ui.LICENSE"),
 );
 await cp(resolve(root, "node_modules/sonner/LICENSE.md"), resolve(target, "files/sonner.LICENSE"));
+await cp(resolve(root, "node_modules/recharts/LICENSE"), resolve(target, "files/recharts.LICENSE"));
 const report = { files: files.map((file) => relative(output, file)), raw, gzip: compressed };
 await writeFile(resolve(root, "build/ui-size.json"), JSON.stringify(report, null, 2) + "\n");
 console.log(
