@@ -13,7 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ErrorAlert } from "@/components/status/error-alert";
 import { HelpTip } from "@/components/help-tip";
-import { TimeClient, type TimeSnapshot } from "@/lib/time-settings";
+import { TimeClient, validateTimeServers, type TimeSnapshot } from "@/lib/time-settings";
+import { notify } from "@/lib/notifications";
 import { useRouter } from "@/stores/router";
 import { useMaintenanceOperation } from "@/stores/maintenance-operation";
 const client = new TimeClient();
@@ -31,7 +32,6 @@ export function TimeCard({ disabled }: { disabled: boolean }) {
     [servers, setServers] = useState(""),
     [error, setError] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
-    [saved, setSaved] = useState(false),
     [attempt, retry] = useState(0);
   useEffect(() => {
     let active = true;
@@ -56,23 +56,29 @@ export function TimeCard({ disabled }: { disabled: boolean }) {
   }, [session, attempt]);
   const save = async () => {
     if (!session || !value || busy || disabled) return;
+    const settings = {
+      ...value.settings,
+      servers: [...new Set(servers.split(/\s+/).filter(Boolean))],
+    };
+    try {
+      validateTimeServers(settings);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "请检查时间设置。");
+      return;
+    }
     const token = useMaintenanceOperation.getState().begin("time");
     if (!token) return;
     setBusy(true);
     setError(null);
-    setSaved(false);
+    notify.dismiss("time");
     try {
-      await client.save(session, {
-        ...value.settings,
-        servers: [...new Set(servers.split(/\s+/).filter(Boolean))],
-      });
-      if (alive.current && useRouter.getState().session === session) {
-        setSaved(true);
+      await client.save(session, settings);
+      if (useRouter.getState().session === session) {
+        notify.success("time", "时间设置已保存", "自动校时取决于上游连通性。");
         void useRouter.getState().refresh();
       }
     } catch (e) {
-      if (alive.current && useRouter.getState().session === session)
-        setError(e instanceof Error ? e.message : "保存失败");
+      if (useRouter.getState().session === session) notify.error("time", e, "时间设置保存失败");
     } finally {
       useMaintenanceOperation.getState().finish(token);
       if (alive.current && useRouter.getState().session === session) setBusy(false);
@@ -118,7 +124,6 @@ export function TimeCard({ disabled }: { disabled: boolean }) {
                 disabled={locked}
                 onValueChange={(zone) => {
                   setValue({ ...value, settings: { ...settings, zone } });
-                  setSaved(false);
                 }}
               >
                 <SelectTrigger id="system-timezone" className="w-full sm:max-w-sm">
@@ -150,7 +155,6 @@ export function TimeCard({ disabled }: { disabled: boolean }) {
                   disabled={locked || (key === "useDhcp" && !settings.enabled)}
                   onCheckedChange={(checked) => {
                     setValue({ ...value, settings: { ...settings, [key]: checked } });
-                    setSaved(false);
                   }}
                 />
               </div>
@@ -168,17 +172,11 @@ export function TimeCard({ disabled }: { disabled: boolean }) {
                 disabled={locked || !settings.enabled}
                 onChange={(e) => {
                   setServers(e.target.value);
-                  setSaved(false);
                 }}
                 placeholder={"0.openwrt.pool.ntp.org\n1.openwrt.pool.ntp.org"}
               />
             </div>
             <Button disabled={locked}>{busy ? "正在应用…" : "应用时间设置"}</Button>
-            {saved && (
-              <output className="block text-xs text-muted-foreground">
-                时间设置已保存，自动校时取决于上游连通性。
-              </output>
-            )}
           </form>
         )}
       </CardContent>

@@ -97,7 +97,7 @@ export function createSettingsStore(client = new ConfigClient()) {
       const { session, pending } = get();
       if (!session || pending || get().loading) return;
       const request = generation;
-      set({ loading: true, error: null });
+      set({ loading: true, error: null, notice: null });
       try {
         await client.revert(session, CONFIGS);
         if (request !== generation) return;
@@ -223,7 +223,7 @@ export function createSettingsStore(client = new ConfigClient()) {
         return;
       if (typeof window !== "undefined" && window.location.origin !== pending.newOrigin) return;
       const request = generation;
-      set({ phase: "confirming", loading: true, error: null });
+      set({ phase: "confirming", loading: true, error: null, notice: null });
       try {
         await client.confirm(session);
         if (request !== generation) return;
@@ -245,7 +245,7 @@ export function createSettingsStore(client = new ConfigClient()) {
       const { session, pending } = get();
       if (!session || !pending || get().loading) return;
       const request = generation;
-      set({ phase: "restoring", loading: true, error: null, restoreRequested: true });
+      set({ phase: "restoring", loading: true, error: null, notice: null, restoreRequested: true });
       let accepted = false;
       try {
         try {

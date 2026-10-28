@@ -60,7 +60,9 @@ test("scheduled reboot requires confirmation, preserves weekday/time and can be 
   expect(writes).toHaveLength(0);
   await page.getByRole("button", { name: "保存定时任务", exact: true }).click();
   await dialog.getByRole("button", { name: "确认保存计划", exact: true }).click();
-  await expect(page.getByText("定时重启计划已保存。", { exact: true })).toBeVisible();
+  await expect(
+    page.locator("[data-sonner-toast]").getByText("定时重启计划已保存", { exact: true }),
+  ).toBeVisible();
   await expect(enabled).toBeEnabled();
   expect(writes).toEqual([{ enabled: true, time: "04:15", days: [1, 2, 3, 4, 5] }]);
   await expect(page.getByText("2026-10-28 04:15:00", { exact: true })).toBeVisible();
@@ -77,7 +79,9 @@ test("scheduled reboot requires confirmation, preserves weekday/time and can be 
   expect(writes).toHaveLength(1);
   await enabled.click();
   await page.getByRole("button", { name: "保存定时任务", exact: true }).click();
-  await expect(page.getByText("定时重启已关闭。", { exact: true })).toBeVisible();
+  await expect(
+    page.locator("[data-sonner-toast]").getByText("定时重启已关闭", { exact: true }),
+  ).toBeVisible();
   expect(writes[1]).toEqual({ enabled: false, time: "04:30", days: [1, 2, 3, 4, 5] });
   await expect(dialog).toHaveCount(0);
 });

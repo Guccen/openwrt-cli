@@ -196,3 +196,50 @@
     display: block;
   }
 }
+
+/* 通知使用现有主题变量，长文本允许换行，手机端避开系统安全区域。 */
+.toaster[data-sonner-toaster][data-sonner-theme] {
+  --success-bg: #effcf3;
+  --success-border: #bbefcd;
+  --success-text: #166534;
+  --info-bg: #eff6ff;
+  --info-border: #bfdbfe;
+  --info-text: #1e40af;
+  --warning-bg: #fffbeb;
+  --warning-border: #fde68a;
+  --warning-text: #92400e;
+  --error-bg: #fff1f2;
+  --error-border: #fecdd3;
+  --error-text: #9f1239;
+  font-family: var(--font-sans);
+}
+
+.dark .toaster[data-sonner-toaster][data-sonner-theme] {
+  --success-bg: #10271b;
+  --success-border: #245c39;
+  --success-text: #bbf7d0;
+  --info-bg: #132339;
+  --info-border: #274a7b;
+  --info-text: #bfdbfe;
+  --warning-bg: #302511;
+  --warning-border: #71531c;
+  --warning-text: #fde68a;
+  --error-bg: #32171f;
+  --error-border: #742c3c;
+  --error-text: #fecdd3;
+}
+
+[data-sonner-toast] [data-content] {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-sonner-toast] [data-description] {
+  max-height: 35vh;
+  overflow-y: auto;
+}
+
+.toaster[data-sonner-toaster] [data-sonner-toast][data-styled] [data-close-button] {
+  width: 28px;
+  height: 28px;
+}

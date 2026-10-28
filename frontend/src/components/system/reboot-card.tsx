@@ -19,6 +19,7 @@ import { loginPath, pageRoutes } from "@/lib/routes";
 import { RouterClient, RpcError } from "@/lib/rpc";
 import { useRouter } from "@/stores/router";
 import { maintenanceClient } from "@/stores/maintenance";
+import { notify } from "@/lib/notifications";
 import { useMaintenanceOperation } from "@/stores/maintenance-operation";
 
 const rpc = new RouterClient();
@@ -70,14 +71,20 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
     const token = useMaintenanceOperation.getState().begin("reboot");
     if (!token) return;
     setError(null);
+    notify.dismiss("reboot");
     try {
       await maintenanceClient.reboot(session);
+      if (useRouter.getState().session === session)
+        notify.info("reboot", "重启请求已发送", "正在等待设备恢复连接。");
     } catch (e) {
       if (useRouter.getState().session !== session) return;
-      setError(e instanceof Error ? e.message : "重启请求失败");
       // 响应可能在设备重启时丢失，不自动重发重启请求。
-      if (!(e instanceof RpcError && e.code === undefined))
+      if (e instanceof RpcError && e.code === undefined)
+        setError("尚未收到设备响应，请等待设备恢复连接，勿重复发送重启请求。");
+      else {
+        notify.error("reboot", e, "重启请求失败");
         useMaintenanceOperation.getState().finish(token);
+      }
     }
   }
   return (
@@ -99,7 +106,7 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
             </AlertDescription>
           </Alert>
         ) : (
-          <Button variant="outline" disabled={disabled} onClick={() => setOpen(true)}>
+          <Button variant="destructive" disabled={disabled} onClick={() => setOpen(true)}>
             <RotateCw />
             重启设备
           </Button>
@@ -123,12 +130,15 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
           <AlertDialogHeader>
             <AlertDialogTitle>确认重启设备？</AlertDialogTitle>
             <AlertDialogDescription>
-              所有客户端的网络连接会中断，设备恢复后需要重新登录。请先完成配置确认并保存备份。
+              <span className="font-medium text-destructive">所有客户端的网络连接会中断。</span>
+              设备恢复后需要重新登录，请先完成配置确认并保存备份。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void reboot()}>确认重启</AlertDialogAction>
+            <AlertDialogAction variant="destructive" onClick={() => void reboot()}>
+              确认重启
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

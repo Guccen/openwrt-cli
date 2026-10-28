@@ -39,7 +39,7 @@ test("boot, normal, offline and fault can select distinct LEDs and independent b
   await page.getByLabel("亮起时间（毫秒）", { exact: true }).last().fill("150");
   await page.getByRole("button", { name: "保存指示灯配置", exact: true }).click();
   await expect(
-    page.getByText("指示灯配置已保存并应用，状态每分钟检测一次。", { exact: true }),
+    page.locator("[data-sonner-toast]").getByText("指示灯配置已保存并应用", { exact: true }),
   ).toBeVisible();
   expect(saved).toHaveLength(1);
   expect(saved[0]?.states).toMatchObject({

@@ -28,7 +28,7 @@ test("exports a verified archive and cancels reboot without a write", async ({
     expect(bytes.length).toBeLessThanOrEqual(131072);
     expect(bytes.subarray(0, 2)).toEqual(Buffer.from([0x1f, 0x8b]));
     await expect(
-      page.getByText("系统配置备份已通过 SHA-256 校验并下载。", { exact: true }),
+      page.locator("[data-sonner-toast]").getByText("系统备份已通过 SHA-256 校验", { exact: true }),
     ).toBeVisible();
     await download.delete();
   }

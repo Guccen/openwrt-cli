@@ -13,10 +13,12 @@ import {
 } from "@/components/ui/select";
 import {
   DiagnosticsClient,
+  DiagnosticInputError,
   type DiagnosticOperation,
   type DiagnosticResult,
 } from "@/lib/diagnostics";
 import { useRouter } from "@/stores/router";
+import { notify } from "@/lib/notifications";
 const client = new DiagnosticsClient();
 export function DiagnosticsPage() {
   const session = useRouter((s) => s.session),
@@ -37,12 +39,15 @@ export function DiagnosticsPage() {
     setBusy(true);
     setError(null);
     setResult(null);
+    notify.dismiss("diagnostics");
     try {
       const response = await client.run(session, operation, target);
       if (active.current && useRouter.getState().session === session) setResult(response);
     } catch (e) {
-      if (active.current && useRouter.getState().session === session)
-        setError(e instanceof Error ? e.message : "诊断失败");
+      if (active.current && useRouter.getState().session === session) {
+        if (e instanceof DiagnosticInputError) setError(e.message);
+        else notify.error("diagnostics", e, "诊断失败");
+      }
     } finally {
       if (active.current && useRouter.getState().session === session) setBusy(false);
     }

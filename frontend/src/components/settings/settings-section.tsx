@@ -61,7 +61,7 @@ export function SettingsSection({
   const disabled = loading || !!pending || staged || !!destination || !!maintenance;
   return (
     <div className="space-y-3">
-      <ErrorAlert message={validation || error || unsupported} />
+      <ErrorAlert message={validation || (!pending ? error : null) || unsupported} />
       {maintenance && (
         <Alert>
           <AlertDescription>系统维护操作进行中，请等待完成后再修改设置。</AlertDescription>

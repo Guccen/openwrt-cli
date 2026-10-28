@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { notify } from "@/lib/notifications";
 import { HelpTip } from "@/components/help-tip";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -43,28 +44,12 @@ function configurationBusy() {
   );
 }
 
-function ScheduleForm({
-  snapshot,
-  disabled,
-  onSaved,
-}: {
-  snapshot: ScheduleSnapshot;
-  disabled: boolean;
-  onSaved: (notice: string | null) => void;
-}) {
+function ScheduleForm({ snapshot, disabled }: { snapshot: ScheduleSnapshot; disabled: boolean }) {
   const [policy, setPolicy] = useState<SchedulePolicy>(() => structuredClone(snapshot.policy));
   const [confirmation, setConfirmation] = useState<SchedulePolicy | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const alive = useRef(true);
-  useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-    };
-  }, []);
   function update(values: Partial<SchedulePolicy>) {
     setPolicy((current) => ({ ...current, ...values }));
-    onSaved(null);
     setError(null);
   }
   function toggleEnabled(enabled: boolean) {
@@ -87,16 +72,16 @@ function ScheduleForm({
     const token = useMaintenanceOperation.getState().begin("schedule");
     if (!token) return;
     setError(null);
-    onSaved(null);
+    notify.dismiss("schedule");
     try {
       await scheduleClient.save(session, value);
-      if (alive.current && useRouter.getState().session === session) {
-        onSaved(value.enabled ? "定时重启计划已保存。" : "定时重启已关闭。");
+      if (useRouter.getState().session === session) {
+        notify.success("schedule", value.enabled ? "定时重启计划已保存" : "定时重启已关闭");
         await useSchedule.getState().load();
       }
     } catch (cause) {
-      if (alive.current && useRouter.getState().session === session)
-        setError(cause instanceof Error ? cause.message : "定时任务保存失败，请重试。");
+      if (useRouter.getState().session === session)
+        notify.error("schedule", cause, "定时任务保存失败，请重试。");
     } finally {
       useMaintenanceOperation.getState().finish(token);
     }
@@ -229,6 +214,7 @@ function ScheduleForm({
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
+              variant="destructive"
               disabled={disabled}
               onClick={() => {
                 if (confirmation) void save(confirmation);
@@ -290,7 +276,6 @@ export function SchedulePage() {
   const { session, snapshot, load, loading, error } = useSchedule();
   const settings = useSettings();
   const operation = useMaintenanceOperation((state) => state.kind);
-  const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
     if (session) void load();
   }, [session, load]);
@@ -328,12 +313,10 @@ export function SchedulePage() {
             key={`${session}:${snapshot.updatedAt}`}
             snapshot={snapshot}
             disabled={disabled}
-            onSaved={setNotice}
           />
           <ScheduleStatus snapshot={snapshot} />
         </>
       )}
-      {notice && <output className="block text-xs text-muted-foreground">{notice}</output>}
     </div>
   );
 }

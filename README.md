@@ -44,6 +44,7 @@ bun run dev
 | [状态指示灯](docs/leds.md)                       | 开机、正常、断网、故障灯效和探测规则         |
 | [定时任务](docs/scheduled-tasks.md)              | 按星期与设备时区定时重启、跳过保护和记录     |
 | [系统与客户端状态](docs/system-status.md)        | 温度、存储、上游、网口及 IPv4/IPv6 租约      |
+| [消息通知与关键操作](docs/notifications.md)      | Sonner 通知、页面提示、红色确认及会话隔离    |
 | [开发进度](docs/development-status.md)           | 已实现功能、构建记录及未完成事项             |
 
 ## 上游与许可

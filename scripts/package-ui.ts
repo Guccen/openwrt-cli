@@ -42,6 +42,7 @@ await cp(
   resolve(root, "frontend/src/components/ui/LICENSE"),
   resolve(target, "files/shadcn-ui.LICENSE"),
 );
+await cp(resolve(root, "node_modules/sonner/LICENSE.md"), resolve(target, "files/sonner.LICENSE"));
 const report = { files: files.map((file) => relative(output, file)), raw, gzip: compressed };
 await writeFile(resolve(root, "build/ui-size.json"), JSON.stringify(report, null, 2) + "\n");
 console.log(

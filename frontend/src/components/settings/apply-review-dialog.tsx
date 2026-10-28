@@ -32,7 +32,10 @@ export function ApplyReviewDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>确认应用{plan?.label}</AlertDialogTitle>
           <AlertDialogDescription>
-            应用后有 120 秒确认连接，未确认会自动恢复。请不要在确认前关闭或刷新页面。
+            <span className="font-medium text-destructive">
+              应用后有 120 秒确认连接，未确认会自动恢复。
+            </span>
+            请不要在确认前关闭或刷新页面。
             {plan &&
               currentAddress &&
               plan.address !== currentAddress &&
@@ -42,6 +45,7 @@ export function ApplyReviewDialog({
         <AlertDialogFooter>
           <AlertDialogCancel>取消</AlertDialogCancel>
           <AlertDialogAction
+            variant="destructive"
             onClick={() => {
               if (plan) onApply(plan);
             }}

@@ -24,5 +24,16 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: false,
     target: "es2022",
+    // 合并共享依赖以提高压缩率，业务页面继续按路由加载，保持固件资源预算。
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: "vendor", test: /[\\/]node_modules[\\/]/ },
+            { name: "shared", minShareCount: 2, includeDependenciesRecursively: false },
+          ],
+        },
+      },
+    },
   },
 });

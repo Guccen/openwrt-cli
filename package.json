@@ -1,6 +1,6 @@
 {
   "name": "openwrt-lite-console",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "private": true,
   "type": "module",
   "scripts": {
@@ -22,6 +22,7 @@
     "radix-ui": "1.8.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "sonner": "2.0.8",
     "wouter": "3.13.0",
     "zustand": "5.0.16"
   },

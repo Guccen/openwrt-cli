@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ErrorAlert } from "@/components/status/error-alert";
+import { notify } from "@/lib/notifications";
 import { useRouter } from "@/stores/router";
 import { maintenanceClient } from "@/stores/maintenance";
 import { useMaintenanceOperation } from "@/stores/maintenance-operation";
@@ -10,15 +10,12 @@ import { useMaintenanceOperation } from "@/stores/maintenance-operation";
 export function SystemBackupCard({ disabled }: { disabled: boolean }) {
   const { session, device } = useRouter();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   async function download() {
     if (!session || disabled || busy) return;
     const token = useMaintenanceOperation.getState().begin("backup");
     if (!token) return;
     setBusy(true);
-    setError(null);
-    setNotice(null);
+    notify.dismiss("system-backup");
     try {
       const bytes = await maintenanceClient.backup(session);
       if (useRouter.getState().session !== session) return;
@@ -28,10 +25,14 @@ export function SystemBackupCard({ disabled }: { disabled: boolean }) {
       anchor.download = `${device?.device ?? "openwrt"}-${device?.role ?? "router"}-system-${new Date().toISOString().slice(0, 10)}.tar.gz`;
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setNotice("系统配置备份已通过 SHA-256 校验并下载。");
+      notify.success(
+        "system-backup",
+        "系统备份已通过 SHA-256 校验",
+        "已发起下载，请妥善保管备份文件。",
+      );
     } catch (e) {
       if (useRouter.getState().session === session)
-        setError(e instanceof Error ? e.message : "系统备份失败");
+        notify.error("system-backup", e, "系统备份失败");
     } finally {
       useMaintenanceOperation.getState().finish(token);
       setBusy(false);
@@ -49,12 +50,10 @@ export function SystemBackupCard({ disabled }: { disabled: boolean }) {
           密钥。请妥善保管，仅用于同设备、相同固件版本恢复。归档不包含完整磁盘、已安装程序或 N1
           引导分区。
         </p>
-        <ErrorAlert message={error} />
         <Button disabled={disabled || busy} onClick={() => void download()}>
           <Download />
           {busy ? "正在生成…" : "导出系统配置"}
         </Button>
-        {notice && <output className="block text-xs text-muted-foreground">{notice}</output>}
         <p className="text-[11px] text-muted-foreground">
           网页恢复需要本项目新版导出的归档；旧归档或含链接的自定义归档请通过 SSH 检查后恢复。
         </p>

@@ -84,7 +84,7 @@ test("manual diagnostics and time settings render and save without extra polling
   await page.getByRole("option", { name: "中国标准时间（上海）", exact: true }).click();
   await page.getByRole("button", { name: "应用时间设置", exact: true }).click();
   await expect(
-    page.getByText("时间设置已保存，自动校时取决于上游连通性。", { exact: true }),
+    page.locator("[data-sonner-toast]").getByText("时间设置已保存", { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "应用时间设置", exact: true })).toBeEnabled();
   await page.screenshot({ path: info.outputPath("system-time.png"), fullPage: true });
@@ -92,6 +92,6 @@ test("manual diagnostics and time settings render and save without extra polling
   await page.getByRole("option", { name: "UTC", exact: true }).click();
   await page.getByRole("button", { name: "应用时间设置", exact: true }).click();
   await expect(
-    page.getByText("时间设置已保存，自动校时取决于上游连通性。", { exact: true }),
+    page.locator("[data-sonner-toast]").getByText("时间设置已保存", { exact: true }),
   ).toBeVisible();
 });

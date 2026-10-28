@@ -17,6 +17,7 @@ import { DeviceLoading } from "@/components/status/device-loading";
 import {
   ledStates,
   ledDraft,
+  validateLedPolicy,
   type LedState,
   type LedSnapshot,
   type LedEffect,
@@ -25,16 +26,9 @@ import { ledClient, useLeds } from "@/stores/leds";
 import { useSettings } from "@/stores/settings";
 import { useRouter } from "@/stores/router";
 import { useMaintenanceOperation } from "@/stores/maintenance-operation";
+import { notify } from "@/lib/notifications";
 
-function LedForm({
-  snapshot,
-  disabled,
-  onSaved,
-}: {
-  snapshot: LedSnapshot;
-  disabled: boolean;
-  onSaved: (notice: string | null) => void;
-}) {
+function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: boolean }) {
   const [policy, setPolicy] = useState(() => ledDraft(snapshot));
   const [targets, setTargets] = useState(policy.targets.join(", "));
   const [error, setError] = useState<string | null>(null);
@@ -47,30 +41,32 @@ function LedForm({
   async function save() {
     const session = useRouter.getState().session;
     if (!session || disabled) return;
+    const value = {
+      ...policy,
+      targets: targets
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    };
+    try {
+      validateLedPolicy(value, snapshot.leds);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "请检查指示灯配置。");
+      return;
+    }
     const operation = useMaintenanceOperation.getState().begin("led");
     if (!operation) return;
     setError(null);
-    onSaved(null);
+    notify.dismiss("led");
     try {
-      await ledClient.save(
-        session,
-        {
-          ...policy,
-          targets: targets
-            .split(",")
-            .map((value) => value.trim())
-            .filter(Boolean),
-        },
-        snapshot.leds,
-      );
+      await ledClient.save(session, value, snapshot.leds);
       if (useRouter.getState().session === session) {
-        onSaved("指示灯配置已保存并应用，状态每分钟检测一次。");
+        notify.success("led", "指示灯配置已保存并应用", "状态每分钟检测一次。");
         // 读取设备实际保存的配置与状态。
         await useLeds.getState().load();
       }
     } catch (e) {
-      if (useRouter.getState().session === session)
-        setError(e instanceof Error ? e.message : "保存失败");
+      if (useRouter.getState().session === session) notify.error("led", e, "指示灯配置保存失败");
     } finally {
       useMaintenanceOperation.getState().finish(operation);
     }
@@ -218,7 +214,6 @@ function LedForm({
   );
 }
 export function LedPage() {
-  const [notice, setNotice] = useState<string | null>(null);
   const { session, snapshot, load, loading, error } = useLeds();
   const settings = useSettings();
   const operation = useMaintenanceOperation((state) => state.kind);
@@ -237,14 +232,8 @@ export function LedPage() {
       <ErrorAlert message={error} />
       {!snapshot && !error && <DeviceLoading />}
       {snapshot && (
-        <LedForm
-          key={`${session}:${snapshot.updatedAt}`}
-          snapshot={snapshot}
-          disabled={disabled}
-          onSaved={setNotice}
-        />
+        <LedForm key={`${session}:${snapshot.updatedAt}`} snapshot={snapshot} disabled={disabled} />
       )}
-      {notice && <output className="block text-xs text-muted-foreground">{notice}</output>}
     </div>
   );
 }

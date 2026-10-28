@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ErrorAlert } from "@/components/status/error-alert";
+import { notify } from "@/lib/notifications";
 import { maintenanceClient } from "@/stores/maintenance";
 import { useMaintenanceOperation } from "@/stores/maintenance-operation";
 import { useRouter } from "@/stores/router";
@@ -88,8 +89,9 @@ export function RecoveryCard({
     if (current) {
       try {
         await maintenanceClient.cancel(current.session, current.token);
-      } catch (e) {
-        if (alive.current) setError(e instanceof Error ? e.message : "取消失败，请等待上传过期");
+      } catch {
+        if (useRouter.getState().session === current.session)
+          notify.warning(kind, "上传取消未完成", "请等待上传记录自动过期后重试。");
       }
     }
   }
@@ -106,16 +108,22 @@ export function RecoveryCard({
     if (!operation) return;
     setError(null);
     setOpen(false);
+    notify.dismiss(kind);
     try {
       await maintenanceClient.execute(session, kind, prepared?.token);
+      if (useRouter.getState().session !== session) return;
       uploaded.current = null;
       setPrepared(null);
+      notify.info(kind, `${titles[kind]}请求已发送`, "请等待设备重启，保持供电，勿重复操作。");
     } catch (e) {
       if (useRouter.getState().session !== session) return;
-      setError(e instanceof Error ? e.message : "维护操作失败");
       // 网络响应可能在重启时丢失，保留互斥状态并提示手动重新连接。
-      if (!(e instanceof RpcError && e.code === undefined))
+      if (e instanceof RpcError && e.code === undefined)
+        setError("尚未收到设备响应，维护结果暂不确定。请等待设备恢复，保持供电，勿重复操作。");
+      else {
+        notify.error(kind, e, "维护操作失败");
         useMaintenanceOperation.getState().finish(operation);
+      }
     }
   }
   return (
@@ -168,7 +176,7 @@ export function RecoveryCard({
                 )}
               </div>
             )}
-            <p className="text-xs leading-relaxed text-muted-foreground">
+            <p className="text-xs font-medium leading-relaxed text-destructive">
               {kind === "restore"
                 ? "归档可能覆盖登录密码、SSH 密钥和管理地址；仅恢复可信的同设备、同模式、相同固件版本备份。网页恢复不提供 120 秒回滚。"
                 : "操作不可撤销，请先导出备份并记录宽带账号。使用网线连接，操作期间保持供电，完成后按固件默认地址重新登录。"}
@@ -201,7 +209,7 @@ export function RecoveryCard({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>确认{titles[kind]}？</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-destructive">
               设备将断开连接并重启。
               {kind === "restore" ? "登录密码和管理地址可能改变。" : "现有配置将被清除。"}{" "}
               此操作没有自动回滚。
@@ -225,6 +233,7 @@ export function RecoveryCard({
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
+              variant="destructive"
               disabled={disabled || confirmation !== titles[kind]}
               onClick={(event) => {
                 event.preventDefault();

@@ -22,6 +22,7 @@ import {
 } from "@/lib/backup";
 import type { ConfigPlan, SettingsSnapshot } from "@/lib/settings";
 import { useRouter } from "@/stores/router";
+import { notify } from "@/lib/notifications";
 
 export function BackupForm({
   snapshot,
@@ -37,7 +38,6 @@ export function BackupForm({
   const [backup, setBackup] = useState<NetworkBackup | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
-  const [exportNote, setExportNote] = useState<string | null>(null);
   const reads = useRef(0);
   useEffect(
     () => () => {
@@ -56,6 +56,7 @@ export function BackupForm({
 
   function download() {
     if (!device || locked) return;
+    notify.dismiss("network-backup");
     try {
       const value = createBackup(snapshot, device);
       const url = URL.createObjectURL(
@@ -67,13 +68,16 @@ export function BackupForm({
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       setError(null);
-      setExportNote(
-        value.omittedWireless.length
-          ? `已导出。未包含的高级无线接口：${value.omittedWireless.join("、")}。`
-          : "备份已下载到当前客户端。",
-      );
+      if (value.omittedWireless.length)
+        notify.warning(
+          "network-backup",
+          "已发起网络备份下载",
+          `未包含的高级无线接口：${value.omittedWireless.join("、")}。`,
+        );
+      else
+        notify.success("network-backup", "已发起网络备份下载", "备份包含 WiFi 密钥，请妥善保管。");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "无法导出备份");
+      notify.error("network-backup", e, "无法导出备份");
     }
   }
 
@@ -120,9 +124,6 @@ export function BackupForm({
             <Download />
             导出备份
           </Button>
-          {exportNote && (
-            <output className="block text-xs text-muted-foreground">{exportNote}</output>
-          )}
         </CardContent>
       </Card>
       <Card size="sm">

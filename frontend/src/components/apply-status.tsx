@@ -30,7 +30,7 @@ export function ApplyStatus() {
     };
   }, [pending, probe]);
   if (!pending)
-    return notice || destination ? (
+    return destination ? (
       <Alert>
         <AlertTitle>{notice}</AlertTitle>
         {destination && (
@@ -46,7 +46,9 @@ export function ApplyStatus() {
   const atNewAddress = window.location.origin === pending.newOrigin;
   return (
     <Alert className="space-y-3" aria-live="polite">
-      <AlertTitle>{seconds ? `请在 ${seconds} 秒内确认连接` : "正在等待设备恢复原设置"}</AlertTitle>
+      <AlertTitle className={seconds <= 30 ? "text-destructive" : undefined}>
+        {seconds ? `请在 ${seconds} 秒内确认连接` : "正在等待设备恢复原设置"}
+      </AlertTitle>
       <AlertDescription className="block space-y-2">
         <p>{pending.label}正在生效。未确认时，设备会自动恢复原设置；请保持此页面打开。</p>
         {pending.oldOrigin !== pending.newOrigin && (

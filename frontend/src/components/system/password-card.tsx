@@ -8,6 +8,8 @@ import { useRouter } from "@/stores/router";
 import { maintenanceClient } from "@/stores/maintenance";
 import { useMaintenanceOperation } from "@/stores/maintenance-operation";
 import { loginPath } from "@/lib/routes";
+import { validatePasswordChange } from "@/lib/maintenance-client";
+import { notify } from "@/lib/notifications";
 
 export function PasswordCard({ disabled }: { disabled: boolean }) {
   const session = useRouter((state) => state.session);
@@ -19,10 +21,17 @@ export function PasswordCard({ disabled }: { disabled: boolean }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!session || disabled || busy) return;
+    try {
+      validatePasswordChange(current, password, confirmation);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "请检查密码输入。");
+      return;
+    }
     const operation = useMaintenanceOperation.getState().begin("password");
     if (!operation) return;
     setBusy(true);
     setError(null);
+    notify.dismiss("password");
     const values = [current, password, confirmation] as const;
     setCurrent("");
     setPassword("");
@@ -34,8 +43,7 @@ export function PasswordCard({ disabled }: { disabled: boolean }) {
       useRouter.getState().forgetSession();
       window.location.assign(`${loginPath}?passwordChanged=1${revoked ? "" : "&revokeFailed=1"}`);
     } catch (e) {
-      if (useRouter.getState().session === session)
-        setError(e instanceof Error ? e.message : "修改密码失败");
+      if (useRouter.getState().session === session) notify.error("password", e, "修改密码失败");
     } finally {
       useMaintenanceOperation.getState().finish(operation);
       setBusy(false);
