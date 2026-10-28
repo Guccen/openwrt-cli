@@ -195,3 +195,20 @@ jobs:
           EOF
           gh release create "$TAG" build/artifacts/* --title "$DEVICE_NAME $ROLE_NAME · $VERSION · $GITHUB_RUN_NUMBER" \
             --target "$GITHUB_SHA" --notes-file build/release-notes.md
+          gh release list --limit 1000 --json tagName > build/releases.json
+          jq -r --arg prefix "$DEVICE-$ROLE-" '
+            [
+              .[]
+              | select(
+                  (.tagName | startswith($prefix))
+                  and (.tagName | ltrimstr($prefix) | test("^[0-9]+-[0-9]+$"))
+                )
+            ]
+            | sort_by(.tagName | ltrimstr($prefix) | split("-") | map(tonumber))
+            | .[:-1][]
+            | .tagName
+          ' build/releases.json |
+          while IFS= read -r old_tag; do
+            [[ -n "$old_tag" ]] || continue
+            gh release delete "$old_tag" --cleanup-tag --yes
+          done
