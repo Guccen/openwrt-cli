@@ -147,9 +147,12 @@
     scrollbar-gutter: stable;
   }
 
-  /* Radix already reserves the scrollbar gap while a dialog or select is open. */
-  html:has(body[data-scroll-locked]) {
-    scrollbar-gutter: auto;
+  @supports (scrollbar-gutter: stable) {
+    /* 根元素始终预留滚动条空间，锁定滚动时不再叠加组件库的右侧补偿。 */
+    html body[data-scroll-locked] {
+      margin-right: 0 !important;
+      --removed-body-scroll-bar-size: 0px;
+    }
   }
 
   @supports selector(::-webkit-scrollbar) {
