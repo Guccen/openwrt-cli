@@ -28,8 +28,9 @@ def run(address):
         # 设置在设备当前时间十二小时之后，本测试只检查落盘，不触发 run。
         hour = int(ssh(address, "date +%H", capture_output=True).stdout.strip())
         policy = {"enabled": True, "time": f"{(hour + 12) % 24:02}:47", "days": [1, 3, 5]}
-        if not maintenance(api, "schedule_save", policy).get("ok"):
-            raise AssertionError("定时重启保存失败")
+        result = maintenance(api, "schedule_save", policy)
+        if not result.get("ok"):
+            raise AssertionError("定时重启保存失败：" + str(result.get("error"))[:128])
         actual = maintenance(api, "schedule_status")
         if actual["policy"] != policy or not actual.get("cronRunning"):
             raise AssertionError("定时任务未落盘或 cron 未运行")

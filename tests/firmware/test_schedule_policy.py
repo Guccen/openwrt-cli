@@ -66,6 +66,21 @@ class SchedulePolicyTests(unittest.TestCase):
         """
         self.assertEqual(self.evaluate(body), [[True, "requested"], [False, "disabled"], [False, "invalid_clock"], [False, "not_due"], [False, "not_due"], [False, "boot_grace"], [False, "duplicate"], [True, "sunday"]])
 
+    def test_rpc_transport_session_is_not_saved_and_other_unknown_fields_are_rejected(self):
+        body = """
+        let incoming = {...settings,ubus_rpc_session:'transport-only'}, rejected=[];
+        for(let value in [{...incoming,command:'reboot'}, {...incoming,path:'/etc/shadow'}, {...incoming,policy:{enabled:true}}]) {
+          try {requestPolicy(value);push(rejected,false);} catch(e) {push(rejected,e.message=='schedule_invalid');}
+        }
+        let stored=requestPolicy(incoming), transportStillPresent=incoming.ubus_rpc_session=='transport-only';
+        try {validate(incoming);push(rejected,false);} catch(e) {push(rejected,e.message=='schedule_invalid');}
+        print({stored,transportStillPresent,rejected});
+        """
+        result = self.evaluate(body)
+        self.assertEqual(result["stored"], {"enabled": True, "time": "03:00", "days": list(range(7))})
+        self.assertTrue(result["transportStillPresent"])
+        self.assertTrue(all(result["rejected"]))
+
     def test_next_uses_local_calendar_weekday_and_skips_consumed_slots(self):
         body = """
         print([

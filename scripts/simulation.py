@@ -414,8 +414,10 @@ def main():
         guest_policy(address, metadata)
         wait_for_network_services(address, args.role)
         test_network(args.role, address)
-        run("python3", ROOT / "tests/runtime/configuration.py", "--address", address)
         env = dict(os.environ, SIM_BASE_URL=f"https://{address}", SIM_DEVICE=args.device, SIM_ROLE=args.role, SIM_ADDRESS=address)
+        # 先检查轻量的新增 RPC，参数不兼容时不必等待长时间的回滚/维护用例。
+        run("python3", ROOT / "tests/runtime/schedule.py", env=env)
+        run("python3", ROOT / "tests/runtime/configuration.py", "--address", address)
         unit_env = dict(env, UCODE_TEST_COMMAND=shlex.join([sys.executable, str(ROOT / "tests/helpers/guest-ucode.py")]))
         with (REPORT / "ucode-tests.log").open("w") as log:
             for suite in ("test_maintenance_data.py", "test_password.py", "test_led_policy.py", "test_status_data.py", "test_router_basics.py", "test_schedule_policy.py"):
@@ -423,7 +425,6 @@ def main():
         run("python3", ROOT / "tests/runtime/maintenance.py", env=env)
         run("python3", ROOT / "tests/runtime/password.py", env=env)
         run("python3", ROOT / "tests/runtime/led.py", env=env)
-        run("python3", ROOT / "tests/runtime/schedule.py", env=env)
         run("python3", ROOT / "tests/runtime/status.py", env=env)
         run("python3", ROOT / "tests/runtime/routing.py", env=env)
         run("python3", ROOT / "tests/runtime/router_basics.py", env=env)

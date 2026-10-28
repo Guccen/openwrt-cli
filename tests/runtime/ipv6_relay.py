@@ -231,7 +231,12 @@ def run_test(api, address):
             try:
                 interfaces = api.call("network.interface", "dump")["interface"]
                 wan6 = next(item for item in interfaces if item.get("interface") == "wan6")
-                if wan6.get("up") and wan6.get("l3_device") == "eth2":
+                lan = next(item for item in interfaces if item.get("interface") == "lan")
+                # 上一个静态 IPv6 用例也使用 eth2；必须等 netifd 实际撤回旧委派，
+                # 避免把异步 rollback/apply 期间仍为 up 的旧接口当成中继就绪。
+                if (wan6.get("up") and wan6.get("l3_device") == "eth2"
+                        and wan6.get("delegation") is False and not wan6.get("ipv6-prefix")
+                        and lan.get("up") and not lan.get("ipv6-prefix-assignment")):
                     baseline = firewall_packets(address)
                     break
             except (RpcFailure, OSError, subprocess.SubprocessError, AssertionError, StopIteration):

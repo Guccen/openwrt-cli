@@ -18,6 +18,13 @@ function validate(value) {
     sort(days, (a, b) => a - b);
     return { enabled: value.enabled, time: value.time, days };
 }
+function requestPolicy(value) {
+    if (type(value) != 'object') die('schedule_invalid');
+    // uhttpd 在鉴权后附加的传输字段，不属于持久化策略。
+    let settings = { ...value };
+    delete settings.ubus_rpc_session;
+    return validate(settings);
+}
 function policy() {
     let text = readfile(config, 2049);
     if (type(text) != 'string' || length(text) > 2048) die('schedule_invalid');
@@ -101,7 +108,7 @@ try {
     if (ARGV[0] == 'validate') {
         let text = fdopen(0, 'r').read(4097);
         if (!text || length(text) > 4096) die('schedule_invalid');
-        print(validate(json(text)));
+        print(requestPolicy(json(text)));
     } else if (ARGV[0] == 'status') {
         let settings = policy(), previous = state(), now = time();
         print({ ok: true, policy: settings, localTime: dateTime(localtime(now)), timezone: zoneName(), next: nextTime(settings, now, previous), last: previous.last, cronRunning: cronRunning() });
