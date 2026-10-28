@@ -8,6 +8,7 @@ HELPER=/usr/libexec/router-ui/led-policy.uc
 LOCK=/var/run/router-ui-led.lock
 BOOT=/var/run/router-ui-led.boot
 CRON=/etc/crontabs/root
+CRONLOCK=/var/run/router-ui-crontab.lock
 LINE='* * * * * /usr/libexec/router-ui/led-state check >/dev/null 2>&1 # router-ui-led'
 mode=${1:-check}
 [ -r "$CONFIG" ] || exit 0
@@ -15,10 +16,17 @@ enabled=$(jsonfilter -i "$CONFIG" -e '@.enabled' 2>/dev/null) || exit 1
 [ "$mode" != check ] || [ ! -d /var/run/router-ui-maintenance.lock ] || exit 0
 if ! mkdir "$LOCK" 2>/dev/null; then [ "$mode" = check ] && exit 0; exit 1; fi
 temporary=
-trap '[ -z "$temporary" ] || rm -f "$temporary"; rmdir "$LOCK" 2>/dev/null || true' EXIT
+cron_locked=false
+trap '[ -z "$temporary" ] || rm -f "$temporary"; [ "$cron_locked" != true ] || rmdir "$CRONLOCK" 2>/dev/null || true; rmdir "$LOCK" 2>/dev/null || true' EXIT
 trap 'exit 1' HUP INT TERM
 case "$mode" in
     configure|start|uninstall)
+        count=0
+        until mkdir "$CRONLOCK" 2>/dev/null; do
+            count=$((count + 1)); [ "$count" -lt 5 ] || exit 1
+            sleep 1
+        done
+        cron_locked=true
         if [ "$mode" = configure ] || [ "$mode" = uninstall ]; then ucode "$HELPER" restore >/dev/null; fi
         [ "$mode" != uninstall ] || enabled=false
         mkdir -p /etc/crontabs
@@ -35,6 +43,8 @@ case "$mode" in
             pidof crond >/dev/null || /etc/init.d/cron start
         fi
         rm -f "$BOOT"
+        rmdir "$CRONLOCK"
+        cron_locked=false
         ;;
     boot)
         [ "$enabled" = true ] || exit 0

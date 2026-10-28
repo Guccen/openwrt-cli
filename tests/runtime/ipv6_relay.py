@@ -18,7 +18,7 @@ import sys
 import time
 
 from configuration import RpcFailure
-from simulation import IPV6_TAP, NAMESPACE, ssh
+from simulation import IPV6_TAP, NAMESPACE, REPORT, ssh
 
 
 EXPECTED_ADDRESS = "2001:db8:100::44"
@@ -140,9 +140,9 @@ def server_worker():
             destination = (peer[0], 547, 0, index)
             sock.sendmsg([envelope], [(socket.IPPROTO_IPV6, socket.IPV6_PKTINFO, pktinfo)], 0, destination)
             replies += 1
+        print(json.dumps({"replies": replies, "source": source, "interface_id": interface_id.hex() if interface_id else None}), flush=True)
         if not replies:
             raise AssertionError("Upstream received no DHCPv6 Relay-Forward")
-        print(json.dumps({"replies": replies, "source": source, "interface_id": interface_id.hex()}), flush=True)
 
 
 def client_worker():
@@ -254,16 +254,22 @@ def run_test(api, address):
             raise AssertionError("Upstream worker did not bind the test global source")
         worker_pid = ready["pid"]
         client = subprocess.run(["sudo", "-n", "ip", "netns", "exec", NAMESPACE, "python3", "-u", script, "--client"], capture_output=True, text=True, timeout=38)
-        if client.returncode:
-            raise AssertionError("DHCPv6 relay client failed: " + client.stderr[-3000:])
-        lease = json.loads(client.stdout)
         output, errors = worker.communicate("stop\n", timeout=5)
+        hits = firewall_packets(address) - baseline
+        (REPORT / "ipv6-relay-exchange.json").write_text(json.dumps({
+            "clientCode": client.returncode, "clientOutput": client.stdout[-4096:],
+            "clientError": client.stderr[-4096:], "serverCode": worker.returncode,
+            "serverOutput": output[-4096:], "serverError": errors[-4096:],
+            "firewallReplyPackets": hits,
+        }, indent=2) + "\n")
+        if client.returncode:
+            raise AssertionError("DHCPv6 relay client failed: " + client.stderr[-2000:] + "; upstream: " + output[-1000:] + errors[-1000:] + f"; firewall reply packets: {hits}")
+        lease = json.loads(client.stdout)
         if worker.returncode:
             raise AssertionError("DHCPv6 relay upstream failed: " + errors[-3000:])
         upstream = json.loads(output)
         if lease.get("address") != EXPECTED_ADDRESS or upstream.get("replies", 0) < 1:
             raise AssertionError("No complete DHCPv6 Relay-Forward/Reply exchange")
-        hits = firewall_packets(address) - baseline
         if hits < 1:
             raise AssertionError("Relayed reply bypassed the managed WAN UDP547 input rule")
         return {"dhcpv6_relay_lease_exchange": "passed", "relay_wan_udp547_firewall": "passed", "relay_address": EXPECTED_ADDRESS, "relay_rule_packets": hits, "relay_upstream_source": upstream["source"]}

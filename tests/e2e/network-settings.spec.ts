@@ -117,14 +117,13 @@ test("DHCP pool validates, confirms, rolls back a disable and restores its initi
 
 test("bypass cannot open WAN or DHCP editors", async ({ page }) => {
   test.skip(process.env.SIM_ROLE !== "bypass", "Only applies to bypass mode");
+  await loginPage(page);
   for (const [path, message] of [
     [pageRoutes.wan.path, "旁路由通过 LAN 网关上网，不开放独立 WAN 配置。"],
     [pageRoutes.dhcp.path, "旁路由不开放 DHCP 地址分配，请使用主路由的 DHCP 服务。"],
   ]) {
     const count = writes(page);
     await page.goto(path);
-    await page.getByLabel("设备密码").fill(process.env.SIM_PASSWORD!);
-    await page.getByRole("button", { name: "登录", exact: true }).click();
     await expect(page.getByText(message, { exact: true })).toBeVisible();
     expect(count.count).toBe(0);
   }

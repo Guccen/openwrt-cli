@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HelpTip } from "@/components/help-tip";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -93,7 +94,12 @@ function LedForm({
             </p>
           )}
           <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="led-policy-enabled">按系统状态控制指示灯</Label>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="led-policy-enabled">按系统状态控制指示灯</Label>
+              <HelpTip label="状态灯控制说明">
+                每分钟及网络接口变化时更新状态。仅接管选中的灯，停用后恢复接管前的灯效。
+              </HelpTip>
+            </div>
             <Switch
               id="led-policy-enabled"
               checked={policy.enabled}
@@ -101,21 +107,19 @@ function LedForm({
               onCheckedChange={(enabled) => setPolicy((current) => ({ ...current, enabled }))}
             />
           </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            启用后复用系统 cron
-            每分钟探测，也在网络接口变化时更新；不新增常驻进程。仅接管下方选中的灯，停用后恢复接管前的灯效。
-          </p>
-          <Label htmlFor="led-targets">连通性探测目标（1–2 个 IPv4）</Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor="led-targets">连通性探测目标（1–2 个 IPv4）</Label>
+            <HelpTip label="连通性探测说明">
+              两个目标均无法响应 ping 时显示断网；任一目标可达则正常。故障指 netifd、rpcd 或 uhttpd
+              关键进程缺失。ICMP 被拦截可能误判，不能检测断电、内核崩溃或所有业务故障。
+            </HelpTip>
+          </div>
           <Input
             id="led-targets"
             value={targets}
             onChange={(event) => setTargets(event.target.value)}
             disabled={disabled || !available}
           />
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            两个目标均无法响应 ping 时显示断网；任一目标可达则正常。故障指 netifd、rpcd 或 uhttpd
-            关键进程缺失。ICMP 被拦截可能误判，不能检测断电、内核崩溃或所有业务故障。
-          </p>
         </CardContent>
       </Card>
       {available && (

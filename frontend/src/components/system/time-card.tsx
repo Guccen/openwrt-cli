@@ -12,6 +12,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ErrorAlert } from "@/components/status/error-alert";
+import { HelpTip } from "@/components/help-tip";
 import { TimeClient, type TimeSnapshot } from "@/lib/time-settings";
 import { useRouter } from "@/stores/router";
 import { useMaintenanceOperation } from "@/stores/maintenance-operation";
@@ -106,7 +107,12 @@ export function TimeCard({ disabled }: { disabled: boolean }) {
             }}
           >
             <div className="space-y-1.5">
-              <Label htmlFor="system-timezone">时区</Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="system-timezone">时区</Label>
+                <HelpTip label="设备时区说明">
+                  设备日志和定时任务使用此时区，与浏览器所在时区无关。
+                </HelpTip>
+              </div>
               <Select
                 value={settings.zone}
                 disabled={locked}
@@ -150,7 +156,12 @@ export function TimeCard({ disabled }: { disabled: boolean }) {
               </div>
             ))}
             <div className="space-y-1.5">
-              <Label htmlFor="ntp-servers">NTP 服务器</Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="ntp-servers">NTP 服务器</Label>
+                <HelpTip label="NTP 服务器说明">
+                  每行一个域名或 IP，最多 4 个。服务器不可达时请更换可访问的校时源。
+                </HelpTip>
+              </div>
               <Textarea
                 id="ntp-servers"
                 value={servers}
@@ -161,9 +172,6 @@ export function TimeCard({ disabled }: { disabled: boolean }) {
                 }}
                 placeholder={"0.openwrt.pool.ntp.org\n1.openwrt.pool.ntp.org"}
               />
-              <p className="text-xs text-muted-foreground">
-                每行一个域名或 IP，最多 4 个。服务器不可达时请更换可访问的校时源。
-              </p>
             </div>
             <Button disabled={locked}>{busy ? "正在应用…" : "应用时间设置"}</Button>
             {saved && (

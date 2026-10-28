@@ -4,10 +4,16 @@ import { ledFixture } from "./helpers/led-fixture";
 import { telemetryFixture, clientsFixture } from "./helpers/status-fixture";
 import { validateLedPolicy, type LedPolicy } from "../frontend/src/lib/led-client";
 import type { ConfigName, SettingsSnapshot } from "../frontend/src/lib/settings";
+import { validateSchedulePolicy, type SchedulePolicy } from "../frontend/src/lib/schedule";
 
 const device = process.env.PREVIEW_DEVICE === "jdcloud-ax1800" ? "jdcloud-ax1800" : "phicomm-n1";
 const bypass = process.env.PREVIEW_ROLE === "bypass" && device === "phicomm-n1";
 const ledSettings = ledFixture(device);
+let schedulePolicy: SchedulePolicy = {
+  enabled: false,
+  time: "03:00",
+  days: [0, 1, 2, 3, 4, 5, 6],
+};
 let timeSettings = {
   zone: "UTC",
   enabled: true,
@@ -262,6 +268,33 @@ Bun.serve({
           ];
         // 演示模式不生成或操作真实系统归档，也不重启主机。
         if (method === "led_status") result = [0, { ok: true, ...ledSettings }];
+        if (method === "schedule_status")
+          result = [
+            0,
+            {
+              ok: true,
+              policy: schedulePolicy,
+              localTime: new Date().toLocaleString("sv-SE", { timeZone: timeSettings.zone }),
+              timezone: timeSettings.zone,
+              next: schedulePolicy.enabled
+                ? `下个所选日期 ${schedulePolicy.time}（本地演示）`
+                : null,
+              last: null,
+              cronRunning: true,
+            },
+          ];
+        if (method === "schedule_save") {
+          if (configurationBusy) result = [0, { ok: false, error: "configuration_busy" }];
+          else {
+            try {
+              validateSchedulePolicy(args as unknown as SchedulePolicy);
+              schedulePolicy = structuredClone(args as unknown as SchedulePolicy);
+              result = [0, { ok: true }];
+            } catch {
+              result = [0, { ok: false, error: "schedule_invalid" }];
+            }
+          }
+        }
         if (method === "time_status")
           result = [
             0,
@@ -299,7 +332,17 @@ Bun.serve({
             }
           }
         }
-        if (!["status", "led_status", "led_save", "time_status", "time_save"].includes(method))
+        if (
+          ![
+            "status",
+            "led_status",
+            "led_save",
+            "time_status",
+            "time_save",
+            "schedule_status",
+            "schedule_save",
+          ].includes(method)
+        )
           result = [
             0,
             { ok: false, error: configurationBusy ? "configuration_busy" : "preview_only" },

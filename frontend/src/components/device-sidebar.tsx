@@ -9,6 +9,7 @@ import {
   Wifi,
   Wrench,
   Cable,
+  CalendarClock,
   ListFilter,
   Lightbulb,
   Monitor,
@@ -43,35 +44,46 @@ export function DeviceSidebar({
   disabled?: boolean;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
-  const items: { id: Page; icon: LucideIcon }[] = [
-    { id: "overview", icon: Activity },
-    { id: "network", icon: Network },
-    { id: "clients", icon: Monitor },
-    { id: "lan", icon: Settings2 },
-    { id: "dns", icon: Globe },
-  ];
   const device = useRouter((state) => state.device);
-  if (device?.role === "router")
-    items.splice(
-      4,
-      0,
-      { id: "wan", icon: Cable },
-      { id: "dhcp", icon: ListFilter },
-      { id: "forwarding", icon: Network },
-    );
-  if (device?.device === "jdcloud-ax1800") {
-    items.splice(2, 0, { id: "wirelessStatus", icon: Wifi });
-    items.push({ id: "wireless", icon: Wifi });
-  }
-  items.push({ id: "backup", icon: ArchiveRestore });
-  items.splice(
-    items.findIndex((item) => item.id === "dns"),
-    0,
-    { id: "ipv6", icon: Globe },
-  );
-  items.push({ id: "leds", icon: Lightbulb });
-  items.push({ id: "system", icon: Wrench });
-  items.push({ id: "diagnostics", icon: Activity });
+  const groups: { title: string; items: { id: Page; icon: LucideIcon }[] }[] = [
+    {
+      title: "状态概览",
+      items: [
+        { id: "overview", icon: Activity },
+        { id: "network", icon: Network },
+        ...(device?.device === "jdcloud-ax1800"
+          ? [{ id: "wirelessStatus" as const, icon: Wifi }]
+          : []),
+        { id: "clients", icon: Monitor },
+      ],
+    },
+    {
+      title: "网络配置",
+      items: [
+        { id: "lan", icon: Settings2 },
+        ...(device?.role === "router"
+          ? [
+              { id: "wan" as const, icon: Cable },
+              { id: "dhcp" as const, icon: ListFilter },
+              { id: "forwarding" as const, icon: Network },
+            ]
+          : []),
+        { id: "ipv6", icon: Globe },
+        { id: "dns", icon: Globe },
+        ...(device?.device === "jdcloud-ax1800" ? [{ id: "wireless" as const, icon: Wifi }] : []),
+      ],
+    },
+    {
+      title: "系统管理",
+      items: [
+        { id: "backup", icon: ArchiveRestore },
+        { id: "leds", icon: Lightbulb },
+        { id: "schedule", icon: CalendarClock },
+        { id: "system", icon: Wrench },
+        { id: "diagnostics", icon: Activity },
+      ],
+    },
+  ];
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="h-12 shrink-0 justify-center border-b px-2 py-0">
@@ -95,33 +107,35 @@ export function DeviceSidebar({
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>设备管理</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => (
-                <SidebarMenuItem key={item.id}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={page === item.id}
-                    tooltip={pageRoutes[item.id].title}
-                  >
-                    <Link
-                      href={pageRoutes[item.id].path}
-                      aria-current={page === item.id ? "page" : undefined}
-                      onClick={() => {
-                        if (isMobile) setOpenMobile(false);
-                      }}
+        {groups.map((group) => (
+          <SidebarGroup key={group.title}>
+            <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) => (
+                  <SidebarMenuItem key={item.id}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={page === item.id}
+                      tooltip={pageRoutes[item.id].title}
                     >
-                      <item.icon />
-                      <span>{pageRoutes[item.id].title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                      <Link
+                        href={pageRoutes[item.id].path}
+                        aria-current={page === item.id ? "page" : undefined}
+                        onClick={() => {
+                          if (isMobile) setOpenMobile(false);
+                        }}
+                      >
+                        <item.icon />
+                        <span>{pageRoutes[item.id].title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>

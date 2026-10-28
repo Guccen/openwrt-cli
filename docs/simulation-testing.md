@@ -33,7 +33,7 @@
 
 ## 报告与产物
 
-打开运行记录，在 Artifacts 下载 `simulation-设备-模式`：包含 HTML/JUnit 报告、页面截图、安装记录、启动日志、DHCP、网络、`configuration.json` 配置事务、`maintenance.json` 维护结果和 `routing.json` 上网及地址池结果。失败时通常保留 Playwright trace；系统导出测试关闭 trace，归档仅在内存或浏览器临时目录校验后删除，不上传归档或其中的测试密钥。浏览器依赖仅用于开发和 CI，不进入固件；测试密码和 SSH 密钥每次临时生成，模拟磁盘及私钥不上传。
+打开运行记录，在 Artifacts 下载 `simulation-设备-模式`：包含 HTML/JUnit 报告、页面截图、安装记录、启动日志、DHCP、网络、`configuration.json` 配置事务、`maintenance.json` 维护结果、`schedule.json` 定时任务权限与 cron 安装结果，以及 `routing.json` 上网及地址池结果。定时任务检查不触发计划重启。失败时通常保留 Playwright trace；系统导出测试关闭 trace，归档仅在内存或浏览器临时目录校验后删除，不上传归档或其中的测试密钥。浏览器依赖仅用于开发和 CI，不进入固件；测试密码和 SSH 密钥每次临时生成，模拟磁盘及私钥不上传。
 
 `Build lightweight firmware` 会先等待三种模拟配置通过，再编译设备固件。编译完成后，还会安装并测试本次真实编译生成的前端 APK，失败会阻止后续打包和 Release。正式构建的模拟报告放在设备构建 Artifact 中。
 

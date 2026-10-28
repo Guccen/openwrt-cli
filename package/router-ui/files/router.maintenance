@@ -67,7 +67,7 @@ fail() {
 
 case "$1" in
     list)
-        printf '%s\n' '{"status":{},"backup":{},"reboot":{"confirm":true},"upload_start":{"kind":"","size":0,"sha256":""},"upload_chunk":{"token":"","offset":0,"data":""},"upload_cancel":{"token":""},"inspect":{"token":""},"restore":{"token":"","confirm":true},"upgrade":{"token":"","confirm":true},"reset":{"confirm":true},"password":{"current":"","password":"","confirmation":""},"led_status":{},"led_save":{"policy":""},"time_status":{},"time_save":{"zone":"","enabled":true,"useDhcp":true,"servers":[]}}'
+        printf '%s\n' '{"status":{},"backup":{},"reboot":{"confirm":true},"upload_start":{"kind":"","size":0,"sha256":""},"upload_chunk":{"token":"","offset":0,"data":""},"upload_cancel":{"token":""},"inspect":{"token":""},"restore":{"token":"","confirm":true},"upgrade":{"token":"","confirm":true},"reset":{"confirm":true},"password":{"current":"","password":"","confirmation":""},"led_status":{},"led_save":{"policy":""},"schedule_status":{},"schedule_save":{"enabled":true,"time":"","days":[]},"time_status":{},"time_save":{"zone":"","enabled":true,"useDhcp":true,"servers":[]}}'
         ;;
     call)
         case "$2" in
@@ -115,6 +115,13 @@ case "$1" in
             time_save)
                 lock
                 ucode /usr/libexec/router-ui/time-settings.uc save
+                ;;
+            schedule_status)
+                ucode /usr/libexec/router-ui/schedule.uc status
+                ;;
+            schedule_save)
+                lock
+                /usr/libexec/router-ui/scheduled-reboot configure
                 ;;
             led_save)
                 lock

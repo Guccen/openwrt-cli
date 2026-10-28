@@ -43,6 +43,9 @@ const SystemPage = lazy(() =>
   import("@/pages/system-page").then((page) => ({ default: page.SystemPage })),
 );
 const LedPage = lazy(() => import("@/pages/led-page").then((page) => ({ default: page.LedPage })));
+const SchedulePage = lazy(() =>
+  import("@/pages/schedule-page").then((page) => ({ default: page.SchedulePage })),
+);
 const DiagnosticsPage = lazy(() =>
   import("@/pages/diagnostics-page").then((page) => ({ default: page.DiagnosticsPage })),
 );
@@ -119,6 +122,7 @@ export function App() {
           <Route path={pageRoutes.backup.path} component={BackupPage} />
           <Route path={pageRoutes.system.path} component={SystemPage} />
           <Route path={pageRoutes.leds.path} component={LedPage} />
+          <Route path={pageRoutes.schedule.path} component={SchedulePage} />
           <Route path={pageRoutes.diagnostics.path} component={DiagnosticsPage} />
           <Route>
             <NotFoundPage />

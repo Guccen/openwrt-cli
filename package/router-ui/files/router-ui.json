@@ -9,7 +9,7 @@
         "iwinfo": ["info", "assoclist", "phyname", "freqlist", "countrylist"],
         "router.status": ["summary", "clients"],
         "router.diagnostics": ["run"],
-        "router.maintenance": ["status", "backup", "led_status", "time_status"],
+        "router.maintenance": ["status", "backup", "led_status", "time_status", "schedule_status"],
         "session": ["access"],
         "uci": ["get", "changes"]
       },
@@ -29,7 +29,8 @@
           "reset",
           "password",
           "led_save",
-          "time_save"
+          "time_save",
+          "schedule_save"
         ],
         "uci": ["add", "set", "delete", "revert", "apply", "confirm", "rollback"]
       },

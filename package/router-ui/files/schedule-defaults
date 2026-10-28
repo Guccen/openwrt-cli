@@ -1,0 +1,3 @@
+#!/bin/sh
+# 重建保留策略对应的唯一 cron 行；失败保留 defaults 文件供下次启动重试。
+/usr/libexec/router-ui/scheduled-reboot start >/dev/null 2>&1

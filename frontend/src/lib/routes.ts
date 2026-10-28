@@ -12,6 +12,7 @@ export const pageRoutes = {
   wireless: { path: "/settings/wireless/", title: "无线设置", settings: true },
   backup: { path: "/settings/backup/", title: "备份与恢复", settings: true },
   leds: { path: "/settings/leds/", title: "指示灯设置", settings: false },
+  schedule: { path: "/settings/schedule/", title: "定时任务", settings: false },
   system: { path: "/system/", title: "系统维护", settings: false },
   diagnostics: { path: "/diagnostics/", title: "诊断与日志", settings: false },
 } as const;

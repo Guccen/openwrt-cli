@@ -6,6 +6,7 @@
 
 - 前端使用 Vite、React、shadcn/ui Mira、Axios、Zustand、wouter、Bun、Oxfmt、Oxlint。通过 `bunx --bun shadcn@latest init -t vite` 初始化，界面组件均来自 shadcn/ui。
 - 桌面侧栏可折叠为图标栏，小于 768px 切换为抽屉菜单，选中页面后自动收起。
+- 菜单按状态概览、网络配置、系统管理分组；`HelpTip` 统一字段说明，支持悬停、键盘聚焦和触摸点击。保存结果与关键错误直接显示。
 - 使用系统字体和按需图标，不加载外部字体或 CDN。设备通过静态资源、OpenWrt 接口和按需执行的受限 rpcd 插件提供功能，不运行 Bun、Node.js 或新增常驻服务。
 - 资源预算：原始静态资源不超过 768 KiB，按文件计算的 gzip 合计不超过 256 KiB。生产构建不输出源代码映射。
 

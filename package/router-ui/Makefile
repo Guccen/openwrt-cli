@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=router-ui
-PKG_VERSION:=0.9.0
+PKG_VERSION:=0.10.0
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 
@@ -24,12 +24,16 @@ endef
 
 define Package/router-ui/conffiles
 /etc/router-ui-led.json
+/etc/router-ui-schedule.json
 endef
 
 define Package/router-ui/postinst
 #!/bin/sh
 if [ -z "$${IPKG_INSTROOT}" ] && [ -f /etc/uci-defaults/91-router-ui-led ]; then
     sh /etc/uci-defaults/91-router-ui-led && rm -f /etc/uci-defaults/91-router-ui-led
+fi
+if [ -z "$${IPKG_INSTROOT}" ] && [ -f /etc/uci-defaults/92-router-ui-schedule ]; then
+    sh /etc/uci-defaults/92-router-ui-schedule && rm -f /etc/uci-defaults/92-router-ui-schedule
 fi
 exit 0
 endef
@@ -38,6 +42,7 @@ define Package/router-ui/prerm
 #!/bin/sh
 if [ -z "$${IPKG_INSTROOT}" ]; then
     /usr/libexec/router-ui/led-state uninstall >/dev/null 2>&1 || true
+    /usr/libexec/router-ui/scheduled-reboot uninstall >/dev/null 2>&1 || true
     /etc/init.d/router-ui-led-boot disable
     /etc/init.d/router-ui-led disable
 fi
@@ -64,7 +69,12 @@ define Package/router-ui/install
 	$(INSTALL_BIN) ./files/router-ui-led-boot $(1)/etc/init.d/router-ui-led-boot
 	$(INSTALL_BIN) ./files/led-hotplug $(1)/etc/hotplug.d/iface/95-router-ui-led
 	$(INSTALL_BIN) ./files/led-defaults $(1)/etc/uci-defaults/91-router-ui-led
+	$(INSTALL_DATA) ./files/schedule.uc $(1)/usr/libexec/router-ui/schedule.uc
+	$(INSTALL_DATA) ./files/router-ui-schedule.json $(1)/etc/router-ui-schedule.json
+	$(INSTALL_BIN) ./files/scheduled-reboot $(1)/usr/libexec/router-ui/scheduled-reboot
+	$(INSTALL_BIN) ./files/schedule-defaults $(1)/etc/uci-defaults/92-router-ui-schedule
 	echo /etc/router-ui-led.json > $(1)/lib/upgrade/keep.d/router-ui-led
+	printf '/etc/router-ui-schedule.json\n/etc/router-ui-schedule.last\n' > $(1)/lib/upgrade/keep.d/router-ui-schedule
 endef
 
 $(eval $(call BuildPackage,router-ui))

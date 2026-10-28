@@ -13,6 +13,7 @@ type OperationKind =
   | "upload"
   | "password"
   | "led"
+  | "schedule"
   | "time";
 export function createMaintenanceOperation() {
   let sequence = 0;

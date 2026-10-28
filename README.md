@@ -2,7 +2,7 @@
 
 为京东云 AX1800 和斐讯 N1 分别构建轻量固件，共用基于 Vite、React 和 shadcn/ui 的管理前端。设备复用 OpenWrt 服务，不运行 Node.js、Bun 或新增常驻服务。
 
-支持设备概览、温度与存储、上游与网口、客户端租约、双频 WiFi 状态、LAN / WAN / IPv6 / DHCP / DNS / 无线配置、DHCP 地址保留、IPv4 端口转发、射频信道与带宽、WAN MTU/MAC、诊断和日志、时区与 NTP、状态灯、备份恢复、密码修改、重启，以及 AX1800 固件升级和恢复出厂。侧栏可折叠，适配桌面和手机；网络配置应用后有 120 秒确认，超时由设备回滚。功能与实机验收边界见[常用路由功能清单](docs/router-basics.md)。
+支持设备概览、温度与存储、上游与网口、客户端租约、双频 WiFi 状态、LAN / WAN / IPv6 / DHCP / DNS / 无线配置、DHCP 地址保留、IPv4 端口转发、射频信道与带宽、WAN MTU/MAC、诊断和日志、时区与 NTP、状态灯、备份恢复、密码修改、重启与定时重启，以及 AX1800 固件升级和恢复出厂。侧栏按状态、网络、系统分组，可折叠并适配桌面和手机；网络配置应用后有 120 秒确认，超时由设备回滚。功能与实机验收边界见[常用路由功能清单](docs/router-basics.md)。
 
 ## 支持设备
 
@@ -40,6 +40,7 @@ bun run dev
 | [常用路由功能清单](docs/router-basics.md)    | IPv6、固定地址、端口转发、射频、诊断及缺失项 |
 | [系统维护与独立更新](docs/maintenance.md)    | 系统归档、重启、单独更新前端包               |
 | [状态指示灯](docs/leds.md)                   | 开机、正常、断网、故障灯效和探测规则         |
+| [定时任务](docs/scheduled-tasks.md)          | 按星期与设备时区定时重启、跳过保护和记录     |
 | [系统与客户端状态](docs/system-status.md)    | 温度、存储、上游、网口及 IPv4/IPv6 租约      |
 | [开发进度](docs/development-status.md)       | 已实现功能、构建记录及未完成事项             |
 

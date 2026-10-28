@@ -8,7 +8,8 @@ import {
 } from "../../frontend/src/lib/routes";
 
 test("页面地址独立，登录返回路径只能选择已知的本地页面", () => {
-  expect(new Set(entryPaths).size).toBe(16);
+  expect(new Set(entryPaths).size).toBe(17);
+  expect(pageForPath("/settings/schedule/")).toBe("schedule");
   expect(pageForPath("/settings/dns")).toBe("dns");
   expect(pageForPath("/settings/dns/")).toBe("dns");
   for (const path of [

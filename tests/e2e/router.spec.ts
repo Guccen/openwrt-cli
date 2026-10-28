@@ -370,8 +370,6 @@ test("wireless runtime status refreshes on demand and stays unavailable on N1", 
   });
   if (process.env.SIM_DEVICE !== "jdcloud-ax1800") {
     await page.goto(pageRoutes.wirelessStatus.path);
-    await page.getByLabel("设备密码").fill(password!);
-    await page.getByRole("button", { name: "登录", exact: true }).click();
     await expect(page.getByText("此设备未开放无线状态。", { exact: true })).toBeVisible();
     expect(reads).toBe(0);
     return;

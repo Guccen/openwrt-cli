@@ -4,6 +4,7 @@ import { useWireless } from "./wireless";
 import { useMaintenance } from "./maintenance";
 import { useMaintenanceOperation } from "./maintenance-operation";
 import { useLeds } from "./leds";
+import { useSchedule } from "./schedule";
 import { useClients } from "./clients";
 import { onSessionRejection, RouterClient, RpcError } from "../lib/rpc";
 
@@ -38,6 +39,7 @@ export function bindSettingsSession(client = new RouterClient()) {
     useWireless.getState().bind(session);
     useMaintenance.getState().bind(session);
     useLeds.getState().bind(session);
+    useSchedule.getState().bind(session);
     useClients.getState().bind(session);
     useMaintenanceOperation.getState().bind(session);
   };

@@ -25,6 +25,7 @@ class LedStateTests(unittest.TestCase):
             "/var/run/router-ui-led.lock": self.path + "/lock",
             "/var/run/router-ui-led.boot": self.path + "/boot",
             "/var/run/router-ui-maintenance.lock": self.path + "/maintenance",
+            "/var/run/router-ui-crontab.lock": self.path + "/cron-lock",
             "/etc/crontabs": self.path + "/crontabs",
             "/etc/init.d/cron": "cron_service",
         }.items(): source = source.replace(original, replacement)
@@ -73,3 +74,16 @@ cron_service() { return 0; }
         self.assertIn(sentinel, cron.read_text())
         self.run_state("configure", enabled=False)
         self.assertEqual(cron.read_text(), sentinel)
+
+    def test_root_crontab_lock_prevents_led_from_overwriting_schedule_jobs(self):
+        (self.root / "crontabs").mkdir()
+        cron = self.root / "crontabs/root"
+        sentinel = "0 3 * * 0 /usr/libexec/router-ui/scheduled-reboot run >/dev/null 2>&1 # router-ui-scheduled-reboot\n"
+        cron.write_text(sentinel)
+        (self.root / "cron-lock").mkdir()
+        env = dict(os.environ, TEST_ENABLED="true", TEST_FAULT="no", TEST_REACHABLE="yes", TEST_LOG=self.path + "/commands", TEST_PROBES=self.path + "/probes")
+        result = subprocess.run([self.bash, self.path + "/state.sh", "configure"], env=env, capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(cron.read_text(), sentinel)
+        self.assertTrue((self.root / "cron-lock").is_dir())
+        self.assertFalse((self.root / "lock").exists())
