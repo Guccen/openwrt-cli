@@ -32,7 +32,7 @@ AX1800 的启动、WiFi、交换机、NSS，以及 N1 的完整网络功能、US
 | 同上                           | `libwrt-qualcommax-ipq60xx-jdcloud_re-ss-01-squashfs-factory.bin`（约 15 MB）    | 给原厂固件/救砖准备的，**已刷 OpenWrt 的机器本次不要用它** |
 | 同上                           | `sha256sums`                                                                     | 核对上面两个文件的 SHA-256                                 |
 | `phicomm-n1-bypass-<编号>`     | `phicomm-n1-bypass-k6.18.58.img.gz`（约 162 MiB）                                | N1 旁路由的完整启动镜像，写卡用                            |
-| `phicomm-n1-router-<编号>`     | `phicomm-n1-router-k6.18.58.img.gz`                                             | N1 主路由的完整启动镜像，写卡用                            |
+| `phicomm-n1-router-<编号>`     | `phicomm-n1-router-k6.18.58.img.gz`                                              | N1 主路由的完整启动镜像，写卡用                            |
 | 上述 N1 Artifact               | `immortalwrt-armsr-armv8-generic-rootfs.tar.gz`                                  | 仅用于再次打包，**不能直接刷入 N1**                        |
 
 注意：N1 旁路由和主路由是两个不同的镜像文件，下载时按你要的模式选对；
