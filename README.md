@@ -1,57 +1,67 @@
-# OpenWrt 轻量固件与设备控制台
+<h1 align="center">📡 OpenWrt 轻量固件与设备控制台</h1>
 
-为京东云 AX1800 和斐讯 N1 分别构建轻量固件，共用基于 Vite、React 和 shadcn/ui 的管理前端。设备复用 OpenWrt 服务，不运行 Node.js、Bun 或新增常驻服务。
+<p align="center">为京东云 AX1800 与斐讯 N1 构建固件，用同一套简洁界面管理网络与设备。</p>
 
-支持设备概览、温度与存储、上游与网口、客户端租约、双频 WiFi 状态、LAN / WAN / IPv6 / DHCP / DNS / 无线配置、DHCP 地址保留、IPv4 端口转发、射频信道与带宽、WAN MTU/MAC、诊断和日志、时区与 NTP、状态灯、备份恢复、密码修改、重启与定时重启，以及 AX1800 固件升级和恢复出厂。侧栏按状态、网络、系统分组，可折叠并适配桌面和手机；网络配置应用后有 120 秒确认，超时由设备回滚。功能与实机验收边界见[常用路由功能清单](docs/router-basics.md)。
+<p align="center">
+  <img src="docs/assets/tech-stack/react.svg" width="32" height="32" alt="React" title="React" />
+  <img src="docs/assets/tech-stack/typescript.svg" width="32" height="32" alt="TypeScript" title="TypeScript" />
+  <img src="docs/assets/tech-stack/vite.svg" width="32" height="32" alt="Vite" title="Vite" />
+  <img src="docs/assets/tech-stack/shadcnui.svg" width="32" height="32" alt="shadcn/ui" title="shadcn/ui" />
+  <img src="docs/assets/tech-stack/tailwindcss.svg" width="32" height="32" alt="Tailwind CSS" title="Tailwind CSS" />
+  <img src="docs/assets/tech-stack/bun.svg" width="32" height="32" alt="Bun" title="Bun" />
+  <img src="docs/assets/tech-stack/python.svg" width="32" height="32" alt="Python" title="Python" />
+  <img src="docs/assets/tech-stack/githubactions.svg" width="32" height="32" alt="GitHub Actions" title="GitHub Actions" />
+</p>
 
-## 支持设备
+<p align="center">
+  <a href="docs/getting-started.md">开始使用</a> ·
+  <a href="docs/flashing.md">刷机说明</a> ·
+  <a href="https://github.com/Guccen/openwrt-cli/releases">下载固件</a> ·
+  <a href="https://github.com/Guccen/openwrt-cli/actions/workflows/build.yml">构建固件</a>
+</p>
 
-| 设备与模式               | 默认管理地址   | 说明                                          |
-| ------------------------ | -------------- | --------------------------------------------- |
-| AX1800 / RE-SS-01 主路由 | `192.168.68.1` | LiBwrt，保留 WiFi、NSS、IPv6 和拨号组件       |
-| N1 旁路由                | `192.168.68.2` | ImmortalWrt + ophub，关闭 DHCP 与 IPv6 通告   |
-| N1 主路由                | `192.168.69.1` | 默认 USB WAN，可切换无线 WAN 或有线 WAN＋热点 |
+## ✨ 可以做什么
 
-N1 使用完整启动镜像，升级与重置请按[刷机步骤](docs/flashing.md)重新写卡；镜像与实机验收状态见[开发进度](docs/development-status.md)。
+- **查看状态**：系统、温度、存储、网口、无线连接与 DHCP 租约；概况页每 5 秒刷新，展示负载和内存趋势。
+- **配置网络**：LAN / WAN、IPv6、DHCP、DNS、WiFi、地址保留和端口转发；网络改动有 120 秒确认，超时自动回滚。
+- **维护设备**：备份恢复、密码、时间同步、状态灯、诊断日志与定时重启；AX1800 支持固件升级和恢复出厂。
+- **保持轻量**：复用 OpenWrt 原有服务，设备端不运行 Node.js 或 Bun；界面适配桌面和手机。
 
-0.10.5 起，N1 新镜像包含内置 BCM43455 无线所需组件，提供热点和无线连接上游配置，默认关闭无线。N1 为单射频，2.4 / 5 GHz 二选一；接线、切换与实机限制见[N1 无线说明](docs/n1-wireless.md)。
+## 🧭 设备与地址
 
-0.10.3 起的新 N1 镜像在首次 USB 启动时自动扩大标准布局的根分区。AX1800 复用系统可写层初始化，保留厂商分区。支持范围和容量说明见[磁盘与首次启动初始化](docs/storage.md)。
+| 设备与模式                      | 默认管理地址   | 固件与接线                                      |
+| ------------------------------- | -------------- | ----------------------------------------------- |
+| 京东云 AX1800 / RE-SS-01 主路由 | `192.168.68.1` | LiBwrt，保留 WiFi、NSS、IPv6 与拨号组件         |
+| 斐讯 N1 旁路由                  | `192.168.68.2` | ImmortalWrt + ophub，关闭本机 DHCP 与 IPv6 通告 |
+| 斐讯 N1 主路由                  | `192.168.69.1` | 自带网口为 LAN，默认 USB WAN，可切换无线方案    |
 
-## 快速开始
+首次使用先通过网线登录并设置密码，无线默认关闭。N1 为单射频，2.4 / 5 GHz 二选一；完整镜像写入外置 U 盘，标准布局首次启动自动扩容，不自动写入内置 eMMC。详见[接线与初始化](docs/getting-started.md)、[N1 无线](docs/n1-wireless.md)和[存储说明](docs/storage.md)。
 
-前端开发使用 Bun 1.4.4、Node.js 22.12 或以上版本：
+## 🚀 构建与检查
+
+在 [GitHub Actions](https://github.com/Guccen/openwrt-cli/actions/workflows/build.yml) 手动运行 **Build lightweight firmware**，默认同时构建三种镜像并发布到 [Releases](https://github.com/Guccen/openwrt-cli/releases)。源码版本固定，复用下载与编译缓存；镜像生成成功与实机功能验收分别记录。
+
+本地使用 Bun 1.4.4、Node.js 22.12 或以上版本：
 
 ```sh
 bun install --frozen-lockfile
 bun run check
-bun run dev
 ```
 
-本地演示接口与代理配置见[前端开发](docs/frontend-development.md)。构建固件时，在 GitHub Actions 手动运行 **Build lightweight firmware**，直接编译所选镜像并默认发布到 Releases，不运行模拟机测试；参数和产物说明见[构建文档](docs/firmware-build.md)。
+完整固件编译使用 Linux 或 Actions。参数、缓存和产物说明见[固件构建](docs/firmware-build.md)，前端工作流见[前端开发](docs/frontend-development.md)。
 
-## 文档
+## 📚 文档导航
 
-| 文档                                             | 内容                                         |
-| ------------------------------------------------ | -------------------------------------------- |
-| [设备与首次使用](docs/getting-started.md)        | 主/旁路由分工、接线、默认地址、初始化        |
-| [刷机步骤](docs/flashing.md)                     | AX1800 升级、N1 写卡、校验与防砖、回滚       |
-| [前端开发](docs/frontend-development.md)         | 技术栈、本地演示、页面路由、组件、资源预算   |
-| [固件构建](docs/firmware-build.md)               | Actions 参数、版本锁定、Linux 编译、N1 打包  |
-| [上游版本记录](docs/upstream-versions.md)        | 最新兼容分支、源码提交、内核及校验记录       |
-| [本地模拟安装与测试](docs/simulation-testing.md) | 按需运行 QEMU、本地报告与验收范围            |
-| [网络配置与备份恢复](docs/configuration.md)      | LAN、WAN、DHCP、DNS、双频 WiFi、确认回滚     |
-| [N1 无线与接线](docs/n1-wireless.md)             | 内置 WiFi、无线 WAN、热点、频段与验收边界    |
-| [常用路由功能清单](docs/router-basics.md)        | IPv6、固定地址、端口转发、射频、诊断及缺失项 |
-| [系统维护与独立更新](docs/maintenance.md)        | 系统归档、重启、单独更新前端包               |
-| [状态指示灯](docs/leds.md)                       | 开机、正常、断网、故障灯效和探测规则         |
-| [定时任务](docs/scheduled-tasks.md)              | 按星期与设备时区定时重启、跳过保护和记录     |
-| [系统与客户端状态](docs/system-status.md)        | 温度、存储、上游、网口及 IPv4/IPv6 租约      |
-| [消息通知与关键操作](docs/notifications.md)      | Sonner 通知、页面提示、红色确认及会话隔离    |
-| [开发进度](docs/development-status.md)           | 已实现功能、构建记录及未完成事项             |
+| 主题       | 文档                                                                                                                                                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 安装与恢复 | [首次使用](docs/getting-started.md) · [刷机步骤](docs/flashing.md) · [磁盘与扩容](docs/storage.md)                                                                                                      |
+| 网络与无线 | [网络配置](docs/configuration.md) · [N1 接线方案](docs/n1-wireless.md) · [功能清单](docs/router-basics.md)                                                                                              |
+| 状态与维护 | [状态和租约](docs/system-status.md) · [系统维护](docs/maintenance.md) · [消息通知](docs/notifications.md)                                                                                               |
+| 灯效与计划 | [状态指示灯](docs/leds.md) · [定时任务](docs/scheduled-tasks.md)                                                                                                                                        |
+| 开发与验收 | [前端开发](docs/frontend-development.md) · [固件构建](docs/firmware-build.md) · [上游版本](docs/upstream-versions.md) · [模拟测试](docs/simulation-testing.md) · [开发进度](docs/development-status.md) |
 
-## 上游与许可
+## 🤝 上游与许可
 
 [LiBwrt](https://github.com/LiBwrt/LibWrt) · [ImmortalWrt](https://github.com/immortalwrt/immortalwrt) · [ophub](https://github.com/ophub/amlogic-s9xxx-openwrt) · [shadcn/ui](https://ui.shadcn.com/)
 
-本仓库采用 [MIT 许可证](LICENSE)，各上游组件遵循其各自许可证；[shadcn/ui 组件许可](frontend/src/components/ui/LICENSE) 随源码保留。
+本仓库采用 [MIT 许可证](LICENSE)，各上游组件遵循各自许可证；[shadcn/ui 组件许可](frontend/src/components/ui/LICENSE) 随源码保留。
