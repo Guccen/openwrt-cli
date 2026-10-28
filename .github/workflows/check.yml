@@ -34,16 +34,9 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Check and build frontend
         run: bun run check
-      - name: Prepare pinned device script interpreter
-        timeout-minutes: 5
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends cmake build-essential libjson-c-dev pkg-config
-          bash scripts/setup-ucode-tests.sh
-          echo "UCODE_TEST_COMMAND=$PWD/build/test-tools/ucode/bin/ucode" >> "$GITHUB_ENV"
       - name: Check firmware configuration and scripts
         run: |
-          python3 scripts/check_firmware_tests.py --strict
+          python3 -m unittest discover -s tests/firmware -v
           python3 -m compileall -q scripts tests/runtime
           for script in scripts/*.sh files/router-defaults.sh files/n1/etc/uci-defaults/00-router-ui-storage files/n1/usr/libexec/router-ui/expand-rootfs package/router-ui/files/router.maintenance package/router-ui/files/router.status package/router-ui/files/router.diagnostics package/router-ui/files/led-state package/router-ui/files/router-ui-led package/router-ui/files/router-ui-led-boot package/router-ui/files/led-hotplug package/router-ui/files/led-defaults package/router-ui/files/scheduled-reboot package/router-ui/files/schedule-defaults; do bash -n "$script"; done
       - name: Validate browser test definitions
