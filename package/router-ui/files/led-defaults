@@ -1,0 +1,5 @@
+#!/bin/sh
+/etc/init.d/router-ui-led-boot enable
+/etc/init.d/router-ui-led enable
+/usr/libexec/router-ui/led-state configure >/dev/null 2>&1 || true
+exit 0

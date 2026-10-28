@@ -1,0 +1,13 @@
+#!/bin/sh
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+case "$1:$2" in
+    list:) printf '%s\n' '{"run":{"operation":"","target":""}}' ;;
+    call:run)
+        # 全局互斥避免多页面同时探测；最长 6 秒，不启动常驻进程。
+        mkdir /var/run/router-ui-diagnostics.lock 2>/dev/null || { printf '%s\n' '{"ok":false,"error":"operation_busy"}'; exit 0; }
+        trap 'rmdir /var/run/router-ui-diagnostics.lock 2>/dev/null || true' EXIT
+        trap 'exit 1' HUP INT TERM
+        ucode /usr/libexec/router-ui/diagnostics.uc
+        ;;
+    *) printf '%s\n' '{"ok":false,"error":"unsupported_method"}' ;;
+esac

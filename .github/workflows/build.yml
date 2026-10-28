@@ -22,6 +22,10 @@ on:
         description: N1 主路由的 WAN 网口名称
         type: string
         default: eth1
+      skip_tests:
+        description: 跳过检查与仿真，直接构建供实机验证的镜像
+        type: boolean
+        default: false
       publish:
         description: 同时创建独立版本的 Release
         type: boolean
@@ -37,10 +41,12 @@ concurrency:
 jobs:
   check:
     name: Run checks
+    if: ${{ !inputs.skip_tests }}
     uses: ./.github/workflows/check.yml
 
   simulate:
     name: Verify simulated installation
+    if: ${{ !inputs.skip_tests }}
     uses: ./.github/workflows/simulate.yml
 
   plan:
@@ -65,6 +71,7 @@ jobs:
   build:
     name: Build ${{ matrix.device }}
     needs: [check, plan, simulate]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (inputs.skip_tests || (needs.check.result == 'success' && needs.simulate.result == 'success')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     permissions:
@@ -114,11 +121,19 @@ jobs:
           if [[ "$DEVICE" == phicomm-n1 ]]; then ROLE="$N1_ROLE"; fi
           bash scripts/build-firmware.sh "$DEVICE" "$ROLE" "$N1_WAN"
       - name: Restore Playwright browser cache
+        if: ${{ !inputs.skip_tests }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package.json') }}
+      - name: 下载通用仿真平台的中继修正版
+        if: ${{ !inputs.skip_tests }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: simulation-package
+          path: build/simulation-package
       - name: Test compiled package in OpenWrt
+        if: ${{ !inputs.skip_tests }}
         timeout-minutes: 30
         run: |
           bunx playwright install --with-deps --only-shell chromium

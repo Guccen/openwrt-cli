@@ -2,6 +2,8 @@ import { DeviceLoading } from "@/components/status/device-loading";
 import { ErrorAlert } from "@/components/status/error-alert";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { WanForm } from "@/components/settings/wan-form";
+import { WanLinkForm } from "@/components/settings/wan-link-form";
+import { wanLinkDraft } from "@/lib/wan-link";
 import { wanDraft } from "@/lib/wan-settings";
 import { useRouter } from "@/stores/router";
 import { NotFoundPage } from "./not-found-page";
@@ -15,7 +17,22 @@ export function WanPage() {
     <SettingsSection>
       {(props) => {
         try {
-          return <WanForm {...props} initial={wanDraft(props.snapshot)} />;
+          let link;
+          try {
+            link = <WanLinkForm {...props} initial={wanLinkDraft(props.snapshot)} />;
+          } catch (error) {
+            link = (
+              <p className="text-xs text-muted-foreground">
+                {error instanceof Error ? error.message : "链路参数不可用"}
+              </p>
+            );
+          }
+          return (
+            <div className="space-y-3">
+              <WanForm {...props} initial={wanDraft(props.snapshot)} />
+              {link}
+            </div>
+          );
         } catch (error) {
           return (
             <ErrorAlert message={error instanceof Error ? error.message : "无法读取 WAN 配置"} />

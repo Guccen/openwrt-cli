@@ -1,13 +1,13 @@
 {
-  "version": "25.12.2",
+  "version": "25.12.6",
   "target": "armsr/armv8",
-  "base_url": "https://downloads.openwrt.org/releases/25.12.2/targets/armsr/armv8/",
+  "base_url": "https://downloads.openwrt.org/releases/25.12.6/targets/armsr/armv8/",
   "imagebuilder": {
-    "file": "openwrt-imagebuilder-25.12.2-armsr-armv8.Linux-x86_64.tar.zst",
-    "sha256": "e4c85c9de4071c990f7f77651b1d2a439a6972c32c1feecc091252573a19b8d2"
+    "file": "openwrt-imagebuilder-25.12.6-armsr-armv8.Linux-x86_64.tar.zst",
+    "sha256": "3d0128148395314c510fe7adfc5996cecec51f3011ea2acc560a9c21772301cf"
   },
   "sdk": {
-    "file": "openwrt-sdk-25.12.2-armsr-armv8_gcc-14.3.0_musl.Linux-x86_64.tar.zst",
-    "sha256": "0d7e35cbacc8cae584392a7e9def99b9b3eea1d02df517dd47ffe5e8ded04734"
+    "file": "openwrt-sdk-25.12.6-armsr-armv8_gcc-14.3.0_musl.Linux-x86_64.tar.zst",
+    "sha256": "cbf3343bc3d6dc6180fc84077b966c13596a79904adaadbfe68409d563b0b596"
   }
 }

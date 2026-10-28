@@ -6,20 +6,35 @@
         "system": ["board", "info"],
         "network.interface": ["dump"],
         "network.wireless": ["status"],
-        "iwinfo": ["info", "assoclist"],
-        "router.maintenance": ["status", "backup"],
+        "iwinfo": ["info", "assoclist", "phyname", "freqlist", "countrylist"],
+        "router.status": ["summary", "clients"],
+        "router.diagnostics": ["run"],
+        "router.maintenance": ["status", "backup", "led_status", "time_status", "schedule_status"],
         "session": ["access"],
         "uci": ["get", "changes"]
       },
-      "uci": ["network", "dhcp", "wireless"]
+      "uci": ["network", "dhcp", "wireless", "firewall"]
     },
     "write": {
       "ubus": {
         "session": ["destroy"],
-        "router.maintenance": ["reboot"],
-        "uci": ["set", "delete", "revert", "apply", "confirm", "rollback"]
+        "router.maintenance": [
+          "reboot",
+          "upload_start",
+          "upload_chunk",
+          "upload_cancel",
+          "inspect",
+          "restore",
+          "upgrade",
+          "reset",
+          "password",
+          "led_save",
+          "time_save",
+          "schedule_save"
+        ],
+        "uci": ["add", "set", "delete", "revert", "apply", "confirm", "rollback"]
       },
-      "uci": ["network", "dhcp", "wireless"]
+      "uci": ["network", "dhcp", "wireless", "firewall"]
     }
   }
 }

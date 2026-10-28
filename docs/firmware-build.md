@@ -2,7 +2,7 @@
 
 [返回项目首页](../README.md) · [设备接线与初始化](getting-started.md) · [模拟测试](simulation-testing.md)
 
-源码、feeds 和 N1 内核版本固定在 [sources.json](../configs/sources.json)。已生成的镜像与待验收事项见[开发进度](development-status.md)。
+源码、feeds 和 N1 内核版本固定在 [sources.json](../configs/sources.json)。最近一次上游核对及兼容分支选择见[上游版本记录](upstream-versions.md)。已生成的镜像与待验收事项见[开发进度](development-status.md)。
 
 ## 构建约束
 
@@ -13,6 +13,8 @@
 ## GitHub Actions 构建
 
 在 GitHub Actions 手动运行“Build lightweight firmware”。`device` 选择 `both` 或单台设备，`n1_role` 选择 `bypass` 或 `router`，`n1_wan` 默认 `eth1`，不可与 LAN 的 `eth0` 相同。`publish` 默认关闭，启用后创建包含设备、模式、运行编号的独立 Release。
+
+需要直接制作镜像用于实机验证时，可启用 `skip_tests`。这会跳过代码检查、编译前仿真与编译后的安装验证；前端构建、固件编译、N1 镜像打包和校验值生成仍会执行。该选项默认关闭，构建成功只表示产物生成成功，功能仍需实机验收。N1 请把 `.img.gz` 写到新 U 盘，保留旧启动盘；镜像不会自动安装到内置存储。
 
 两台设备使用独立 Ubuntu 24.04 任务，先做检查再编译。始终保留 Artifact，不依赖 Release 发布成功。只缓存下载文件，不混用工具链。产物包含固件、独立前端包、最终配置、版本锁定、源码补丁、体积报告和 SHA-256。N1 明确选择 generic 设备的根文件系统并核对归档内标识；目标目录清单保存在 `target-files.json`。构建失败时额外保留已有根文件系统和 APK，避免因产物收集错误丢失编译结果。
 

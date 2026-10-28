@@ -1,9 +1,25 @@
 // 仅用于本地页面开发；配置和网络变化均为内存演示，不修改真实设备。
 import { settingsFixture } from "./helpers/settings-fixture";
+import { ledFixture } from "./helpers/led-fixture";
+import { telemetryFixture, clientsFixture } from "./helpers/status-fixture";
+import { validateLedPolicy, type LedPolicy } from "../frontend/src/lib/led-client";
 import type { ConfigName, SettingsSnapshot } from "../frontend/src/lib/settings";
+import { validateSchedulePolicy, type SchedulePolicy } from "../frontend/src/lib/schedule";
 
 const device = process.env.PREVIEW_DEVICE === "jdcloud-ax1800" ? "jdcloud-ax1800" : "phicomm-n1";
 const bypass = process.env.PREVIEW_ROLE === "bypass" && device === "phicomm-n1";
+const ledSettings = ledFixture(device);
+let schedulePolicy: SchedulePolicy = {
+  enabled: false,
+  time: "03:00",
+  days: [0, 1, 2, 3, 4, 5, 6],
+};
+let timeSettings = {
+  zone: "UTC",
+  enabled: true,
+  useDhcp: true,
+  servers: ["0.openwrt.pool.ntp.org", "1.openwrt.pool.ntp.org"],
+};
 const initial = settingsFixture(bypass);
 if (device === "jdcloud-ax1800") {
   initial.network.lan.ipaddr = "192.168.68.1";
@@ -24,7 +40,7 @@ let transaction: {
   original: SettingsSnapshot;
   timer: ReturnType<typeof setTimeout>;
 } | null = null;
-const configs: ConfigName[] = ["network", "dhcp", "wireless"];
+const configs: ConfigName[] = ["network", "dhcp", "wireless", "firewall"];
 function restore() {
   if (!transaction) return;
   clearTimeout(transaction.timer);
@@ -57,6 +73,20 @@ Bun.serve({
       sessions.add(session);
       result = [0, { ubus_rpc_session: session }];
     } else if (sessions.has(sid)) {
+      if (object === "router.status" && method === "summary") result = [0, telemetryFixture()];
+      if (object === "router.diagnostics" && method === "run")
+        result = [
+          0,
+          {
+            ok: true,
+            success: true,
+            code: 0,
+            output: "本地演示结果：未发起真实网络探测。",
+            limited: false,
+          },
+        ];
+      if (object === "router.status" && method === "clients")
+        result = [0, bypass ? { ...clientsFixture(), ipv4: [], ipv6: [] } : clientsFixture()];
       if (object === "session" && method === "destroy") {
         sessions.delete(sid);
         drafts.delete(sid);
@@ -69,17 +99,19 @@ Bun.serve({
             access:
               args.scope === "uci"
                 ? configs.includes(args.object as ConfigName)
-                : args.object === "uci" &&
-                  [
-                    "get",
-                    "changes",
-                    "set",
-                    "delete",
-                    "revert",
-                    "apply",
-                    "confirm",
-                    "rollback",
-                  ].includes(String(args.function)),
+                : (args.object === "system" && ["board", "info"].includes(String(args.function))) ||
+                  (args.object === "uci" &&
+                    [
+                      "get",
+                      "add",
+                      "changes",
+                      "set",
+                      "delete",
+                      "revert",
+                      "apply",
+                      "confirm",
+                      "rollback",
+                    ].includes(String(args.function))),
           },
         ];
       if (object === "system" && method === "board")
@@ -116,6 +148,12 @@ Bun.serve({
                 up: true,
                 proto: "static",
                 device: "br-lan",
+                ...(bypass
+                  ? {
+                      route: [{ target: "0.0.0.0", mask: 0, nexthop: "192.168.68.1" }],
+                      "dns-server": ["192.168.68.1"],
+                    }
+                  : {}),
                 "ipv4-address": [{ address: committed.network.lan.ipaddr, mask: 24 }],
               },
               ...(!bypass
@@ -125,6 +163,9 @@ Bun.serve({
                       up: true,
                       proto: String(committed.network.wan.proto),
                       device: String(committed.network.wan.device),
+                      uptime: 3600,
+                      route: [{ target: "0.0.0.0", mask: 0, nexthop: "10.0.2.2" }],
+                      "dns-server": ["10.0.2.3"],
                       "ipv4-address": [
                         {
                           address:
@@ -173,12 +214,135 @@ Bun.serve({
             : { channel: 6, frequency: 2437 },
         ];
       if (object === "iwinfo" && method === "assoclist") result = [0, { results: [] }];
+      if (object === "iwinfo" && method === "phyname")
+        result = [0, { phyname: args.section === "radio1" ? "phy1" : "phy0" }];
+      if (object === "iwinfo" && method === "freqlist")
+        result = [
+          0,
+          {
+            results: (args.device === "phy1"
+              ? [
+                  [36, 5180],
+                  [40, 5200],
+                  [149, 5745],
+                ]
+              : [
+                  [1, 2412],
+                  [6, 2437],
+                  [11, 2462],
+                ]
+            ).map(([channel, mhz]) => ({ channel, mhz, restricted: false })),
+          },
+        ];
+      if (object === "iwinfo" && method === "countrylist")
+        result = [
+          0,
+          {
+            results: [
+              { iso3166: "CN", country: "China" },
+              { iso3166: "US", country: "United States" },
+            ],
+          },
+        ];
+      if (object === "iwinfo" && method === "info" && /^phy[01]$/.test(String(args.device)))
+        result = [
+          0,
+          {
+            htmodes:
+              args.device === "phy1" ? ["HE20", "HE40", "HE80", "VHT80"] : ["HE20", "HE40", "HT20"],
+          },
+        ];
       if (object === "router.maintenance") {
         const configurationBusy = !!transaction || drafts.size > 0;
         if (method === "status")
-          result = [0, { ok: true, configurationBusy, operationBusy: false, backupLimit: 131072 }];
+          result = [
+            0,
+            {
+              ok: true,
+              configurationBusy,
+              operationBusy: false,
+              backupLimit: 131072,
+              upgradeSupported: device === "jdcloud-ax1800",
+              resetSupported: device === "jdcloud-ax1800",
+            },
+          ];
         // 演示模式不生成或操作真实系统归档，也不重启主机。
-        if (method === "backup" || method === "reboot")
+        if (method === "led_status") result = [0, { ok: true, ...ledSettings }];
+        if (method === "schedule_status")
+          result = [
+            0,
+            {
+              ok: true,
+              policy: schedulePolicy,
+              localTime: new Date().toLocaleString("sv-SE", { timeZone: timeSettings.zone }),
+              timezone: timeSettings.zone,
+              next: schedulePolicy.enabled
+                ? `下个所选日期 ${schedulePolicy.time}（本地演示）`
+                : null,
+              last: null,
+              cronRunning: true,
+            },
+          ];
+        if (method === "schedule_save") {
+          if (configurationBusy) result = [0, { ok: false, error: "configuration_busy" }];
+          else {
+            try {
+              validateSchedulePolicy(args as unknown as SchedulePolicy);
+              schedulePolicy = structuredClone(args as unknown as SchedulePolicy);
+              result = [0, { ok: true }];
+            } catch {
+              result = [0, { ok: false, error: "schedule_invalid" }];
+            }
+          }
+        }
+        if (method === "time_status")
+          result = [
+            0,
+            {
+              ok: true,
+              settings: timeSettings,
+              zones: ["UTC", "Asia/Shanghai", "Asia/Hong_Kong", "Asia/Tokyo", "Asia/Singapore"],
+            },
+          ];
+        if (method === "time_save") {
+          if (configurationBusy) result = [0, { ok: false, error: "configuration_busy" }];
+          else {
+            timeSettings = {
+              zone: String(args.zone),
+              enabled: args.enabled === true,
+              useDhcp: args.useDhcp === true,
+              servers: args.servers as string[],
+            };
+            result = [0, { ok: true }];
+          }
+        }
+        if (method === "led_save") {
+          if (configurationBusy) result = [0, { ok: false, error: "configuration_busy" }];
+          else {
+            try {
+              const policy = JSON.parse(String(args.policy)) as LedPolicy;
+              validateLedPolicy(policy, ledSettings.leds);
+              ledSettings.policy = policy;
+              ledSettings.current = policy.enabled
+                ? { state: "normal", checkedAt: Math.floor(Date.now() / 1000) }
+                : null;
+              result = [0, { ok: true }];
+            } catch {
+              result = [0, { ok: false, error: "led_invalid" }];
+            }
+          }
+        }
+        if (
+          ![
+            "status",
+            "led_status",
+            "led_save",
+            "time_status",
+            "time_save",
+            "schedule_status",
+            "schedule_save",
+          ].includes(method)
+        )
           result = [
             0,
             { ok: false, error: configurationBusy ? "configuration_busy" : "preview_only" },
@@ -205,13 +369,27 @@ Bun.serve({
               ),
             },
           ];
+        if (method === "add" && configs.includes(config) && !transaction) {
+          const draft = drafts.get(sid) ?? structuredClone(committed),
+            name = String(args.name);
+          if (draft[config][name]) result = [2];
+          else {
+            draft[config][name] = {
+              ".type": String(args.type),
+              ...(args.values as Record<string, string>),
+            };
+            drafts.set(sid, draft);
+            result = [0, { section: name }];
+          }
+        }
         if (["set", "delete"].includes(method) && configs.includes(config) && !transaction) {
           const draft = drafts.get(sid) ?? structuredClone(committed);
           const section = draft[config][String(args.section)];
           if (!section) result = [4];
           else {
             if (method === "set") Object.assign(section, args.values);
-            else delete section[String(args.option)];
+            else if (args.option !== undefined) delete section[String(args.option)];
+            else delete draft[config][String(args.section)];
             drafts.set(sid, draft);
             result = [0];
           }

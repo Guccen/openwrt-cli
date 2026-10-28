@@ -3,7 +3,7 @@ import { ipv4, maskPrefix, poolRange } from "./ipv4";
 import { wifiBand, type WifiBand } from "./wifi-band";
 export { ipv4, maskPrefix } from "./ipv4";
 
-export type ConfigName = "network" | "dhcp" | "wireless";
+export type ConfigName = "network" | "dhcp" | "wireless" | "firewall";
 export type UciSection = Record<string, string | string[] | number | boolean>;
 export type UciSections = Record<string, UciSection>;
 export function hasControl(value: string) {
@@ -15,12 +15,15 @@ export interface SettingsSnapshot {
   network: UciSections;
   dhcp: UciSections;
   wireless: UciSections;
+  firewall: UciSections;
 }
 export interface ConfigEdit {
   config: ConfigName;
   section: string;
   values?: Record<string, string | string[]>;
   remove?: string[];
+  add?: string;
+  deleteSection?: boolean;
 }
 export interface ConfigPlan {
   label: string;
@@ -92,6 +95,23 @@ export function lanPlan(
   const network = (ip & mask) >>> 0;
   const broadcast = (network | ~mask) >>> 0;
   if (ip === network || ip === broadcast) throw new Error("LAN 地址不能是网络地址或广播地址");
+  for (const section of Object.values(snapshot.dhcp)) {
+    if (section[".type"] !== "host" || typeof section.ip !== "string") continue;
+    const reserved = ipv4(section.ip);
+    if (reserved !== null && (reserved <= network || reserved >= broadcast || reserved === ip))
+      throw new Error("新的 LAN 网段与已有 DHCP 地址保留冲突，请先调整保留记录。");
+  }
+  for (const section of Object.values(snapshot.firewall)) {
+    if (
+      section[".type"] !== "redirect" ||
+      section.dest !== "lan" ||
+      typeof section.dest_ip !== "string"
+    )
+      continue;
+    const target = ipv4(section.dest_ip);
+    if (target !== null && (target <= network || target >= broadcast || target === ip))
+      throw new Error("新的 LAN 网段与已有端口转发目标冲突，请先调整转发规则。");
+  }
   if (!bypass) {
     for (const [name, section] of Object.entries(snapshot.dhcp)) {
       if (

@@ -100,7 +100,14 @@ export function wanPlan(snapshot: SettingsSnapshot, draft: WanDraft, bypass: boo
     if (draft.password) set("password", draft.password);
     // 已有独立 wan6 时仅启用 PPP IPv6 链路，避免再创建一份自动 DHCPv6 接口。
     if (changedProtocol && raw.ipv6 === undefined)
-      set("ipv6", snapshot.network.wan6 ? "1" : "auto");
+      set(
+        "ipv6",
+        snapshot.network.wan6
+          ? snapshot.network.wan6.proto === "none" || snapshot.network.wan6.auto === "0"
+            ? "0"
+            : "1"
+          : "auto",
+      );
   } else if (changedProtocol)
     for (const key of ["username", "password", ...(old.protocol === "pppoe" ? ["ipv6"] : [])])
       clear(key);

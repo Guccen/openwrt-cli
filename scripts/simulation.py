@@ -9,6 +9,7 @@ import shlex
 import shutil
 import ssl
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -18,10 +19,12 @@ import firmware
 from qemu_host import network_device
 
 ROOT = firmware.ROOT
+SIMULATION_VERSION = json.loads((ROOT / "configs/simulation.json").read_text(encoding="utf-8"))["version"]
 REPORT = ROOT / "build/simulation-report"
 WORK = ROOT / "build/simulation-private"
 BRIDGE = "br-router-ci"
 TAP = "tap-router-ci"
+IPV6_TAP = "tap-router-v6"
 NAMESPACE = "router-ci-client"
 
 
@@ -34,6 +37,10 @@ def prepare_overlay(device, role):
     metadata = firmware.overlay(overlay, device, role)
     # 通用虚拟机只有 VirtIO 网卡；物理设备的交换机/USB/无线驱动不在模拟范围内。
     network = firmware.n1_network(role, "eth1").replace("192.168.69.1", metadata["address"])
+    if role == "router":
+        # 仿真的 IPv6 上游固定使用第三网口，从开机起保持 ifindex 稳定。
+        # odhcpd 会缓存逻辑接口的 ifindex，不能在中继用例中临时从 IPv4 WAN 搬迁。
+        network = network.replace("option device '@wan'", "option device 'eth2'")
     (overlay / "etc/config/network").write_text(network, encoding="utf-8")
     template = (ROOT / "files/n1-dhcp.template").read_text(encoding="utf-8")
     (overlay / "etc/config/dhcp").write_text(template.replace("@IGNORE@", "0" if role == "router" else "1").replace("@IPV6@", "server" if role == "router" else "disabled"), encoding="utf-8")
@@ -76,8 +83,40 @@ config wifi-iface 'default_radio1'
     return metadata
 
 
+def ssh_handshake_failure(error, address):
+    # 只识别 OpenSSH 在运行远程命令前产生的固定连接/密钥交换错误。
+    # client_loop、通道中断、远程退出码和已有标准输出都不能证明命令尚未执行。
+    if error.returncode != 255 or error.stdout or not isinstance(error.stderr, str):
+        return False
+    lines = error.stderr.strip().splitlines()
+    kex = {
+        "kex_exchange_identification: read: Connection reset by peer",
+        "kex_exchange_identification: Connection reset by peer",
+        "kex_exchange_identification: Connection closed by remote host",
+        "kex_exchange_identification: read: Connection closed by remote host",
+    }
+    if lines and lines[0] in kex:
+        return len(lines) == 1 or (len(lines) == 2 and lines[1] in {
+            f"Connection reset by {address} port 22",
+            f"Connection closed by {address} port 22",
+        })
+    return len(lines) == 1 and lines[0] in {
+        f"ssh: connect to host {address} port 22: Connection refused",
+        f"ssh: connect to host {address} port 22: No route to host",
+        f"ssh: connect to host {address} port 22: Connection timed out",
+    }
+
+
 def ssh(address, command, **kwargs):
-    return run("ssh", "-i", WORK / "ssh-key", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", f"UserKnownHostsFile={WORK / 'known_hosts'}", "-o", "ConnectTimeout=3", "-o", "LogLevel=ERROR", f"root@{address}", command, **kwargs)
+    args = ("ssh", "-i", WORK / "ssh-key", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", f"UserKnownHostsFile={WORK / 'known_hosts'}", "-o", "ConnectTimeout=3", "-o", "LogLevel=ERROR", f"root@{address}", command)
+    captured_stderr = kwargs.get("capture_output") or kwargs.get("stderr") == subprocess.PIPE
+    for attempt in range(3):
+        try:
+            return run(*args, **kwargs)
+        except subprocess.CalledProcessError as error:
+            if attempt == 2 or not captured_stderr or not ssh_handshake_failure(error, address):
+                raise
+            time.sleep(0.5 * (attempt + 1))
 
 
 def wait_for_guest(address, process, previous_boot=None):
@@ -139,7 +178,7 @@ def wait_for_network_services(address, role):
 
 def network_preflight(address):
     links = json.loads(run("ip", "-j", "addr", "show", capture_output=True).stdout)
-    reserved = {BRIDGE, TAP, "router-ci-host", "router-ci-peer"}
+    reserved = {BRIDGE, TAP, IPV6_TAP, "router-ci-host", "router-ci-peer"}
     if any(link["ifname"] in reserved for link in links):
         raise ValueError("模拟网桥或网口已存在，请先核对旧测试资源")
     namespaces = run("ip", "netns", "list", capture_output=True).stdout.splitlines()
@@ -152,6 +191,10 @@ def network_preflight(address):
                 existing = ipaddress.ip_network(f"{item['local']}/{item['prefixlen']}", strict=False)
                 if planned.overlaps(existing):
                     raise ValueError(f"模拟网段与本机已有网段重叠：{existing}，请在独立的 CI runner 运行")
+            elif item["family"] == "inet6":
+                existing = ipaddress.ip_network(f"{item['local']}/{item['prefixlen']}", strict=False)
+                if any(existing.overlaps(ipaddress.ip_network(prefix)) for prefix in ("2001:db8:100::/64", "2001:db8:200::/56")):
+                    raise ValueError("IPv6 模拟网段与宿主已有网络重叠")
 
 
 def network_up(address):
@@ -161,6 +204,7 @@ def network_up(address):
     run("sudo", "ip", "link", "set", BRIDGE, "up")
     # GitHub runner 上 Docker 的 FORWARD=DROP 不应拦截这个独立桥中的测试客户端。
     run("sudo", "iptables", "-I", "FORWARD", "-i", BRIDGE, "-o", BRIDGE, "-j", "ACCEPT")
+    run("sudo", "ip6tables", "-I", "FORWARD", "-i", BRIDGE, "-o", BRIDGE, "-j", "ACCEPT")
     run("sudo", "ip", "tuntap", "add", "dev", TAP, "mode", "tap", "user", str(os.getuid()))
     run("sudo", "ip", "link", "set", TAP, "master", BRIDGE)
     run("sudo", "ip", "link", "set", TAP, "up")
@@ -172,11 +216,20 @@ def network_up(address):
     run("sudo", "ip", "-n", NAMESPACE, "link", "set", "router-ci-peer", "name", "eth0")
     run("sudo", "ip", "-n", NAMESPACE, "link", "set", "eth0", "up")
     run("sudo", "ip", "-n", NAMESPACE, "link", "set", "lo", "up")
+    # 独立第三网卡仅用于 IPv6 路由联调，不修改宿主默认路由或真实网口。
+    run("sudo", "ip", "tuntap", "add", "dev", IPV6_TAP, "mode", "tap", "user", str(os.getuid()))
+    run("sudo", "ip", "link", "set", IPV6_TAP, "up")
+    run("sudo", "ip", "-6", "addr", "add", "2001:db8:100::1/64", "dev", IPV6_TAP)
+    run("sudo", "ip", "-6", "route", "add", "2001:db8:200::/56", "via", "2001:db8:100::2", "dev", IPV6_TAP)
+    run("sudo", "ip6tables", "-I", "INPUT", "-i", IPV6_TAP, "-p", "tcp", "--dport", "18093", "-j", "ACCEPT")
 
 
 def network_down():
     commands = [
+        ("ip6tables", "-D", "INPUT", "-i", IPV6_TAP, "-p", "tcp", "--dport", "18093", "-j", "ACCEPT"),
+        ("ip", "link", "delete", IPV6_TAP),
         ("iptables", "-D", "FORWARD", "-i", BRIDGE, "-o", BRIDGE, "-j", "ACCEPT"),
+        ("ip6tables", "-D", "FORWARD", "-i", BRIDGE, "-o", BRIDGE, "-j", "ACCEPT"),
         ("ip", "netns", "delete", NAMESPACE),
         ("ip", "link", "delete", "router-ci-host"),
         ("ip", "link", "delete", TAP),
@@ -189,11 +242,11 @@ def network_down():
 def build_image(role, device):
     imagebuilder = ROOT / "build/simulation-tools/imagebuilder"
     # 官方仓库没有 fork 中的 px5g-openssl，测试系统使用 uhttpd 原生 OpenSSL 回退。
-    packages = "uhttpd uhttpd-mod-ubus rpcd jsonfilter ucode ucode-mod-fs rpcd-mod-iwinfo libustream-openssl openssl-util ca-bundle -luci -luci-light -luci-ssl -wpad-basic-mbedtls -libustream-mbedtls -libustream-wolfssl"
+    packages = "uhttpd uhttpd-mod-ubus rpcd jsonfilter ucode ucode-mod-fs ucode-mod-ubus ucode-mod-uci coreutils-timeout rpcd-mod-iwinfo libustream-openssl openssl-util ca-bundle -luci -luci-light -luci-ssl -wpad-basic-mbedtls -libustream-mbedtls -libustream-wolfssl"
     if device == "jdcloud-ax1800":
         packages += " wifi-scripts"
     if role == "bypass":
-        packages += " -ppp -ppp-mod-pppoe -odhcp6c -odhcpd-ipv6only"
+        packages += " -ppp -ppp-mod-pppoe -odhcpd-ipv6only"
     with (REPORT / "imagebuilder.log").open("w") as log:
         run("make", "-C", imagebuilder, "image", "PROFILE=generic", f"PACKAGES={packages}", f"FILES={WORK / 'overlay'}", f"BIN_DIR={WORK / 'images'}", "ROOTFS_PARTSIZE=128", stdout=log, stderr=subprocess.STDOUT)
     kernels = list((WORK / "images").glob("*-generic-kernel.bin"))
@@ -228,8 +281,39 @@ def install_package(address, package):
     lines.append(f"{hashlib.sha256(acl.read_bytes()).hexdigest()}  /usr/share/rpcd/acl.d/router-ui.json")
     plugin = bundle / "files/router.maintenance"
     lines.append(f"{hashlib.sha256(plugin.read_bytes()).hexdigest()}  /usr/libexec/rpcd/router.maintenance")
+    for name, destination in {'router.status': '/usr/libexec/rpcd/router.status', 'status.uc': '/usr/libexec/router-ui/status.uc'}.items():
+        lines.append(f"{hashlib.sha256((bundle / 'files' / name).read_bytes()).hexdigest()}  {destination}")
+    data_helper = bundle / "files/maintenance-data.uc"
+    lines.append(f"{hashlib.sha256(data_helper.read_bytes()).hexdigest()}  /usr/libexec/router-ui/maintenance-data.uc")
+    password_helper = bundle / "files/password.uc"
+    lines.append(f"{hashlib.sha256(password_helper.read_bytes()).hexdigest()}  /usr/libexec/router-ui/password.uc")
+    for name, destination in {
+        'router.diagnostics': '/usr/libexec/rpcd/router.diagnostics',
+        'diagnostics.uc': '/usr/libexec/router-ui/diagnostics.uc',
+        'time-settings.uc': '/usr/libexec/router-ui/time-settings.uc',
+        'schedule.uc': '/usr/libexec/router-ui/schedule.uc',
+        'scheduled-reboot': '/usr/libexec/router-ui/scheduled-reboot',
+        'led-policy.uc': '/usr/libexec/router-ui/led-policy.uc',
+        'led-state': '/usr/libexec/router-ui/led-state',
+        'router-ui-led': '/etc/init.d/router-ui-led',
+        'router-ui-led-boot': '/etc/init.d/router-ui-led-boot',
+        'led-hotplug': '/etc/hotplug.d/iface/95-router-ui-led',
+    }.items():
+        lines.append(f"{hashlib.sha256((bundle / 'files' / name).read_bytes()).hexdigest()}  {destination}")
     with (REPORT / "installed-files.log").open("w") as log:
         ssh(address, "sha256sum -c -", input="\n".join(lines) + "\n", stdout=log, stderr=subprocess.STDOUT)
+
+
+def install_relay_package(address, package):
+    # 官方镜像仍带有旧服务，先安装同一源码补丁的包，再重启验证持久化。
+    with package.open("rb") as stream:
+        ssh(address, "cat > /tmp/router-ui-odhcpd.apk", stdin=stream, capture_output=True)
+    expected = hashlib.sha256(package.read_bytes()).hexdigest()
+    actual = ssh(address, "sha256sum /tmp/router-ui-odhcpd.apk", capture_output=True).stdout.split()[0]
+    if actual != expected:
+        raise ValueError("传入虚拟机的中继修正版校验失败")
+    with (REPORT / "odhcpd-install.log").open("w") as log:
+        ssh(address, "apk add --no-network --allow-untrusted /tmp/router-ui-odhcpd.apk && apk info -a odhcpd-ipv6only && sha256sum /usr/sbin/odhcpd", stdout=log, stderr=subprocess.STDOUT, timeout=90)
 
 
 def test_network(role, address, expected_pool=None, report_name="network"):
@@ -288,6 +372,10 @@ def guest_policy(address, metadata):
     wan = ssh(address, "uci -q get network.wan.device || true", capture_output=True).stdout.strip()
     if wan != ("eth1" if metadata["role"] == "router" else ""):
         raise AssertionError("WAN 网口配置不符")
+    if metadata["role"] == "router":
+        wan6 = ssh(address, "uci -q get network.wan6.device", capture_output=True).stdout.strip()
+        if wan6 != "eth2":
+            raise AssertionError("仿真 IPv6 专用上游必须从开机起使用第三网口")
 
 
 def main():
@@ -295,10 +383,14 @@ def main():
     parser.add_argument("--device", choices=firmware.DEVICES, required=True)
     parser.add_argument("--role", choices=("router", "bypass"), required=True)
     parser.add_argument("--package", type=Path, required=True)
+    parser.add_argument("--odhcpd-package", type=Path, help="主路由必须安装本次编译的中继修正版")
+    parser.add_argument("--without-browser", action="store_true", help="仅运行原生设备验证，不启动浏览器")
     args = parser.parse_args()
     firmware.validate_role(args.device, args.role, "eth1")
     if args.package.suffix != ".apk" or not args.package.is_file():
         raise ValueError("需要本次构建的 router-ui APK 文件")
+    if args.role == "router" and (not args.odhcpd_package or args.odhcpd_package.suffix != ".apk" or not args.odhcpd_package.is_file()):
+        raise ValueError("主路由仿真需要同次编译的中继修正版安装包")
     if not os.environ.get("SIM_PASSWORD"):
         raise ValueError("需要一次性 SIM_PASSWORD")
     if "udhcpc" not in run("busybox", "--list", capture_output=True).stdout.splitlines():
@@ -328,7 +420,8 @@ def main():
             "-kernel", str(kernel), "-append", "root=/dev/vda rootwait console=ttyAMA0,115200",
             "-drive", f"file={disk},format=raw,if=virtio",
             "-netdev", f"tap,id=lan,ifname={TAP},script=no,downscript=no", "-device", network_device("lan", "52:54:00:12:34:01"),
-            "-netdev", "user,id=wan,net=10.0.2.0/24", "-device", network_device("wan", "52:54:00:12:34:02"),
+            "-netdev", "user,id=wan,net=10.0.2.0/24,hostfwd=tcp:127.0.0.1:18081-:18081", "-device", network_device("wan", "52:54:00:12:34:02"),
+            "-netdev", f"tap,id=ipv6,ifname={IPV6_TAP},script=no,downscript=no", "-device", network_device("ipv6", "52:54:00:12:34:03"),
             "-object", "rng-random,filename=/dev/urandom,id=rng0", "-device", "virtio-rng-pci,rng=rng0",
         ], stdin=subprocess.DEVNULL, stdout=qemu_log, stderr=subprocess.STDOUT)
         processes.append(process)
@@ -336,6 +429,8 @@ def main():
         password = os.environ["SIM_PASSWORD"]
         ssh(address, "passwd root", input=password + "\n" + password + "\n", capture_output=True)
         install_package(address, args.package.resolve())
+        if args.role == "router":
+            install_relay_package(address, args.odhcpd_package.resolve())
         # 同一磁盘重新启动，验证已安装的文件和首次启动状态能够保留。
         boot_id = ssh(address, "cat /proc/sys/kernel/random/boot_id", capture_output=True).stdout.strip()
         ssh(address, "(sleep 1; reboot) >/dev/null 2>&1 &", capture_output=True)
@@ -345,11 +440,22 @@ def main():
         guest_policy(address, metadata)
         wait_for_network_services(address, args.role)
         test_network(args.role, address)
-        run("python3", ROOT / "tests/runtime/configuration.py", "--address", address)
         env = dict(os.environ, SIM_BASE_URL=f"https://{address}", SIM_DEVICE=args.device, SIM_ROLE=args.role, SIM_ADDRESS=address)
+        # 先检查轻量的新增 RPC，参数不兼容时不必等待长时间的回滚/维护用例。
+        run("python3", ROOT / "tests/runtime/schedule.py", env=env)
+        run("python3", ROOT / "tests/runtime/configuration.py", "--address", address)
+        unit_env = dict(env, UCODE_TEST_COMMAND=shlex.join([sys.executable, str(ROOT / "tests/helpers/guest-ucode.py")]))
+        with (REPORT / "ucode-tests.log").open("w") as log:
+            for suite in ("test_maintenance_data.py", "test_password.py", "test_led_policy.py", "test_status_data.py", "test_router_basics.py", "test_schedule_policy.py"):
+                run("python3", "-m", "unittest", "discover", "-s", ROOT / "tests/firmware", "-p", suite, "-v", env=unit_env, stdout=log, stderr=subprocess.STDOUT)
         run("python3", ROOT / "tests/runtime/maintenance.py", env=env)
+        run("python3", ROOT / "tests/runtime/password.py", env=env)
+        run("python3", ROOT / "tests/runtime/led.py", env=env)
+        run("python3", ROOT / "tests/runtime/status.py", env=env)
         run("python3", ROOT / "tests/runtime/routing.py", env=env)
-        run("bun", "run", "test:e2e", env=env)
+        run("python3", ROOT / "tests/runtime/router_basics.py", env=env)
+        if not args.without_browser:
+            run("bun", "run", "test:e2e", env=env)
         success = True
     finally:
         if processes:
@@ -369,7 +475,7 @@ def main():
         wan_log.close()
         if network_created:
             network_down()
-        (REPORT / "summary.json").write_text(json.dumps({"device": args.device, "role": args.role, "runtime": "OpenWrt 25.12.2 ARM64 / QEMU virt", "package_sha256": hashlib.sha256(args.package.read_bytes()).hexdigest(), "passed": success, "hardware_emulated": False}, indent=2) + "\n")
+        (REPORT / "summary.json").write_text(json.dumps({"device": args.device, "role": args.role, "runtime": f"OpenWrt {SIMULATION_VERSION} ARM64 / QEMU virt", "package_sha256": hashlib.sha256(args.package.read_bytes()).hexdigest(), "odhcpd_package_sha256": hashlib.sha256(args.odhcpd_package.read_bytes()).hexdigest() if args.role == "router" else None, "passed": success, "browser_tests_enabled": not args.without_browser, "hardware_emulated": False}, indent=2) + "\n")
         shutil.rmtree(WORK)
     if not success:
         raise RuntimeError("模拟测试失败")

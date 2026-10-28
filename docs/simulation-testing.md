@@ -4,13 +4,19 @@
 
 ## GitHub Actions 运行方式
 
-`Simulate OpenWrt installation` 在 Actions 中手动运行，完整固件构建也会调用它作为前置检查。它通过官方 SDK 构建真正的 `router-ui.apk`，使用校验 SHA-256 的 OpenWrt 25.12.2 ImageBuilder 生成 ARM64 测试系统，在 QEMU 中启动。接口来自运行中的 `procd`、`netifd`、`rpcd` 和 `uhttpd`，不是本地演示接口。
+`Simulate OpenWrt installation` 在 Actions 中手动运行，完整固件构建也会调用它作为前置检查。它通过官方 SDK 构建真正的 `router-ui.apk`，使用校验 SHA-256 的 OpenWrt 25.12.6 ImageBuilder 生成 ARM64 测试系统，在 QEMU 中启动。接口来自运行中的 `procd`、`netifd`、`rpcd` 和 `uhttpd`，不是本地演示接口。
+
+主路由还会通过 SDK 编译带有[断链恢复补丁](ipv6-link-recovery.md)的 `odhcpd-ipv6only.apk`，安装后再重启测试机。`simulate.sh` 的第四个参数可指定该包，默认读取 `build/simulation-package/odhcpd-ipv6only.apk`；缺失时拒绝运行主路由验证。编译后仿真使用本次运行前置阶段生成的通用架构服务包，其源码、修订号与补丁和设备固件一致，报告记录安装包摘要、架构及版本；AX1800 的设备架构包不能直接混装到通用测试系统。N1 旁路由不安装此服务。
 
 普通 push / pull request 只自动执行快速代码检查，同分支新提交会取消尚未结束的旧检查。先在本地验证并集中推送，按需要手动运行固件配置、QEMU 模拟或完整固件构建；不再每次提交重复运行耗时任务。
+
+不使用浏览器时，手动运行取消 `browser_tests` 选项，或命令行设置 `SIM_BROWSER_TESTS=0` 后调用 `simulate.sh`。该模式保留真实安装、重启、权限、配置回滚、网络与维护验证，跳过浏览器安装和页面回归；报告通过 `browser_tests_enabled` 明确标记范围。无需启动开发模式。
 
 ## QEMU 启动检查
 
 `simulate.sh` 在下载 ImageBuilder、生成镜像前执行 [qemu_host.py](../scripts/qemu_host.py)，用空 ROM 搜索目录检查 ARM64 TCG、VirtIO 磁盘、双网卡和随机数设备能否创建。测试直接通过 `-kernel` 启动，两张网卡都显式设置 `romfile=` 关闭 PXE ROM，避免精简安装依赖时因缺少 `efi-virtio.rom` 而退出。正式启动使用相同网卡参数；提前退出时会把 QEMU 错误直接写入任务日志。
+
+正式联调额外加入第三网口 `eth2` 作为独立 IPv6 上游，主路由仿真从开机起将 `wan6` 固定到该口，IPv4 WAN 保持 `eth1`。这样 DHCPv6 中继用例不混入运行中搬迁物理网口的行为；真实设备默认仍使用 `@wan`，没有修改硬件配置。odhcpd 对已有逻辑接口保留 ifindex 的实现见[固定上游源码](https://github.com/openwrt/odhcpd/blob/5d7be43f8b9dec0eb47e245cfab81108bb131273/src/config.c)。中继用例仍需完成真实 Relay-Forward/Reply 租约交换，并命中 WAN UDP 547 规则；失败时额外保留设备状态和桥组播表。
 
 ## 覆盖范围
 
@@ -27,13 +33,15 @@
 - 测试页面 DNS 应用确认、LAN 输入校验及跨地址确认交接；AX1800 使用禁用的虚拟无线配置测试 SSID 表单，不模拟射频硬件。
 - 下载网络设置备份、校验相同设备/模式、预览变更、拒绝错误备份，以及同次恢复 DNS、DHCP 后的确认流程；同次应用 LAN 和 DNS，验证失联后两个配置都能回滚。
 - 验证无线只读状态权限和按需刷新；通用 QEMU 没有射频设备，连接设备列表、信号和协商速率由协议测试及本地组件测试覆盖，仍需 AX1800 实机验证。
-- 验证系统归档导出、gzip 格式和 SHA-256；暂存及待确认配置期间，另一个登录会话同样不能导出或重启。最后通过维护接口真实重启虚拟机，检查 boot ID 改变、原配置保留和旧会话失效。
+- 验证系统归档导出、gzip 格式和 SHA-256；暂存及待确认配置期间，另一个登录会话同样不能导出或重启。验证真实上传令牌、顺序、摘要、归档路径检查、取消清理，以及 generic/ext4 设备拒绝升级与恢复出厂。通过维护接口真实重启，再修改主机名、恢复刚导出的归档并再次重启，核对 boot ID、原配置及旧会话失效。
+- 浏览器在受控 RPC 响应下检查归档取消、输入确认文字、维护期间配置互斥、固件摘要和兼容性失败、无能力设备隐藏操作；这些页面测试不执行真实固件刷写。
+- 验证未登录、当前密码错误、两次输入不一致和暂存配置期间不能修改密码；在模拟机真实修改 root 密码，确认旧密码拒绝、新密码可登录、所有原 root 网页会话失效，随后还原测试密码。报告仅记录结果，不保存密码或 shadow 内容；密码页面测试关闭 trace。
 
 ## 报告与产物
 
-打开运行记录，在 Artifacts 下载 `simulation-设备-模式`：包含 HTML/JUnit 报告、页面截图、安装记录、启动日志、DHCP、网络、`configuration.json` 配置事务、`maintenance.json` 维护结果和 `routing.json` 上网及地址池结果。失败时通常保留 Playwright trace；系统导出测试关闭 trace，归档仅在内存或浏览器临时目录校验后删除，不上传归档或其中的测试密钥。浏览器依赖仅用于开发和 CI，不进入固件；测试密码和 SSH 密钥每次临时生成，模拟磁盘及私钥不上传。
+打开运行记录，在 Artifacts 下载 `simulation-设备-模式`：包含 HTML/JUnit 报告、页面截图、安装记录、启动日志、DHCP、网络、`configuration.json` 配置事务、`maintenance.json` 维护结果、`schedule.json` 定时任务权限与 cron 安装结果，以及 `routing.json` 上网及地址池结果。定时任务检查不触发计划重启。失败时通常保留 Playwright trace；系统导出测试关闭 trace，归档仅在内存或浏览器临时目录校验后删除，不上传归档或其中的测试密钥。浏览器依赖仅用于开发和 CI，不进入固件；测试密码和 SSH 密钥每次临时生成，模拟磁盘及私钥不上传。
 
-`Build lightweight firmware` 会先等待三种模拟配置通过，再编译设备固件。编译完成后，还会安装并测试本次真实编译生成的前端 APK，失败会阻止后续打包和 Release。正式构建的模拟报告放在设备构建 Artifact 中。
+`Build lightweight firmware` 默认先等待三种模拟配置通过，再编译设备固件。编译完成后，还会安装并测试本次真实编译生成的前端 APK，失败会阻止后续打包和 Release。启用 `skip_tests` 时跳过上述检查与仿真，产物须另行验收。正式构建的模拟报告放在设备构建 Artifact 中。
 
 ## 模拟边界
 

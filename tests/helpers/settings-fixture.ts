@@ -2,6 +2,10 @@ import type { SettingsSnapshot } from "../../frontend/src/lib/settings";
 
 export function settingsFixture(bypass = false): SettingsSnapshot {
   return {
+    firewall: {
+      lan: { ".type": "zone", name: "lan", network: ["lan"] },
+      wan: { ".type": "zone", name: "wan", network: ["wan", "wan6"], masq: "1" },
+    },
     network: {
       ...(!bypass
         ? {

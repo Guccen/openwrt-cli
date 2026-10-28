@@ -1,0 +1,123 @@
+#!/bin/sh
+# 只管理本插件的标记行，运行时只调用固定的 system reboot。
+set -e
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+umask 077
+CONFIG=/etc/router-ui-schedule.json
+HELPER=/usr/libexec/router-ui/schedule.uc
+CRON=/etc/crontabs/root
+LOCK=/var/run/router-ui-schedule.lock
+CRONLOCK=/var/run/router-ui-crontab.lock
+MAINTENANCE=/var/run/router-ui-maintenance.lock
+mode=${1:-run}
+temporary=
+config_backup=
+cron_backup=
+config_existed=false
+cron_existed=false
+cron_locked=false
+maintenance_locked=false
+transaction=false
+was_running=false
+was_enabled=false
+cleanup() {
+    [ -z "$temporary" ] || rm -f "$temporary"
+    [ -z "$config_backup" ] || rm -f "$config_backup"
+    [ -z "$cron_backup" ] || rm -f "$cron_backup"
+    [ "$cron_locked" != true ] || rmdir "$CRONLOCK" 2>/dev/null || true
+    [ "$maintenance_locked" != true ] || rmdir "$MAINTENANCE" 2>/dev/null || true
+    rmdir "$LOCK" 2>/dev/null || true
+}
+fail() { printf '{"ok":false,"error":"%s"}\n' "$1"; exit 1; }
+rollback() {
+    [ "$transaction" = true ] || return 0
+    transaction=false
+    restored=true
+    if [ "$config_existed" = true ]; then mv "$config_backup" "$CONFIG" || restored=false; config_backup=;
+    else rm -f "$CONFIG" || restored=false; fi
+    if [ "$cron_existed" = true ]; then mv "$cron_backup" "$CRON" || restored=false; cron_backup=;
+    else rm -f "$CRON" || restored=false; fi
+    if [ "$was_enabled" = true ]; then /etc/init.d/cron enable >/dev/null 2>&1 || restored=false;
+    else /etc/init.d/cron disable >/dev/null 2>&1 || restored=false; fi
+    if [ "$was_running" = true ]; then /etc/init.d/cron restart >/dev/null 2>&1 || restored=false;
+    else /etc/init.d/cron stop >/dev/null 2>&1 || restored=false; fi
+    [ "$restored" = true ]
+}
+abort() { rollback || fail schedule_restore_failed; fail schedule_apply_failed; }
+busy_config() {
+    local entry
+    for entry in /var/run/rpcd/snapshot-files/* /var/run/rpcd/snapshot-delta/* /var/run/rpcd/uci-*/* /tmp/.uci/*; do
+        [ ! -s "$entry" ] || return 0
+    done
+    return 1
+}
+save_event() { ucode "$HELPER" record "$1" >/dev/null; }
+case "$mode" in configure|start|uninstall|run) ;; *) fail unsupported_method ;; esac
+if ! mkdir "$LOCK" 2>/dev/null; then [ "$mode" = run ] && exit 0; fail operation_busy; fi
+trap 'if [ "$transaction" = true ]; then rollback >/dev/null 2>&1 || true; fi; cleanup' EXIT
+trap 'exit 1' HUP INT TERM
+if [ "$mode" = run ]; then
+    decision=$(ucode "$HELPER" decision) || fail schedule_invalid
+    due=$(printf '%s' "$decision" | jsonfilter -e '@.due')
+    reason=$(printf '%s' "$decision" | jsonfilter -e '@.reason')
+    if [ "$due" != true ]; then save_event "$reason"; exit 0; fi
+    if ! mkdir "$MAINTENANCE" 2>/dev/null; then save_event maintenance_busy; exit 0; fi
+    maintenance_locked=true
+    if busy_config; then save_event configuration_busy; exit 0; fi
+    # 再核对当前分钟，锁冲突后不补执行已经错过的时间。
+    decision=$(ucode "$HELPER" decision) || fail schedule_invalid
+    due=$(printf '%s' "$decision" | jsonfilter -e '@.due')
+    reason=$(printf '%s' "$decision" | jsonfilter -e '@.reason')
+    if [ "$due" != true ]; then save_event "$reason"; exit 0; fi
+    ucode "$HELPER" reserve >/dev/null
+    if ! ubus call system reboot >/dev/null 2>&1; then save_event reboot_failed; exit 1; fi
+    save_event requested
+    exit 0
+fi
+# 与 LED 的 boot/defaults/save 共用同一把锁，避免覆盖其他任务。
+count=0
+until mkdir "$CRONLOCK" 2>/dev/null; do
+    count=$((count + 1)); [ "$count" -lt 5 ] || fail schedule_cron_busy
+    sleep 1
+done
+cron_locked=true
+mkdir -p /etc/crontabs
+[ ! -L "$CONFIG" ] && [ ! -L "$CRON" ] || fail schedule_apply_failed
+[ ! -e "$CONFIG" ] || [ -f "$CONFIG" ] || fail schedule_apply_failed
+[ ! -e "$CRON" ] || [ -f "$CRON" ] || fail schedule_apply_failed
+if [ -f "$CONFIG" ]; then [ "$(wc -c < "$CONFIG")" -le 2048 ] || fail schedule_invalid; config_existed=true; fi
+if [ -f "$CRON" ]; then [ "$(wc -c < "$CRON")" -le 65536 ] || fail schedule_crontab_too_large; cron_existed=true; fi
+config_backup=$(mktemp /etc/.router-ui-schedule-backup.XXXXXX)
+cron_backup=$(mktemp /etc/crontabs/.router-ui-schedule-backup.XXXXXX)
+[ "$config_existed" != true ] || cp -p "$CONFIG" "$config_backup"
+[ "$cron_existed" != true ] || cp -p "$CRON" "$cron_backup"
+pidof crond >/dev/null 2>&1 && was_running=true
+/etc/init.d/cron enabled >/dev/null 2>&1 && was_enabled=true
+if [ "$mode" = configure ]; then
+    temporary=$(mktemp /etc/.router-ui-schedule-config.XXXXXX)
+    if ! ucode "$HELPER" validate > "$temporary"; then cat "$temporary"; exit 1; fi
+    transaction=true
+    mv "$temporary" "$CONFIG" || abort
+    temporary=
+fi
+line=
+if [ "$mode" != uninstall ]; then line=$(ucode "$HELPER" line) || abort; fi
+transaction=true
+temporary=$(mktemp /etc/crontabs/.router-ui-schedule.XXXXXX)
+if [ "$cron_existed" = true ]; then
+    if grep -v ' # router-ui-scheduled-reboot$' "$CRON" > "$temporary"; then :;
+    else result=$?; [ "$result" -eq 1 ] || abort; fi
+fi
+[ -z "$line" ] || printf '%s\n' "$line" >> "$temporary"
+if [ "$cron_existed" != true ] && [ ! -s "$temporary" ]; then
+    # 禁用的默认策略不创建空 root crontab，避免因此让 cron 在下次启动驻留。
+    rm -f "$temporary" || abort
+else mv "$temporary" "$CRON" || abort; fi
+temporary=
+if [ -n "$line" ]; then /etc/init.d/cron enable >/dev/null 2>&1 || abort; fi
+if [ -n "$line" ] || [ "$was_running" = true ]; then
+    /etc/init.d/cron restart >/dev/null 2>&1 || abort
+    pidof crond >/dev/null 2>&1 || abort
+fi
+transaction=false
+printf '%s\n' '{"ok":true}'

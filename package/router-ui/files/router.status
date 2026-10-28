@@ -1,0 +1,8 @@
+#!/bin/sh
+# 仅提供固定只读状态，不接受路径、命令或设备名称。
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+case "$1:$2" in
+    list:) printf '%s\n' '{"summary":{},"clients":{}}' ;;
+    call:summary|call:clients) exec ucode /usr/libexec/router-ui/status.uc "$2" ;;
+    *) printf '%s\n' '{"ok":false,"error":"unsupported_method"}' ;;
+esac

@@ -1,0 +1,12 @@
+接口短暂断链时仅停用服务，保留接口以便链路恢复事件重新启用中继。
+
+--- a/src/config.c
++++ b/src/config.c
+@@ -2168,5 +2168,6 @@ void odhcpd_reload(void)
+ 	avl_for_each_element_safe(&interfaces, i, avl, tmp) {
+-		if (i->inuse && i->ifflags & IFF_RUNNING) {
++		/* 断链只停用服务，仍在使用的接口须保留以接收链路恢复事件。 */
++		if (i->inuse) {
+ 			/* Resolve hybrid mode */
+ 			if (i->dhcpv6 == MODE_HYBRID)
+ 				i->dhcpv6 = (master && master->dhcpv6 == MODE_RELAY) ?

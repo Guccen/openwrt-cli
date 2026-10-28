@@ -25,7 +25,9 @@ const rpc = new RouterClient();
 export function RebootCard({ disabled }: { disabled: boolean }) {
   const session = useRouter((state) => state.session);
   const [open, setOpen] = useState(false);
-  const waiting = useMaintenanceOperation((state) => state.kind === "reboot");
+  const operation = useMaintenanceOperation((state) => state.kind);
+  const waiting =
+    operation !== null && ["reboot", "restore", "upgrade", "reset"].includes(operation);
   const [expired, setExpired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -46,8 +48,12 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
         await rpc.call(session, "system", "info");
       } catch (e) {
         if (e instanceof RpcError && e.sessionExpired) {
-          const device = await rpc.device();
-          if (!cancelled && device) useRouter.setState({ session: null, snapshot: null });
+          try {
+            const device = await rpc.device();
+            if (!cancelled && device) useRouter.getState().forgetSession();
+          } catch {
+            /* 设备 HTTP 服务尚未恢复，下次继续探测。 */
+          }
         }
       } finally {
         polling = false;
@@ -86,8 +92,10 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
           <Alert>
             <AlertDescription>
               {expired
-                ? "暂未检测到设备重新上线，请检查连接后重新登录。"
-                : "已发送重启请求，正在等待设备恢复连接…"}
+                ? "暂未检测到设备重新上线，请检查连接和管理地址后重新登录。"
+                : operation === "reboot"
+                  ? "已发送重启请求，正在等待设备恢复连接…"
+                  : "已发送维护请求，请等待设备重启；恢复或重置后管理地址和密码可能改变。"}
             </AlertDescription>
           </Alert>
         ) : (
@@ -100,7 +108,7 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
           <Button asChild variant="outline">
             <Link
               href={`${loginPath}?next=${encodeURIComponent(pageRoutes.system.path)}`}
-              onClick={() => useRouter.setState({ session: null, snapshot: null })}
+              onClick={() => useRouter.getState().forgetSession()}
             >
               重新登录
             </Link>

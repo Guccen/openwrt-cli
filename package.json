@@ -1,6 +1,6 @@
 {
   "name": "openwrt-lite-console",
-  "version": "0.5.0",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -43,5 +43,5 @@
   "engines": {
     "node": ">=22.12"
   },
-  "packageManager": "bun@1.4.0"
+  "packageManager": "bun@1.4.4"
 }

@@ -2,7 +2,7 @@ config rpcd
 	option socket '/var/run/ubus/ubus.sock'
 	option timeout '30'
 
-# 网页会话仅允许读取状态及退出登录，系统管理仍可通过 SSH 完成。
+# 网页会话只开放 router-ui 定义的状态、配置和固定维护操作。
 config login
 	option username 'root'
 	option password '$p$root'

@@ -1,6 +1,7 @@
 import { useRouter } from "../stores/router";
 import { useSettings, type PendingApply } from "../stores/settings";
 import { ipv4 } from "./settings";
+import { CONFIGS } from "./config-client";
 
 const channel = "router-ui-apply-v1";
 let outgoing: {
@@ -32,8 +33,8 @@ function validPending(value: unknown, source: string): value is PendingApply {
     ipv4(p.previousAddress) !== null &&
     Array.isArray(p.configs) &&
     p.configs.length > 0 &&
-    p.configs.length <= 3 &&
-    p.configs.every((name) => ["network", "dhcp", "wireless"].includes(name))
+    p.configs.length <= CONFIGS.length &&
+    p.configs.every((name) => CONFIGS.includes(name))
   );
 }
 
@@ -105,7 +106,7 @@ export function registerApplyHandoff() {
       incoming.accepted = true;
       window.history.replaceState(null, "", window.location.pathname + window.location.search);
       useSettings.getState().adopt(data.session, data.pending);
-      useRouter.setState({ session: data.session, snapshot: null, loading: false, error: null });
+      useRouter.getState().adoptSession(data.session);
       void useRouter.getState().refresh();
     }
   };

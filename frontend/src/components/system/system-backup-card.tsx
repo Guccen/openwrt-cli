@@ -56,7 +56,7 @@ export function SystemBackupCard({ disabled }: { disabled: boolean }) {
         </Button>
         {notice && <output className="block text-xs text-muted-foreground">{notice}</output>}
         <p className="text-[11px] text-muted-foreground">
-          系统归档恢复暂通过 SSH 执行；LAN、DNS 和无线设置可在“备份与恢复”中预览后恢复。
+          网页恢复需要本项目新版导出的归档；旧归档或含链接的自定义归档请通过 SSH 检查后恢复。
         </p>
       </CardContent>
     </Card>
