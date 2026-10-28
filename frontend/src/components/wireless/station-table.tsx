@@ -22,7 +22,7 @@ export function StationTable({ stations }: { stations: WirelessStation[] | null 
         <TableRow>
           <TableHead>设备 MAC</TableHead>
           <TableHead>状态</TableHead>
-          <TableHead>信号</TableHead>
+          <TableHead>信号 / 信噪比</TableHead>
           <TableHead>接收 / 发送协商速率</TableHead>
           <TableHead>连接时长</TableHead>
         </TableRow>
@@ -40,7 +40,12 @@ export function StationTable({ stations }: { stations: WirelessStation[] | null 
                 </Badge>
               )}
             </TableCell>
-            <TableCell>{item.signal === null ? "—" : `${item.signal} dBm`}</TableCell>
+            <TableCell>
+              <div>{item.signal === null ? "—" : `${item.signal} dBm`}</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                信噪比 {item.snr === null ? "未知" : `${item.snr} dB`}
+              </div>
+            </TableCell>
             <TableCell>
               {rate(item.rx)} / {rate(item.tx)}
             </TableCell>

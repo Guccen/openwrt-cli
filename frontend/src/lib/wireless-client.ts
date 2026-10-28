@@ -4,6 +4,8 @@ import { wifiBand, type WifiBand } from "./wifi-band";
 export interface WirelessStation {
   mac: string;
   signal: number | null;
+  noise: number | null;
+  snr: number | null;
   connected: number | null;
   authorized: boolean | null;
   rx: number | null;
@@ -16,6 +18,9 @@ export interface WirelessInterface {
   mode: string;
   channel: number | null;
   frequency: number | null;
+  htmode: string | null;
+  txpower: number | null;
+  noise: number | null;
   stations: WirelessStation[] | null;
   warning: string | null;
 }
@@ -43,18 +48,41 @@ const positive = (value: unknown) =>
 export function signalDbm(value: unknown) {
   if (typeof value !== "number" || !Number.isInteger(value)) return null;
   // iwinfo 在部分版本中以无符号 32 位整数返回负的 dBm。
+  if (value < -127 || value > 0xffffffff) return null;
   const signed = value | 0;
   return signed >= -127 && signed < 0 ? signed : null;
 }
 export function station(value: unknown): WirelessStation {
   const row = record(value);
+  const signal = signalDbm(row.signal),
+    noise = signalDbm(row.noise);
+  const difference = signal !== null && noise !== null ? signal - noise : null;
   return {
     mac: text(row.mac),
-    signal: signalDbm(row.signal),
+    signal,
+    noise,
+    snr: difference !== null && difference >= 0 && difference <= 100 ? difference : null,
     connected: positive(row.connected_time),
     authorized: typeof row.authorized === "boolean" ? row.authorized : null,
     rx: positive(record(row.rx).rate),
     tx: positive(record(row.tx).rate),
+  };
+}
+
+function runtime(value: unknown) {
+  const row = record(value);
+  const power = row.txpower,
+    offset = row.txpower_offset ?? 0;
+  const validPower =
+    typeof power === "number" && Number.isInteger(power) && power >= 0 && power <= 40;
+  const validOffset =
+    typeof offset === "number" && Number.isInteger(offset) && Math.abs(offset) <= 30;
+  return {
+    htmode: /^(?:NOHT|(?:HT|VHT|HE|EHT)(?:20|40|80|160|320|80\+80))$/.test(text(row.htmode))
+      ? text(row.htmode)
+      : null,
+    txpower: validPower && validOffset ? power + offset : null,
+    noise: signalDbm(row.noise),
   };
 }
 
@@ -97,6 +125,9 @@ export class WirelessClient {
                   mode: text(options.mode),
                   channel: null,
                   frequency: null,
+                  htmode: null,
+                  txpower: null,
+                  noise: null,
                   stations: null,
                   warning: null,
                 };
@@ -135,6 +166,8 @@ export class WirelessClient {
                 if (responses[0].status === "fulfilled") {
                   result.channel = positive(responses[0].value?.channel);
                   result.frequency = positive(responses[0].value?.frequency);
+                  // 只显示实际运行字段，不拿芯片支持的模式列表代替运行模式。
+                  Object.assign(result, runtime(responses[0].value));
                 }
                 if (
                   responses[1].status === "fulfilled" &&

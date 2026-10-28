@@ -55,6 +55,26 @@ export function RadioCard({ radio }: { radio: WirelessRadio }) {
                 {iface.frequency ? ` · ${iface.frequency} MHz` : ""}
               </span>
             </div>
+            {radio.up && iface.name && (
+              <dl className="grid grid-cols-1 gap-2 rounded-md bg-muted/40 p-3 text-xs sm:grid-cols-3">
+                <div>
+                  <dt className="text-muted-foreground">运行模式 / 带宽</dt>
+                  <dd className="mt-1 font-medium">{iface.htmode ?? "未知"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">驱动报告功率</dt>
+                  <dd className="mt-1 font-medium">
+                    {iface.txpower === null ? "未知" : `${iface.txpower} dBm`}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">底噪</dt>
+                  <dd className="mt-1 font-medium">
+                    {iface.noise === null ? "未知" : `${iface.noise} dBm`}
+                  </dd>
+                </div>
+              </dl>
+            )}
             {iface.warning && <p className="text-xs text-muted-foreground">{iface.warning}</p>}
             {radio.up && iface.name && <StationTable stations={iface.stations} />}
           </div>

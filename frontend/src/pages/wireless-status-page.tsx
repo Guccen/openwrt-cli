@@ -27,7 +27,7 @@ export function WirelessStatusPage() {
         <RadioCard key={radio.name} radio={radio} />
       ))}
       <p className="text-[11px] text-muted-foreground">
-        手动刷新运行状态。协商速率由设备驱动报告，实际传输速度取决于连接环境。
+        手动刷新运行状态。信号是路由器接收到的客户端信号，可能与手机显示不同；信噪比仅在驱动同时提供有效信号和底噪时显示。协商速率不等于实际传输速度，底噪不代表信道占用率。
       </p>
     </div>
   );

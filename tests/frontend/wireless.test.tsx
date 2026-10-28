@@ -4,11 +4,13 @@ import axios from "axios";
 import { RouterClient, RpcError } from "../../frontend/src/lib/rpc";
 import { WirelessClient, signalDbm, station } from "../../frontend/src/lib/wireless-client";
 import { StationTable } from "../../frontend/src/components/wireless/station-table";
+import { RadioCard } from "../../frontend/src/components/wireless/radio-card";
 import { createSessionResource } from "../../frontend/src/stores/resource";
 
 test("无线数据处理有符号信号、缺失速率与转义，不把未知数据当作零客户端", () => {
   expect(signalDbm(4294967246)).toBe(-50);
-  for (const value of [0, null, NaN, -200, "-50"]) expect(signalDbm(value)).toBeNull();
+  for (const value of [0, null, NaN, -200, "-50", 8589934542, -4294967346])
+    expect(signalDbm(value)).toBeNull();
   const row = station({
     mac: "<script>alert(1)</script>",
     signal: -42,
@@ -120,6 +122,8 @@ test("网页通过只读状态接口读取 N1 的 wlan0，不调用拒绝会话�
     {
       mac: "02:00:00:00:00:01",
       signal: null,
+      noise: null,
+      snr: null,
       connected: 173,
       authorized: true,
       rx: 11000,
@@ -127,6 +131,68 @@ test("网页通过只读状态接口读取 N1 的 wlan0，不调用拒绝会话�
     },
   ]);
   expect(calls).toEqual(["router.status.wireless", "iwinfo.info", "iwinfo.assoclist"]);
+});
+
+test("无线运行数据展示实际模式、校准功率和信噪比，不额外调用设备接口", async () => {
+  const calls: string[] = [];
+  const rpc = {
+    call: async (_session: string, object: string, method: string) => {
+      calls.push(`${object}.${method}`);
+      if (object === "router.status")
+        return {
+          ok: true,
+          radios: {
+            radio0: {
+              up: true,
+              config: { band: "5g" },
+              interfaces: [{ ifname: "phy0-ap0", config: { mode: "ap" } }],
+            },
+          },
+        };
+      if (method === "info")
+        return {
+          channel: 149,
+          frequency: 5745,
+          htmode: "HE80",
+          htmodes: ["HE160"],
+          txpower: 20,
+          txpower_offset: 3,
+          noise: 4294967201,
+        };
+      return {
+        results: [
+          { signal: 4294967236, noise: 4294967201, rx: { rate: 1201000 }, tx: { rate: 573500 } },
+        ],
+      };
+    },
+  } as unknown as RouterClient;
+  const radio = (await new WirelessClient(rpc).read("session")).radios[0];
+  expect(radio.interfaces[0]).toMatchObject({ htmode: "HE80", txpower: 23, noise: -95 });
+  expect(radio.interfaces[0].stations?.[0]).toMatchObject({ signal: -60, noise: -95, snr: 35 });
+  const html = renderToStaticMarkup(<RadioCard radio={radio} />);
+  for (const value of ["HE80", "23 dBm", "-95 dBm", "35 dB", "1201.0 Mbps"])
+    expect(html).toContain(value);
+  expect(html).not.toContain("HE160");
+  expect(calls).toEqual(["router.status.wireless", "iwinfo.info", "iwinfo.assoclist"]);
+});
+
+test("旧驱动缺失运行模式或给出异常数据时显示未知，不把支持列表当运行带宽", async () => {
+  const rpc = {
+    call: async (_session: string, object: string, method: string) => {
+      if (object === "router.status")
+        return { ok: true, radios: { radio0: { up: true, interfaces: [{ ifname: "wlan0" }] } } };
+      if (method === "info") return { htmodes: ["HE80"], txpower: "20", noise: 0 };
+      return { results: [{ signal: -60, noise: 0 }] };
+    },
+  } as unknown as RouterClient;
+  const radio = (await new WirelessClient(rpc).read("session")).radios[0];
+  expect(radio.interfaces[0]).toMatchObject({ htmode: null, txpower: null, noise: null });
+  expect(radio.interfaces[0].stations?.[0].snr).toBeNull();
+  expect(station({ signal: -80, noise: -60 }).snr).toBeNull();
+  const html = renderToStaticMarkup(<RadioCard radio={radio} />);
+  expect(html).toContain("未知");
+  expect(html).not.toContain("HE80");
+  expect(html).not.toContain(">0 dBm<");
 });
 
 test("无线来源不可用与无射频明确区分，不把失败或格式错误显示为空列表", async () => {
