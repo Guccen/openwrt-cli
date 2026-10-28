@@ -8,10 +8,11 @@ import { useWireless } from "@/stores/wireless";
 
 export function WirelessStatusPage() {
   const device = useRouter((state) => state.device);
-  const { session, snapshot, load, error } = useWireless();
+  const { session, snapshot, load, cancel, error } = useWireless();
   useEffect(() => {
     if (session && device) void load();
-  }, [device, session, load]);
+    return cancel;
+  }, [device, session, load, cancel]);
   if (!device) return <DeviceLoading />;
   return (
     <div className="space-y-3">

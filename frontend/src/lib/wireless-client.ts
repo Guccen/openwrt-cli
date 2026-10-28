@@ -1,4 +1,4 @@
-import { RouterClient, RpcError } from "./rpc";
+import { RouterClient, RpcError, WIRELESS_READ_TIMEOUT } from "./rpc";
 import { wifiBand, type WifiBand } from "./wifi-band";
 
 export interface WirelessStation {
@@ -61,11 +61,18 @@ export function station(value: unknown): WirelessStation {
 export class WirelessClient {
   constructor(readonly rpc = new RouterClient()) {}
 
-  async read(session: string): Promise<WirelessSnapshot> {
+  async read(session: string, cancelled?: AbortSignal): Promise<WirelessSnapshot> {
+    const signal = AbortSignal.any([
+      AbortSignal.timeout(WIRELESS_READ_TIMEOUT),
+      ...(cancelled ? [cancelled] : []),
+    ]);
     const response = await this.rpc.call<{ ok: boolean; radios: unknown }>(
       session,
       "router.status",
       "wireless",
+      {},
+      undefined,
+      signal,
     );
     if (response?.ok !== true) throw new RpcError("无线状态暂不可用，请稍后刷新。");
     const raw = response.radios;
@@ -96,13 +103,28 @@ export class WirelessClient {
                 if (row.up !== true || !result.name) return result;
                 // 无线重载时单个接口可能消失；仍保留其他接口的读取结果。
                 const responses = await Promise.allSettled([
-                  this.rpc.call<Record<string, unknown>>(session, "iwinfo", "info", {
-                    device: result.name,
-                  }),
-                  this.rpc.call<{ results: unknown[] }>(session, "iwinfo", "assoclist", {
-                    device: result.name,
-                  }),
+                  this.rpc.call<Record<string, unknown>>(
+                    session,
+                    "iwinfo",
+                    "info",
+                    {
+                      device: result.name,
+                    },
+                    undefined,
+                    signal,
+                  ),
+                  this.rpc.call<{ results: unknown[] }>(
+                    session,
+                    "iwinfo",
+                    "assoclist",
+                    {
+                      device: result.name,
+                    },
+                    undefined,
+                    signal,
+                  ),
                 ]);
+                signal.throwIfAborted();
                 for (const response of responses)
                   if (
                     response.status === "rejected" &&

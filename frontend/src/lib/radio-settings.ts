@@ -1,4 +1,4 @@
-import { RouterClient } from "./rpc";
+import { RouterClient, WIRELESS_READ_TIMEOUT } from "./rpc";
 import { lanDraft, type ConfigPlan, type SettingsSnapshot } from "./settings";
 import { wifiBand, type WifiBand } from "./wifi-band";
 export interface RadioCapabilities {
@@ -9,13 +9,35 @@ export interface RadioCapabilities {
 }
 export class RadioClient {
   constructor(readonly rpc = new RouterClient()) {}
-  async read(session: string, section: string): Promise<RadioCapabilities> {
-    const { phyname } = await this.rpc.call<{ phyname: string }>(session, "iwinfo", "phyname", {
-      section,
-    });
+  async read(
+    session: string,
+    section: string,
+    cancelled?: AbortSignal,
+  ): Promise<RadioCapabilities> {
+    const signal = AbortSignal.any([
+      AbortSignal.timeout(WIRELESS_READ_TIMEOUT),
+      ...(cancelled ? [cancelled] : []),
+    ]);
+    const { phyname } = await this.rpc.call<{ phyname: string }>(
+      session,
+      "iwinfo",
+      "phyname",
+      {
+        section,
+      },
+      undefined,
+      signal,
+    );
     if (!/^phy\d+$/.test(phyname ?? "")) throw new Error("无法识别实际无线硬件。");
     const [info, frequencies, countries] = await Promise.all([
-      this.rpc.call<{ htmodes?: string[] }>(session, "iwinfo", "info", { device: phyname }),
+      this.rpc.call<{ htmodes?: string[] }>(
+        session,
+        "iwinfo",
+        "info",
+        { device: phyname },
+        undefined,
+        signal,
+      ),
       this.rpc.call<{
         results?: {
           channel: number;
@@ -23,12 +45,14 @@ export class RadioClient {
           restricted: boolean | number;
           flags?: string[];
         }[];
-      }>(session, "iwinfo", "freqlist", { device: phyname }),
+      }>(session, "iwinfo", "freqlist", { device: phyname }, undefined, signal),
       this.rpc.call<{ results?: { iso3166: string; country: string }[] }>(
         session,
         "iwinfo",
         "countrylist",
         { device: phyname },
+        undefined,
+        signal,
       ),
     ]);
     return {

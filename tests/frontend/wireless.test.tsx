@@ -167,3 +167,26 @@ test("读取无线不会吞掉会话失效，换会话后不会显示迟到的�
   expect(store.getState().snapshot).toBeNull();
   expect(store.getState().loading).toBe(false);
 });
+
+test("无线页面离开和换会话立即中止读取，不显示取消错误", async () => {
+  const signals: AbortSignal[] = [];
+  const store = createSessionResource<string>((_session, signal) => {
+    signals.push(signal);
+    return new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(new Error("已取消")), { once: true });
+    });
+  });
+  store.getState().bind("first");
+  const first = store.getState().load();
+  store.getState().cancel();
+  await first;
+  expect(signals[0].aborted).toBe(true);
+  expect(store.getState().loading).toBe(false);
+  expect(store.getState().error).toBeNull();
+  const second = store.getState().load();
+  store.getState().bind("second");
+  await second;
+  expect(signals[1].aborted).toBe(true);
+  expect(store.getState().session).toBe("second");
+  expect(store.getState().snapshot).toBeNull();
+});

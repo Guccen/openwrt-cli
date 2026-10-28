@@ -226,3 +226,83 @@ test("无线超时失败释放队列，不混用不同接口或不同会话的�
   });
   expect(calls).toHaveLength(4);
 });
+
+test("切换会话取消旧无线队列，取消的请求不会再发送", async () => {
+  const gate = deferred();
+  const calls: string[] = [];
+  const controller = new AbortController();
+  const api = new RouterClient(
+    transport(async (body) => {
+      const request = body as Request;
+      calls.push(`${request.params[0]}:${request.params[2]}`);
+      if (calls.length === 1) await gate.promise;
+      return success(request);
+    }),
+  );
+  const old = Promise.allSettled([
+    api.call("old", "iwinfo", "info", { device: "wlan0" }, undefined, controller.signal),
+    api.call("old", "iwinfo", "assoclist", { device: "wlan0" }, undefined, controller.signal),
+  ]);
+  await tick();
+  const fresh = api.call("new", "iwinfo", "info", { device: "wlan0" });
+  controller.abort();
+  expect((await old).every((item) => item.status === "rejected")).toBe(true);
+  gate.resolve();
+  await fresh;
+  expect(calls).toEqual(["old:info", "new:info"]);
+});
+
+test("一个页面取消共享无线读取时保留其他订阅者", async () => {
+  const gate = deferred();
+  const controller = new AbortController();
+  let calls = 0;
+  const api = new RouterClient(
+    transport(async (body) => {
+      calls++;
+      await gate.promise;
+      return success(body as Request, { channel: 1 });
+    }),
+  );
+  const cancelled = api.call(
+    "sid",
+    "iwinfo",
+    "info",
+    { device: "wlan0" },
+    undefined,
+    controller.signal,
+  );
+  const retained = api.call("sid", "iwinfo", "info", { device: "wlan0" });
+  const rejected = cancelled.catch((error: unknown) => error);
+  controller.abort();
+  expect(await rejected).toMatchObject({ message: "请求已取消" });
+  gate.resolve();
+  expect(await retained).toEqual({ channel: 1 });
+  expect(calls).toBe(1);
+});
+
+test("无线读取期限包含排队等待，过期任务不会阻塞后续刷新", async () => {
+  const gate = deferred();
+  const calls: string[] = [];
+  const api = new RouterClient(
+    transport(async (body) => {
+      const request = body as Request;
+      calls.push(request.params[2]);
+      if (calls.length === 1) await gate.promise;
+      return success(request);
+    }),
+  );
+  const active = api.call("sid", "iwinfo", "info", { device: "wlan0" });
+  const expired = api.call(
+    "sid",
+    "iwinfo",
+    "assoclist",
+    { device: "wlan0" },
+    undefined,
+    AbortSignal.timeout(10),
+  );
+  await expect(expired).rejects.toThrow("超时");
+  gate.resolve();
+  await active;
+  await api.call("sid", "iwinfo", "assoclist", { device: "wlan0" });
+  expect(calls).toEqual(["info", "assoclist"]);
+});

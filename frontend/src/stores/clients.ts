@@ -1,3 +1,3 @@
 import { readClients } from "../lib/status";
 import { createSessionResource } from "./resource";
-export const useClients = createSessionResource(readClients);
+export const useClients = createSessionResource((session) => readClients(session));

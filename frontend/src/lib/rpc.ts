@@ -15,6 +15,7 @@ const fastReads = new Set([
   "uci.changes",
 ]);
 const wirelessReads = new Set(["info", "assoclist", "phyname", "freqlist", "countrylist"]);
+export const WIRELESS_READ_TIMEOUT = 30000;
 const sessionRejections = new Set<(session: string) => void>();
 export function onSessionRejection(listener: (session: string) => void) {
   sessionRejections.add(listener);
@@ -37,6 +38,19 @@ export class RpcError extends Error {
   }
 }
 
+export class RpcCancelledError extends RpcError {
+  constructor() {
+    super("请求已取消");
+    this.name = "RpcCancelledError";
+  }
+}
+
+function cancellation(signal: AbortSignal) {
+  return signal.reason?.name === "TimeoutError"
+    ? new RpcError("无线状态读取等待超时，请重试")
+    : new RpcCancelledError();
+}
+
 interface RpcRequest {
   jsonrpc: "2.0";
   id: number;
@@ -49,15 +63,30 @@ interface PendingRead {
   reject: (reason: unknown) => void;
 }
 
+interface WirelessRead {
+  operation: Promise<unknown>;
+  controller: AbortController;
+  subscribers: number;
+  done: boolean;
+}
+
 class RpcTransport {
   private id = 0;
   private batches = new Map<string, PendingRead[]>();
-  private wireless = new Map<string, Promise<unknown>>();
+  private wireless = new Map<string, WirelessRead>();
   private wirelessTail: Promise<void> = Promise.resolve();
 
   constructor(private readonly http: AxiosInstance) {}
 
-  request(session: string, object: string, method: string, args: object, timeout?: number) {
+  request(
+    session: string,
+    object: string,
+    method: string,
+    args: object,
+    timeout?: number,
+    signal?: AbortSignal,
+  ) {
+    if (signal?.aborted) return Promise.reject(cancellation(signal));
     const request: RpcRequest = {
       jsonrpc: "2.0",
       id: ++this.id,
@@ -71,17 +100,39 @@ class RpcTransport {
         Object.entries(args).sort(([a], [b]) => a.localeCompare(b)),
         timeout ?? null,
       ]);
-      const pending = this.wireless.get(key);
-      if (pending) return pending;
-      // 同一设备端点最多执行一条驱动读取，等待队列不占用实际请求的超时时间。
-      const operation = this.wirelessTail.then(() => this.send(request, timeout));
-      this.wireless.set(key, operation);
-      const cleanup = () => {
-        this.wireless.delete(key);
-      };
-      this.wirelessTail = operation.then(cleanup, cleanup);
-      return operation;
+      let pending = this.wireless.get(key);
+      if (!pending) {
+        const controller = new AbortController();
+        // 队列等待也计入总期限；页面离开或所有订阅者取消后不再发送过时请求。
+        const timer = setTimeout(
+          () => controller.abort(new DOMException("读取超时", "TimeoutError")),
+          WIRELESS_READ_TIMEOUT,
+        );
+        const operation = this.wirelessTail.then(() => {
+          if (controller.signal.aborted) throw cancellation(controller.signal);
+          return this.send(request, timeout, controller.signal);
+        });
+        const task: WirelessRead = { operation, controller, subscribers: 0, done: false };
+        pending = task;
+        this.wireless.set(key, task);
+        controller.signal.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(timer);
+            if (this.wireless.get(key) === task) this.wireless.delete(key);
+          },
+          { once: true },
+        );
+        const cleanup = () => {
+          task.done = true;
+          clearTimeout(timer);
+          if (this.wireless.get(key) === task) this.wireless.delete(key);
+        };
+        this.wirelessTail = operation.then(cleanup, cleanup);
+      }
+      return this.subscribe(pending, signal);
     }
+    if (signal) return this.send(request, timeout, signal);
     if (!fastReads.has(`${object}.${method}`)) return this.send(request, timeout);
     const key = JSON.stringify([session, timeout ?? null]);
     return new Promise<unknown>((resolve, reject) => {
@@ -99,8 +150,42 @@ class RpcTransport {
     });
   }
 
-  private async send(request: RpcRequest | RpcRequest[], timeout?: number): Promise<unknown> {
-    const { data } = await this.http.post("/ubus", request, timeout ? { timeout } : undefined);
+  private subscribe(task: WirelessRead, signal?: AbortSignal) {
+    task.subscribers++;
+    return new Promise<unknown>((resolve, reject) => {
+      let settled = false;
+      const finish = (complete: (value: unknown) => void, value: unknown) => {
+        if (settled) return;
+        settled = true;
+        signal?.removeEventListener("abort", cancel);
+        task.controller.signal.removeEventListener("abort", abort);
+        --task.subscribers;
+        complete(value);
+        // 共享读取只在最后一个订阅者退出时取消，其他页面仍可正常接收结果。
+        if (!task.subscribers && !task.done) task.controller.abort();
+      };
+      const cancel = () => finish(reject, cancellation(signal!));
+      const abort = () => finish(reject, cancellation(task.controller.signal));
+      signal?.addEventListener("abort", cancel, { once: true });
+      task.controller.signal.addEventListener("abort", abort, { once: true });
+      void task.operation.then(
+        (value) => finish(resolve, value),
+        (error) => finish(reject, error),
+      );
+      if (signal?.aborted) cancel();
+      else if (task.controller.signal.aborted) abort();
+    });
+  }
+
+  private async send(
+    request: RpcRequest | RpcRequest[],
+    timeout?: number,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
+    const { data } = await this.http.post("/ubus", request, {
+      ...(timeout ? { timeout } : {}),
+      ...(signal ? { signal } : {}),
+    });
     return data;
   }
 
@@ -155,9 +240,17 @@ export class RouterClient {
     method: string,
     args: object = {},
     timeout?: number,
+    signal?: AbortSignal,
   ): Promise<T> {
     try {
-      const data = (await this.transport.request(session, object, method, args, timeout)) as {
+      const data = (await this.transport.request(
+        session,
+        object,
+        method,
+        args,
+        timeout,
+        signal,
+      )) as {
         error?: { code?: number };
         result?: unknown[];
       } | null;
@@ -172,6 +265,7 @@ export class RouterClient {
       }
       return data.result[1] as T;
     } catch (error) {
+      if (signal?.aborted) throw cancellation(signal);
       if (error instanceof RpcError) {
         if (error.sessionExpired && session !== anonymous)
           for (const listener of sessionRejections) listener(session);

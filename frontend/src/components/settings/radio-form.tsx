@@ -36,9 +36,10 @@ export function RadioForm({
     [attempt, retry] = useState(0);
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     if (session)
       void client
-        .read(session, section)
+        .read(session, section, controller.signal)
         .then((value) => {
           if (active) {
             setCaps(value);
@@ -53,6 +54,7 @@ export function RadioForm({
         });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [session, section, attempt]);
   const band = draft.band;
