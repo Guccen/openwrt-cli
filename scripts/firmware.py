@@ -5,6 +5,7 @@ import json
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 from odhcpd_patch import prepare as patch_odhcpd
@@ -154,7 +155,8 @@ def overlay(destination, device, role, wan="eth1"):
     destination.mkdir(parents=True, exist_ok=True)
     shutil.copytree(ROOT / "files/common", destination, dirs_exist_ok=True)
     address = "192.168.68.1" if device == "jdcloud-ax1800" else ("192.168.69.1" if role == "router" else "192.168.68.2")
-    metadata = {"device": device, "model": "京东云 AX1800" if device == "jdcloud-ax1800" else "斐讯 N1", "role": role, "address": address, "source": SOURCES[device]["version"], "revision": SOURCES[device]["revision"]}
+    # 记录本次固件配置生成时间，不使用上游源码提交时间或浏览器访问时间。
+    metadata = {"device": device, "model": "京东云 AX1800" if device == "jdcloud-ax1800" else "斐讯 N1", "role": role, "address": address, "source": SOURCES[device]["version"], "revision": SOURCES[device]["revision"], "builtAt": int(time.time())}
     if device == "phicomm-n1" and role == "router":
         metadata["wan"] = wan
     (destination / "www").mkdir(exist_ok=True)

@@ -9,6 +9,29 @@ export function uptime(seconds: number) {
   return `${Math.floor(minutes / 1440)} 天 ${Math.floor((minutes % 1440) / 60)} 小时 ${minutes % 60} 分`;
 }
 
+const buildTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+export function buildTime(seconds?: number) {
+  // 构建元数据使用秒级时间戳；旧镜像或无效值不能伪装成当前时间。
+  if (!Number.isSafeInteger(seconds) || !seconds || seconds < 0 || seconds > 253402271999)
+    return null;
+  const parts = Object.fromEntries(
+    buildTimeFormatter
+      .formatToParts(new Date(seconds * 1000))
+      .map(({ type, value }) => [type, value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
 export function memoryUsage(memory: {
   total: number;
   free: number;

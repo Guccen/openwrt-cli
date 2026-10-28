@@ -11,6 +11,7 @@ export function OverviewPage() {
   const snapshot = useRouter((state) => state.snapshot);
   const session = useRouter((state) => state.session);
   const history = useRouter((state) => state.history);
+  const builtAt = useRouter((state) => state.device?.builtAt);
   useEffect(() => {
     if (!session) return;
     return startOverviewRefresh(
@@ -30,7 +31,7 @@ export function OverviewPage() {
     );
   }, [session]);
   return snapshot ? (
-    <OverviewContent snapshot={snapshot}>
+    <OverviewContent snapshot={snapshot} builtAt={builtAt}>
       <OverviewTrends history={history} />
     </OverviewContent>
   ) : (

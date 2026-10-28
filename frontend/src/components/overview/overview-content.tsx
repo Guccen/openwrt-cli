@@ -9,9 +9,11 @@ import { ErrorAlert } from "@/components/status/error-alert";
 
 export function OverviewContent({
   snapshot,
+  builtAt,
   children,
 }: {
   snapshot: Snapshot;
+  builtAt?: number;
   children?: ReactNode;
 }) {
   return (
@@ -20,7 +22,7 @@ export function OverviewContent({
       {children}
       <ErrorAlert message={snapshot.telemetryError ?? null} />
       <div className="grid items-stretch gap-3 lg:grid-cols-2">
-        <DeviceInfoCard snapshot={snapshot} />
+        <DeviceInfoCard snapshot={snapshot} builtAt={builtAt} />
         {snapshot.telemetry && <HealthCard telemetry={snapshot.telemetry} />}
       </div>
       <StorageDevicesCard disks={snapshot.telemetry?.blockDisks ?? []} />

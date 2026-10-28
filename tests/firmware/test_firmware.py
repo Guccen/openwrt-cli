@@ -16,6 +16,15 @@ import n1_packer
 
 
 class FirmwareTests(unittest.TestCase):
+    def test_build_time_records_current_build_for_every_image(self):
+        for device, role in [("jdcloud-ax1800", "router"), ("phicomm-n1", "router"), ("phicomm-n1", "bypass")]:
+            with self.subTest(device=device, role=role), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                with patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "1"}), patch("firmware.time.time", return_value=1793187238.75):
+                    metadata = firmware.overlay(root, device, role)
+                self.assertEqual(metadata["builtAt"], 1793187238)
+                self.assertEqual(json.loads((root / "www/device.json").read_text(encoding="utf-8")), metadata)
+
     def test_first_boot_is_idempotent_and_stops_on_failure(self):
         bash = shutil.which("bash")
         if not bash and Path("C:/Program Files/Git/bin/bash.exe").is_file():
@@ -250,6 +259,7 @@ exit 0
             self.assertEqual((rootfs / "etc/modules.d/brcmfmac").read_text(), "cfg80211\nbrcmutil\nbrcmfmac\n")
             self.assertTrue((rootfs / "lib/firmware/rtl_nic").is_dir())
             self.assertEqual((rootfs / "etc/config/network").read_bytes(), (overlay / "etc/config/network").read_bytes())
+            self.assertEqual((rootfs / "www/device.json").read_bytes(), (overlay / "www/device.json").read_bytes())
             required = rootfs / "lib/firmware/brcm/brcmfmac43455-sdio.phicomm,n1.bin"
             required.unlink()
             with self.assertRaisesRegex(ValueError, "BCM43455"):

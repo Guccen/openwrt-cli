@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { NetworkTable } from "../../frontend/src/components/network/network-table";
 import { OverviewContent } from "../../frontend/src/components/overview/overview-content";
-import { bytes, memoryUsage, uptime } from "../../frontend/src/lib/format";
+import { buildTime, bytes, memoryUsage, uptime } from "../../frontend/src/lib/format";
 import type { Snapshot } from "../../frontend/src/lib/types";
 
 const snapshot: Snapshot = {
@@ -47,4 +47,16 @@ test("按可用内存统计占用，处理计数边界", () => {
   expect(bytes(-1)).toBe("0 B");
   expect(bytes(1024)).toBe("1.0 KiB");
   expect(uptime(3660)).toBe("0 天 1 小时 1 分");
+});
+
+test("固件构建时间按北京时间显示到秒，旧镜像缺失时间时不使用当前时间", () => {
+  const builtAt = Date.parse("2026-10-28T11:33:58Z") / 1000;
+  expect(buildTime(builtAt)).toBe("2026-10-28 19:33:58");
+  expect(buildTime(Date.parse("2026-10-28T16:00:00Z") / 1000)).toBe("2026-10-29 00:00:00");
+  const html = renderToStaticMarkup(<OverviewContent snapshot={snapshot} builtAt={builtAt} />);
+  expect(html).toContain("构建时间");
+  expect(html).toContain("2026-10-28 19:33:58");
+  expect(renderToStaticMarkup(<OverviewContent snapshot={snapshot} />)).toContain("未提供");
+  for (const value of [undefined, 0, -1, NaN, Infinity, builtAt * 1000, builtAt + 0.5])
+    expect(buildTime(value)).toBeNull();
 });

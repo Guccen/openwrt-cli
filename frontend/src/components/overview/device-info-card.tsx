@@ -1,7 +1,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Snapshot } from "@/lib/types";
+import { buildTime } from "@/lib/format";
 
-export function DeviceInfoCard({ snapshot }: { snapshot: Snapshot }) {
+export function DeviceInfoCard({ snapshot, builtAt }: { snapshot: Snapshot; builtAt?: number }) {
   const { board } = snapshot;
   return (
     <Card size="sm">
@@ -21,6 +22,12 @@ export function DeviceInfoCard({ snapshot }: { snapshot: Snapshot }) {
           </dd>
           <dt className="text-muted-foreground">内核版本</dt>
           <dd>{board.kernel}</dd>
+          <dt className="text-muted-foreground" title="北京时间（UTC+8）">
+            构建时间
+          </dt>
+          <dd className="tabular-nums" title="北京时间（UTC+8）">
+            {buildTime(builtAt) ?? "未提供"}
+          </dd>
         </dl>
       </CardContent>
     </Card>
