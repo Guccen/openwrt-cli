@@ -28,24 +28,32 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
   const n1 = useRouter((state) => state.device?.device === "phicomm-n1");
   const [open, setOpen] = useState(false);
   const operation = useMaintenanceOperation((state) => state.kind);
+  const operationId = useMaintenanceOperation((state) => state.operationId);
+  const startedAt = useMaintenanceOperation((state) => state.startedAt);
+  const failure = useMaintenanceOperation((state) => state.failure);
   const waiting =
     operation !== null && ["reboot", "restore", "upgrade", "reset"].includes(operation);
-  const [expired, setExpired] = useState(false);
+  const [expiredOperation, setExpiredOperation] = useState<number | null>(null);
+  const expired = expiredOperation === startedAt;
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!waiting || !session) return;
     let cancelled = false;
     let polling = false;
-    const started = Date.now();
+    const started = startedAt || Date.now();
     const timer = setInterval(async () => {
       if (polling || cancelled) return;
       if (Date.now() - started > 180000) {
-        setExpired(true);
+        setExpiredOperation(startedAt);
         clearInterval(timer);
         return;
       }
       polling = true;
       try {
+        const status = await maintenanceClient.read(session);
+        if (cancelled) return;
+        useMaintenanceOperation.getState().observe(status.operation ?? null);
+        if (!useMaintenanceOperation.getState().kind) return;
         // 重启后原 rpcd 会话失效；只有管理页恢复且会话失效时才返回登录页。
         await rpc.call(session, "system", "info");
       } catch (e) {
@@ -65,7 +73,7 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [waiting, session]);
+  }, [waiting, session, operationId, startedAt]);
   async function reboot() {
     setOpen(false);
     if (!session || disabled || waiting) return;
@@ -74,7 +82,8 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
     setError(null);
     notify.dismiss("reboot");
     try {
-      await maintenanceClient.reboot(session);
+      const id = await maintenanceClient.reboot(session);
+      useMaintenanceOperation.getState().track(token, id);
       if (useRouter.getState().session === session)
         notify.info("reboot", "重启请求已发送", "正在等待设备恢复连接。");
     } catch (e) {
@@ -95,7 +104,7 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
         <CardDescription>网络会短暂中断，配置保持不变。</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <ErrorAlert message={error} />
+        <ErrorAlert message={failure || error} />
         {waiting ? (
           <Alert>
             <AlertDescription>

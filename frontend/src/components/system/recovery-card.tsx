@@ -110,7 +110,8 @@ export function RecoveryCard({
     setOpen(false);
     notify.dismiss(kind);
     try {
-      await maintenanceClient.execute(session, kind, prepared?.token);
+      const id = await maintenanceClient.execute(session, kind, prepared?.token);
+      useMaintenanceOperation.getState().track(operation, id);
       if (useRouter.getState().session !== session) return;
       uploaded.current = null;
       setPrepared(null);

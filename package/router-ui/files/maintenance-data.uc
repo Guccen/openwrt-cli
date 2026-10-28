@@ -8,6 +8,16 @@ const expandedLimit = 2097152;
 let created = false;
 
 function fail(reason) { die(reason); }
+function operationRecord(value) {
+    if (type(value) != 'object' || type(value.id) != 'string' || !match(value.id, /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/) ||
+        index(['reboot', 'restore', 'upgrade', 'reset'], value.kind) < 0 ||
+        index(['accepted', 'running', 'rebooting', 'failed'], value.state) < 0 ||
+        type(value.updatedAt) != 'int' || value.updatedAt < 0 ||
+        type(value.bootId) != 'string' || !match(value.bootId, /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/) ||
+        type(value.error) != 'string' || !match(value.error, /^[a-z_]{0,80}$/)) return null;
+    return { id: value.id, kind: value.kind, state: value.state, error: value.error,
+        updatedAt: value.updatedAt, bootId: value.bootId };
+}
 function save(path, data) {
     if (writefile(path, data) != length(data)) fail('write_failed');
 }
@@ -108,6 +118,12 @@ function archive(data, requireIdentity) {
 
 try {
     let mode = ARGV[0];
+    if (mode == 'operation') {
+        let saved = readfile('/var/run/router-ui-maintenance.json', 4097), value = null;
+        try { value = saved && length(saved) <= 4096 ? operationRecord(json(saved)) : null; } catch (e) {}
+        print(sprintf('%J', value));
+        exit(0);
+    }
     if (mode == 'seal') {
         let data = readfile(ARGV[1], expandedLimit + 1);
         // 导出保留标准 sysupgrade 文件内容，只前置一个可供网页恢复核对的清单。

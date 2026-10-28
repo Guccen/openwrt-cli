@@ -8,6 +8,63 @@ import {
 } from "../../frontend/src/lib/maintenance-client";
 import type { RouterClient } from "../../frontend/src/lib/rpc";
 import { createMaintenanceOperation } from "../../frontend/src/stores/maintenance-operation";
+import {
+  parseMaintenanceOperation,
+  type MaintenanceOperationStatus,
+} from "../../frontend/src/lib/maintenance-client";
+
+test("维护结果只关联当前操作，设备明确失败后解除互斥并显示原因", () => {
+  const store = createMaintenanceOperation();
+  store.getState().bind("sid");
+  const token = store.getState().begin("upgrade")!;
+  const status: MaintenanceOperationStatus = {
+    id: "12345678-1234-1234-1234-123456789abc",
+    kind: "upgrade",
+    state: "failed",
+    error: "upgrade_failed",
+    updatedAt: Math.floor(Date.now() / 1000),
+    bootId: "87654321-1234-1234-1234-123456789abc",
+  };
+  store.getState().track(token, status.id);
+  store.getState().observe({ ...status, id: "87654321-1234-1234-1234-123456789abc" });
+  expect(store.getState().kind).toBe("upgrade");
+  store.getState().observe(status);
+  expect(store.getState().kind).toBeNull();
+  expect(store.getState().failure).toContain("升级执行失败");
+  const fresh = store.getState().begin("reboot")!;
+  store.getState().track(token, status.id);
+  expect(store.getState().operationId).toBeNull();
+  store.getState().finish(fresh);
+});
+
+test("维护响应丢失时可关联新记录，旧记录和异常状态不能作为本次结果", () => {
+  const store = createMaintenanceOperation();
+  store.getState().bind("sid");
+  store.getState().begin("reboot");
+  const status: MaintenanceOperationStatus = {
+    id: "12345678-1234-1234-1234-123456789abc",
+    kind: "reboot",
+    state: "failed",
+    error: "configuration_busy",
+    updatedAt: Math.floor(Date.now() / 1000),
+    bootId: "87654321-1234-1234-1234-123456789abc",
+  };
+  store.getState().observe({ ...status, updatedAt: status.updatedAt - 100 });
+  expect(store.getState().kind).toBe("reboot");
+  store.getState().observe(status);
+  expect(store.getState().failure).toContain("待确认或暂存");
+  expect(parseMaintenanceOperation(status)).toEqual(status);
+  expect(() => parseMaintenanceOperation({ ...status, id: "invalid" })).toThrow("状态格式");
+  expect(parseMaintenanceOperation(undefined)).toBeNull();
+});
+
+test("设备已接受维护时编号异常仍保留等待状态，不把辅助字段当成执行失败", async () => {
+  const client = new MaintenanceClient({
+    call: async () => ({ ok: true, accepted: true, operationId: "invalid" }),
+  } as unknown as RouterClient);
+  expect(await client.reboot("sid")).toBeNull();
+  expect(await client.execute("sid", "upgrade", "token")).toBeNull();
+});
 
 test("系统归档检查 gzip、体积、长度和 SHA-256，不接受损坏的备份", async () => {
   const compressed = gzipSync("configuration-fixture");

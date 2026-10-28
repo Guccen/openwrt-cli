@@ -52,6 +52,14 @@ class MaintenanceDataTests(unittest.TestCase):
     def inspect(self, data):
         return self.run_ucode(f"print(archive(hexdec('{data.hex()}'), true));")
 
+    def test_operation_record_filters_fields_and_rejects_malformed_state(self):
+        value = {"id": "12345678-1234-1234-1234-123456789abc", "kind": "upgrade", "state": "failed",
+                 "error": "upgrade_failed", "updatedAt": 1793187238,
+                 "bootId": "87654321-1234-1234-1234-123456789abc"}
+        self.assertEqual(json.loads(self.run_ucode(f"print(operationRecord({json.dumps(value)}));")), value)
+        for update in ({"id": "bad"}, {"kind": "shell"}, {"state": "done"}, {"error": "bad;command"}, {"updatedAt": -1}):
+            self.assertEqual(self.run_ucode(f"print(sprintf('%J', operationRecord({json.dumps(value | update)})));"), "null")
+
     def test_standard_ustar_is_validated_and_manifest_is_not_restored(self):
         data = fixture()
         output = self.run_ucode(f"archive(hexdec('{data.hex()}'), true); print(hexenc(readfile(directory + '/restore.tar')));")

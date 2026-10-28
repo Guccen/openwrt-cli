@@ -6,6 +6,27 @@ umask 077
 LOCK=/var/run/router-ui-maintenance.lock
 DATA=/usr/libexec/router-ui/maintenance-data.uc
 UPLOAD=/tmp/router-ui-upload
+OPERATION=/var/run/router-ui-maintenance.json
+
+record_operation() {
+    local temporary updated
+    updated=$(date +%s) || return 1
+    temporary=$(mktemp "$OPERATION.XXXXXX") || return 1
+    if printf '{"id":"%s","kind":"%s","state":"%s","error":"%s","updatedAt":%s,"bootId":"%s"}\n' \
+        "$operation_id" "$operation_kind" "$1" "${2:-}" "$updated" "$operation_boot" > "$temporary" &&
+        mv -f "$temporary" "$OPERATION"; then return 0; fi
+    rm -f "$temporary"
+    return 1
+}
+begin_operation() {
+    operation_kind=$1
+    operation_id=$(cat /proc/sys/kernel/random/uuid) || fail operation_state_failed
+    operation_boot=$(cat /proc/sys/kernel/random/boot_id) || fail operation_state_failed
+    record_operation accepted || fail operation_state_failed
+}
+accepted() {
+    printf '{"ok":true,"accepted":true,"operationId":"%s"}\n' "$operation_id"
+}
 
 upgrade_supported() {
     [ "$(cat /tmp/sysinfo/board_name 2>/dev/null)" = 'jdcloud,re-ss-01' ] &&
@@ -48,7 +69,10 @@ schedule_reboot() {
     trap - EXIT
     (
         sleep 3
-        ubus call system reboot >/dev/null 2>&1 || true
+        if busy_config; then record_operation failed configuration_busy || true
+        elif record_operation rebooting; then
+            ubus call system reboot >/dev/null 2>&1 || record_operation failed reboot_failed || true
+        fi
         rmdir "$LOCK" 2>/dev/null || true
     ) </dev/null >/dev/null 2>&1 &
 }
@@ -68,6 +92,7 @@ pending_apply() {
     return 1
 }
 fail() {
+    if [ -n "${operation_id:-}" ]; then record_operation failed "$1" || true; fi
     printf '{"ok":false,"error":"%s"}\n' "$1"
     exit 0
 }
@@ -87,9 +112,10 @@ case "$1" in
                 reset=false
                 pending=false
                 pending_apply && pending=true
+                operation_record=$(ucode "$DATA" operation) || operation_record=null
                 upgrade_supported && upgrade=true
                 reset_supported && reset=true
-                printf '{"ok":true,"configurationBusy":%s,"operationBusy":%s,"backupLimit":131072,"upgradeSupported":%s,"resetSupported":%s,"firmwareLimit":33554432,"applyPending":%s}\n' "$configuration" "$operation" "$upgrade" "$reset" "$pending"
+                printf '{"ok":true,"configurationBusy":%s,"operationBusy":%s,"backupLimit":131072,"upgradeSupported":%s,"resetSupported":%s,"firmwareLimit":33554432,"applyPending":%s,"operation":%s}\n' "$configuration" "$operation" "$upgrade" "$reset" "$pending" "${operation_record:-null}"
                 ;;
             backup)
                 busy_config && fail configuration_busy
@@ -167,7 +193,9 @@ case "$1" in
                 fi
                 confirmed=$(printf '%s' "$request" | jsonfilter -e '@.confirm')
                 [ "$confirmed" = true ] || fail confirmation_required
+                begin_operation "$kind"
                 if [ "$kind" = restore ]; then
+                    record_operation running || fail operation_state_failed
                     # 校验后仅用经过过滤的 etc 文件恢复；失败不安排重启。
                     gzip -c "$UPLOAD/restore.tar" > "$UPLOAD/expanded" || fail restore_failed
                     (ulimit -f 4096; sysupgrade -b "$UPLOAD/rescue.tar.gz" >/dev/null 2>&1) || fail backup_failed
@@ -183,44 +211,51 @@ case "$1" in
                     trap - EXIT
                     (
                         sleep 3
-                        checksum=$(sha256sum "$UPLOAD/payload")
-                        if ! busy_config && [ "${checksum%% *}" = "$expected" ]; then
-                            sysupgrade -n "$UPLOAD/payload" >/dev/null 2>&1 || true
+                        checksum=$(sha256sum "$UPLOAD/payload" 2>/dev/null) || checksum=missing
+                        if busy_config; then record_operation failed configuration_busy || true
+                        elif [ "${checksum%% *}" != "$expected" ]; then record_operation failed checksum_mismatch || true
+                        elif ! upgrade_supported; then record_operation failed unsupported_device || true
+                        elif record_operation running; then
+                            if sysupgrade -n "$UPLOAD/payload" >/dev/null 2>&1; then
+                                record_operation rebooting || true
+                            else record_operation failed upgrade_failed || true; fi
                         fi
                         rmdir "$LOCK" 2>/dev/null || true
                     ) </dev/null >/dev/null 2>&1 &
                 fi
-                printf '%s\n' '{"ok":true,"accepted":true}'
+                accepted
                 ;;
             reset)
                 confirmed=$(jsonfilter -e '@.confirm' 2>/dev/null) || fail confirmation_required
                 [ "$confirmed" = true ] || fail confirmation_required
                 reset_supported || fail unsupported_device
                 lock
+                begin_operation reset
                 # jffs2reset 只用于经过检查的 squashfs/overlay AX1800。
                 trap - EXIT
                 (
                     sleep 3
-                    if ! busy_config && reset_supported; then
-                        jffs2reset -y >/dev/null 2>&1 && ubus call system reboot >/dev/null 2>&1
+                    if busy_config; then record_operation failed configuration_busy || true
+                    elif ! reset_supported; then record_operation failed unsupported_device || true
+                    elif record_operation running; then
+                        if jffs2reset -y >/dev/null 2>&1; then
+                            if record_operation rebooting; then
+                                ubus call system reboot >/dev/null 2>&1 || record_operation failed reboot_failed || true
+                            fi
+                        else record_operation failed reset_failed || true; fi
                     fi
                     rmdir "$LOCK" 2>/dev/null || true
                 ) </dev/null >/dev/null 2>&1 &
-                printf '%s\n' '{"ok":true,"accepted":true}'
+                accepted
                 ;;
             reboot)
                 confirmed=$(jsonfilter -e '@.confirm' 2>/dev/null) || fail confirmation_required
                 [ "$confirmed" = true ] || fail confirmation_required
-                busy_config && fail configuration_busy
-                mkdir "$LOCK" 2>/dev/null || fail operation_busy
-                if busy_config; then rmdir "$LOCK"; fail configuration_busy; fi
+                lock
+                begin_operation reboot
                 # 先返回响应，再次检查其他窗口的配置事务，最后通过 procd 重启。
-                (
-                    sleep 3
-                    if ! busy_config; then ubus call system reboot >/dev/null 2>&1; fi
-                    rmdir "$LOCK" 2>/dev/null || true
-                ) </dev/null >/dev/null 2>&1 &
-                printf '%s\n' '{"ok":true,"accepted":true}'
+                schedule_reboot
+                accepted
                 ;;
             *) fail unsupported_method ;;
         esac

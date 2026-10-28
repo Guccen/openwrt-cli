@@ -3,6 +3,14 @@ import { RouterClient } from "./rpc";
 export const SYSTEM_BACKUP_LIMIT = 128 * 1024;
 export const FIRMWARE_LIMIT = 32 * 1024 * 1024;
 export type DestructiveOperation = "restore" | "upgrade" | "reset";
+export interface MaintenanceOperationStatus {
+  id: string;
+  kind: "reboot" | DestructiveOperation;
+  state: "accepted" | "running" | "rebooting" | "failed";
+  error: string;
+  updatedAt: number;
+  bootId: string;
+}
 export interface PreparedUpload {
   token: string;
   kind: "restore" | "upgrade";
@@ -16,11 +24,16 @@ export interface MaintenanceSnapshot {
   backupLimit: number;
   upgradeSupported: boolean;
   resetSupported: boolean;
+  operation?: MaintenanceOperationStatus | null;
   updatedAt: number;
 }
 const errors: Record<string, string> = {
   configuration_busy: "设备存在待确认或暂存的配置，请先完成确认或恢复。",
   operation_busy: "设备正在执行其他维护操作，请稍后重试。",
+  operation_state_failed: "设备无法记录维护操作，请检查临时空间后重试。",
+  upgrade_failed: "固件升级执行失败，请检查设备日志和镜像后重新操作。",
+  reset_failed: "恢复出厂设置执行失败，请保持供电并检查设备日志。",
+  reboot_failed: "设备未能完成重启，请检查设备状态和日志。",
   confirmation_required: "需要再次确认维护操作。",
   backup_failed: "系统备份生成失败；自定义备份较大时请通过 SSH 导出。",
   backup_too_large: "系统备份超过 128 KiB，请通过 SSH 导出。",
@@ -44,6 +57,33 @@ const errors: Record<string, string> = {
   current_password_incorrect: "当前登录密码不正确。",
   password_failed: "修改密码未完成，请检查设备状态；连接中断时请先尝试新密码登录，勿反复提交。",
 };
+const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
+export function maintenanceFailure(reason: string) {
+  return errors[reason] ?? "维护操作未完成，请检查设备日志。";
+}
+function operationId(value: unknown) {
+  // 请求已经被设备接受，编号缺失或异常时继续等待，不能因此开放重复执行。
+  return typeof value === "string" && uuid.test(value) ? value : null;
+}
+export function parseMaintenanceOperation(value: unknown): MaintenanceOperationStatus | null {
+  if (value === null || value === undefined) return null;
+  const item = value as MaintenanceOperationStatus;
+  if (
+    typeof item !== "object" ||
+    typeof item.id !== "string" ||
+    !uuid.test(item.id) ||
+    !["reboot", "restore", "upgrade", "reset"].includes(item.kind) ||
+    !["accepted", "running", "rebooting", "failed"].includes(item.state) ||
+    !Number.isInteger(item.updatedAt) ||
+    item.updatedAt < 0 ||
+    typeof item.bootId !== "string" ||
+    !uuid.test(item.bootId) ||
+    typeof item.error !== "string" ||
+    !/^[a-z_]{0,80}$/.test(item.error)
+  )
+    throw new Error("维护操作状态格式不正确");
+  return item;
+}
 export class MaintenanceClient {
   constructor(readonly rpc = new RouterClient()) {}
   private async call(session: string, method: string, args = {}) {
@@ -68,6 +108,7 @@ export class MaintenanceClient {
       backupLimit: SYSTEM_BACKUP_LIMIT,
       upgradeSupported: result.upgradeSupported === true,
       resetSupported: result.resetSupported === true,
+      operation: parseMaintenanceOperation(result.operation),
       updatedAt: Date.now(),
     };
   }
@@ -78,6 +119,7 @@ export class MaintenanceClient {
   async reboot(session: string) {
     const result = await this.call(session, "reboot", { confirm: true });
     if (result.accepted !== true) throw new Error("设备未接受重启请求");
+    return operationId(result.operationId);
   }
   async prepare(
     session: string,
@@ -133,6 +175,7 @@ export class MaintenanceClient {
   async execute(session: string, kind: DestructiveOperation, token?: string) {
     const result = await this.call(session, kind, { confirm: true, ...(token ? { token } : {}) });
     if (result.accepted !== true) throw new Error("设备未接受维护请求");
+    return operationId(result.operationId);
   }
   async changePassword(session: string, current: string, password: string, confirmation: string) {
     validatePasswordChange(current, password, confirmation);
