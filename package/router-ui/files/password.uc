@@ -24,8 +24,8 @@ try {
     let verified = bus.call('session', 'login', { username: 'root', password: args.current, timeout: 1 });
     if (!verified || !verified.ubus_rpc_session) fail('current_password_incorrect');
     bus.call('session', 'destroy', { ubus_rpc_session: verified.ubus_rpc_session });
-    let sessions = bus.call('session', 'list', {}, 'multiple');
-    if (type(sessions) != 'array') fail('password_failed');
+    let previousSessions = bus.call('session', 'list', {}, 'multiple');
+    if (type(previousSessions) != 'array') fail('password_failed');
     let process = popen('/bin/passwd root >/dev/null 2>&1', 'w');
     if (!process) fail('password_failed');
     if (process.write(args.password + '\n') != length(args.password) + 1 || !process.flush()) {
@@ -36,9 +36,12 @@ try {
     let written = process.write(args.password + '\n');
     let status = process.close();
     if (written != length(args.password) + 1 || status !== 0) fail('password_failed');
-    let revoked = true;
-    for (let session in sessions) {
-        if (session.data?.username == 'root' && session.ubus_rpc_session) {
+    // 修改期间仍可能有旧密码登录成功，必须在密码落盘后重新枚举会话。
+    let sessions = bus.call('session', 'list', {}, 'multiple');
+    let revoked = type(sessions) == 'array', seen = {};
+    for (let session in [...previousSessions, ...(revoked ? sessions : [])]) {
+        if (session.data?.username == 'root' && session.ubus_rpc_session && !seen[session.ubus_rpc_session]) {
+            seen[session.ubus_rpc_session] = true;
             bus.call('session', 'destroy', { ubus_rpc_session: session.ubus_rpc_session });
             // destroy 成功时没有响应体；应检查 ubus 状态码，已过期也视为清理完成。
             let status = busError(true);
