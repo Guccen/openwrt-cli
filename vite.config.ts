@@ -20,11 +20,12 @@ export default defineConfig({
       : undefined,
   },
   build: {
+    manifest: true,
     outDir: "../dist",
     emptyOutDir: true,
     sourcemap: false,
     target: "es2022",
-    // 图表单独分块且不递归吸收公共依赖，避免登录页提前加载图表。
+    // 图表与基础运行时独立分块，其余依赖按页面复用关系拆分，避免登录页提前加载。
     rolldownOptions: {
       output: {
         codeSplitting: {
@@ -35,8 +36,12 @@ export default defineConfig({
               priority: 20,
               includeDependenciesRecursively: false,
             },
-            { name: "vendor", test: /[\\/]node_modules[\\/]/ },
-            { name: "shared", minShareCount: 2, includeDependenciesRecursively: false },
+            {
+              name: "react",
+              test: /[\\/]node_modules[\\/](react|react-dom|scheduler|use-sync-external-store)[\\/]/,
+              priority: 10,
+              includeDependenciesRecursively: false,
+            },
           ],
         },
       },

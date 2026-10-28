@@ -22,6 +22,8 @@ bun run dev
 
 `check` 执行 Oxlint、Oxfmt、测试、TypeScript、生产构建和体积统计。`dist/` 是静态资源，`build/router-ui/` 是安装包目录，`build/ui-size.json` 记录资源体积。
 
+管理布局在登录后延迟加载，React 基础运行时与图表分别分块，其余共享依赖按实际引用拆分。`ui-size.json` 的 `entries.login` 和 `entries.overview` 分别统计入口 HTML、脚本与样式及其静态依赖，便于比较首屏开销；gzip 是逐文件压缩估算，实际传输取决于设备 HTTP 服务配置。构建清单保存在 `build/ui-manifest.json`，不会安装到设备页面目录。
+
 本地演示使用两个终端，数据标记为“本地演示”，密码为 `preview-only`：
 
 ```sh

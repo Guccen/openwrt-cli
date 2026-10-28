@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Redirect, Route, Switch, useLocation, useSearch } from "wouter";
-import { DeviceLayout } from "@/components/layout/device-layout";
 import { loginPath, pageForPath, pageRoutes, returnPath } from "@/lib/routes";
 import { LoginPage } from "@/pages/login-page";
 import { NotFoundPage } from "@/pages/not-found-page";
@@ -9,6 +8,10 @@ import { DeviceIdentityStatus } from "@/components/status/device-identity-status
 import { Button } from "@/components/ui/button";
 import { ErrorAlert } from "@/components/status/error-alert";
 import { useRouter } from "@/stores/router";
+
+const DeviceLayout = lazy(() =>
+  import("@/components/layout/device-layout").then((layout) => ({ default: layout.DeviceLayout })),
+);
 
 const OverviewPage = lazy(() =>
   import("@/pages/overview-page").then((page) => ({ default: page.OverviewPage })),
