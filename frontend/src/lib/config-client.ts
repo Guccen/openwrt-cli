@@ -31,6 +31,17 @@ export class ConfigClient {
     return Object.values(result.changes ?? {}).some((items) => items.length);
   }
 
+  async applyPending(session: string) {
+    const result = await this.rpc.call<{ ok?: boolean; applyPending?: boolean }>(
+      session,
+      "router.maintenance",
+      "status",
+    );
+    if (result?.ok !== true || typeof result.applyPending !== "boolean")
+      throw new Error("无法核对配置确认状态，请等待设备自动恢复");
+    return result.applyPending;
+  }
+
   async stage(session: string, edits: ConfigEdit[]) {
     for (const edit of edits) {
       if (!CONFIGS.includes(edit.config)) throw new Error("不支持此配置文件");

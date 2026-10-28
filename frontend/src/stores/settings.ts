@@ -3,21 +3,13 @@ import { useMaintenanceOperation } from "./maintenance-operation";
 import { APPLY_TIMEOUT, CONFIGS, ConfigClient } from "../lib/config-client";
 import { RpcError } from "../lib/rpc";
 import {
-  managementOrigin,
-  type ConfigName,
-  type ConfigPlan,
-  type SettingsSnapshot,
-} from "../lib/settings";
+  browserApplyStorage,
+  type ApplyStorageAdapter,
+  type PendingApply,
+} from "../lib/apply-storage";
+import { managementOrigin, type ConfigPlan, type SettingsSnapshot } from "../lib/settings";
 
-export interface PendingApply {
-  label: string;
-  deadline: number;
-  oldOrigin: string;
-  newOrigin: string;
-  address: string;
-  previousAddress: string;
-  configs: ConfigName[];
-}
+export type { PendingApply } from "../lib/apply-storage";
 interface SettingsState {
   session: string | null;
   snapshot: SettingsSnapshot | null;
@@ -26,6 +18,7 @@ interface SettingsState {
   loading: boolean;
   reachable: boolean;
   restoreRequested: boolean;
+  recovered: boolean;
   error: string | null;
   notice: string | null;
   destination: string | null;
@@ -44,10 +37,10 @@ interface SettingsState {
 const message = (error: unknown) =>
   error instanceof Error ? error.message : "操作失败，请稍后重试";
 
-export function createSettingsStore(client = new ConfigClient()) {
+export function createSettingsStore(client = new ConfigClient(), storage?: ApplyStorageAdapter) {
   let generation = 0;
   let probing = false;
-  return create<SettingsState>((set, get) => ({
+  const store = create<SettingsState>((set, get) => ({
     session: null,
     snapshot: null,
     pending: null,
@@ -55,6 +48,7 @@ export function createSettingsStore(client = new ConfigClient()) {
     loading: false,
     reachable: false,
     restoreRequested: false,
+    recovered: false,
     error: null,
     notice: null,
     destination: null,
@@ -63,14 +57,16 @@ export function createSettingsStore(client = new ConfigClient()) {
     bind: (session) => {
       if (session === get().session) return;
       ++generation;
+      const saved = session ? storage?.read(session) : null;
       set({
         session,
         snapshot: null,
-        pending: null,
-        phase: "idle",
+        pending: saved?.pending ?? null,
+        phase: saved ? "waiting" : "idle",
         loading: false,
         reachable: false,
-        restoreRequested: false,
+        restoreRequested: saved?.restoreRequested ?? false,
+        recovered: !!saved,
         error: null,
         notice: null,
         destination: null,
@@ -136,7 +132,14 @@ export function createSettingsStore(client = new ConfigClient()) {
             : managementOrigin(plan.address, origin),
         deadline: Date.now() + APPLY_TIMEOUT * 1000,
       };
-      set({ phase: "staging", loading: true, error: null, notice: null, restoreRequested: false });
+      set({
+        phase: "staging",
+        loading: true,
+        error: null,
+        notice: null,
+        restoreRequested: false,
+        recovered: false,
+      });
       let started = false;
       try {
         if (await client.changes(session)) throw new Error("检测到其他未应用改动，请重新读取配置");
@@ -195,6 +198,19 @@ export function createSettingsStore(client = new ConfigClient()) {
       const request = generation;
       probing = true;
       try {
+        // 存储只恢复界面线索；设备的回滚快照和实际地址才决定是否开放确认。
+        if (get().recovered && !(await client.applyPending(session))) {
+          if (request !== generation || pending !== get().pending) return;
+          set({
+            pending: null,
+            phase: "idle",
+            recovered: false,
+            reachable: false,
+            notice: "设备已结束配置确认，已重新读取当前设置",
+          });
+          await get().load();
+          return;
+        }
         const state = await client.rpc.call<{
           interface: { interface: string; up: boolean; "ipv4-address"?: { address: string }[] }[];
         }>(session, "network.interface", "dump");
@@ -202,10 +218,17 @@ export function createSettingsStore(client = new ConfigClient()) {
         const lan = state.interface.find((item) => item.interface === "lan" && item.up);
         set({
           reachable: !!lan?.["ipv4-address"]?.some((item) => item.address === pending.address),
+          ...(get().recovered ? { error: null } : {}),
         });
         if (Date.now() > pending.deadline + 1500 || get().restoreRequested) await get().rollback();
       } catch {
-        if (request === generation) set({ reachable: false });
+        if (request === generation)
+          set({
+            reachable: false,
+            ...(get().recovered
+              ? { error: "暂时无法核对设备的配置确认状态，请重试连接或等待自动恢复" }
+              : {}),
+          });
       } finally {
         probing = false;
       }
@@ -304,6 +327,7 @@ export function createSettingsStore(client = new ConfigClient()) {
         loading: false,
         reachable: false,
         restoreRequested: false,
+        recovered: false,
         error: null,
         notice: null,
         destination: null,
@@ -322,6 +346,21 @@ export function createSettingsStore(client = new ConfigClient()) {
       });
     },
   }));
+  store.subscribe((state, previous) => {
+    if (
+      state.pending === previous.pending &&
+      state.session === previous.session &&
+      state.restoreRequested === previous.restoreRequested
+    )
+      return;
+    if (state.session && state.pending)
+      storage?.write(state.session, {
+        pending: state.pending,
+        restoreRequested: state.restoreRequested,
+      });
+    else storage?.clear();
+  });
+  return store;
 }
 
-export const useSettings = createSettingsStore();
+export const useSettings = createSettingsStore(new ConfigClient(), browserApplyStorage);

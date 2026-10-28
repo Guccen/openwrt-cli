@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class MaintenanceRpcTests(unittest.TestCase):
     def run_rpc(self, method, *, board="jdcloud,re-ss-01", mounts="", busy=False,
-                accepted=True, checksum=True, confirmed=True, kind="upgrade", restore_fails=False, rollback_fails=False):
+                accepted=True, checksum=True, confirmed=True, kind="upgrade", restore_fails=False, rollback_fails=False,
+                apply_pending=False):
         bash = shutil.which("bash") or "C:/Program Files/Git/bin/bash.exe"
         if not Path(bash).is_file():
             self.skipTest("需要 Bash")
@@ -24,6 +25,9 @@ class MaintenanceRpcTests(unittest.TestCase):
                 path = subprocess.run([bash, "-c", 'cygpath -u "$1"', "--", path], capture_output=True, text=True, check=True).stdout.strip()
             (root / "board").write_text(board)
             (root / "mounts").write_text(mounts)
+            (root / "rpcd/snapshot-files").mkdir(parents=True)
+            if apply_pending:
+                (root / "rpcd/snapshot-files/network").write_text("config interface lan\n")
             (root / "upload").mkdir()
             (root / "upload/payload").write_bytes(b"firmware-fixture")
             digest = hashlib.sha256(b"firmware-fixture").hexdigest() if checksum else "0" * 64
@@ -58,6 +62,7 @@ jsonfilter() {
             script = script.replace("umask 077", "umask 077\n" + mock)
             script = script.replace("/var/run/router-ui-maintenance.lock", path + "/lock")
             script = script.replace("/tmp/router-ui-upload", path + "/upload")
+            script = script.replace("/var/run/rpcd/", path + "/rpcd/")
             script = script.replace("/tmp/sysinfo/board_name", path + "/board")
             script = script.replace("/proc/mounts", path + "/mounts")
             script = script.replace("[ -x /sbin/sysupgrade ]", "[ -f '" + path + "/board' ]")
@@ -83,6 +88,13 @@ jsonfilter() {
                 result, commands = self.run_rpc(method, board=board)
                 self.assertEqual(result["error"], "unsupported_device")
                 self.assertEqual(commands, "")
+
+    def test_status_distinguishes_pending_apply_from_other_configuration_changes(self):
+        for pending in (False, True):
+            result, commands = self.run_rpc("status", busy=True, apply_pending=pending)
+            self.assertTrue(result["configurationBusy"])
+            self.assertEqual(result["applyPending"], pending)
+            self.assertEqual(commands, "")
 
     def test_flash_requires_confirmation_hash_compatible_image_and_idle_configuration(self):
         for params, reason in [({"confirmed": False}, "confirmation_required"),

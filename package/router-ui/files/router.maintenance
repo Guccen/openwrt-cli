@@ -60,6 +60,13 @@ busy_config() {
     done
     return 1
 }
+pending_apply() {
+    local entry
+    for entry in /var/run/rpcd/snapshot-files/*; do
+        [ ! -s "$entry" ] || return 0
+    done
+    return 1
+}
 fail() {
     printf '{"ok":false,"error":"%s"}\n' "$1"
     exit 0
@@ -78,9 +85,11 @@ case "$1" in
                 [ ! -d "$LOCK" ] || operation=true
                 upgrade=false
                 reset=false
+                pending=false
+                pending_apply && pending=true
                 upgrade_supported && upgrade=true
                 reset_supported && reset=true
-                printf '{"ok":true,"configurationBusy":%s,"operationBusy":%s,"backupLimit":131072,"upgradeSupported":%s,"resetSupported":%s,"firmwareLimit":33554432}\n' "$configuration" "$operation" "$upgrade" "$reset"
+                printf '{"ok":true,"configurationBusy":%s,"operationBusy":%s,"backupLimit":131072,"upgradeSupported":%s,"resetSupported":%s,"firmwareLimit":33554432,"applyPending":%s}\n' "$configuration" "$operation" "$upgrade" "$reset" "$pending"
                 ;;
             backup)
                 busy_config && fail configuration_busy
