@@ -75,3 +75,5 @@ python3 -m unittest discover -s tests/firmware -v
 ```
 
 归档、密码、灯效和状态解析的 15 项脚本测试使用真实 `ucode`；未安装时本机跳过，可通过 `UCODE_TEST_COMMAND` 指定解释器命令。QEMU 同时运行原生 ucode 单测及实际 RPC 测试，不能以本地页面测试代替。
+
+CI 使用与固件一致的固定 ucode 提交，执行 `python3 scripts/check_firmware_tests.py --strict`；解释器缺失或任意测试跳过都会使检查失败。Linux 可先安装 CMake、编译工具、libjson-c-dev 和 pkg-config，再运行 `bash scripts/setup-ucode-tests.sh`。本地已有解释器时，通过 `UCODE_TEST_COMMAND` 指向其命令即可运行严格检查。
