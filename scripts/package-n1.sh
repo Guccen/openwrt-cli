@@ -13,8 +13,9 @@ read -r KERNEL DIGEST < <(python3 -c 'import json,sys; d=json.load(open(sys.argv
 mkdir -p "$PACKER/openwrt-armsr" "$PACKER/make-openwrt/kernel/stable"
 cp "$ROOTFS" "$PACKER/openwrt-armsr/"
 ARCHIVE="$PACKER/make-openwrt/kernel/stable/$KERNEL.tar.gz"
-curl --fail --location --retry 3 "https://github.com/ophub/kernel/releases/download/kernel_stable/$KERNEL.tar.gz" -o "$ARCHIVE"
-printf '%s  %s\n' "$DIGEST" "$ARCHIVE" | sha256sum --check --status
+CACHED_ARCHIVE="$ROOT/build/downloads/ophub-$KERNEL.tar.gz"
+bash "$ROOT/scripts/download-verified.sh" "https://github.com/ophub/kernel/releases/download/kernel_stable/$KERNEL.tar.gz" "$DIGEST" "$CACHED_ARCHIVE"
+cp "$CACHED_ARCHIVE" "$ARCHIVE"
 tar -xzf "$ARCHIVE" -C "$PACKER/make-openwrt/kernel/stable"
 [[ -d "$PACKER/make-openwrt/kernel/stable/$KERNEL" ]] || { echo '内核压缩包目录不正确'; exit 1; }
 
