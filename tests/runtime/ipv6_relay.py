@@ -18,7 +18,7 @@ import sys
 import time
 
 from configuration import RpcFailure
-from simulation import IPV6_TAP, NAMESPACE, REPORT, ssh
+from simulation import IPV6_TAP, NAMESPACE, REPORT, BRIDGE, ssh
 
 
 EXPECTED_ADDRESS = "2001:db8:100::44"
@@ -216,6 +216,9 @@ def run_test(api, address):
     host_rule = False
     firewall = ["ip6tables", "-I", "INPUT", "-i", IPV6_TAP, "-p", "udp", "--sport", "547", "--dport", "547", "-j", "ACCEPT"]
     try:
+        global_section = next((name for name, value in api.values("dhcp").items() if value.get(".type") == "odhcpd"), None)
+        if global_section:
+            api.set("dhcp", global_section, {"loglevel": "7"})
         api.set("network", "wan6", {"proto": "static", "device": "eth2", "ip6addr": ["2001:db8:100::2/64"], "ip6gw": "2001:db8:100::1", "delegate": "0", "auto": "1"})
         for section, key in (("lan", "ip6assign"), ("wan6", "ip6prefix")):
             if key in api.values("network").get(section, {}):
@@ -281,6 +284,14 @@ def run_test(api, address):
     finally:
         failure = sys.exc_info()[1]
         cleanup_errors = []
+        if failure:
+            try:
+                detail = ssh(address, "uci -q show dhcp; ip -6 addr show; cat /proc/net/udp6; cat /proc/net/igmp6; logread -e odhcpd | tail -n 100", capture_output=True, timeout=10)
+                (REPORT / "ipv6-relay-device.log").write_text(detail.stdout[-65536:])
+                bridge = subprocess.run(["sudo", "bridge", "mdb", "show", "dev", BRIDGE], capture_output=True, text=True, timeout=5)
+                (REPORT / "ipv6-relay-bridge.log").write_text(bridge.stdout[-16384:] + bridge.stderr[-2048:])
+            except (subprocess.SubprocessError, OSError):
+                pass
         if worker and worker.poll() is None:
             try:
                 worker.communicate("stop\n", timeout=3)

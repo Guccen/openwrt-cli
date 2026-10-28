@@ -37,6 +37,10 @@ def prepare_overlay(device, role):
     metadata = firmware.overlay(overlay, device, role)
     # 通用虚拟机只有 VirtIO 网卡；物理设备的交换机/USB/无线驱动不在模拟范围内。
     network = firmware.n1_network(role, "eth1").replace("192.168.69.1", metadata["address"])
+    if role == "router":
+        # 仿真的 IPv6 上游固定使用第三网口，从开机起保持 ifindex 稳定。
+        # odhcpd 会缓存逻辑接口的 ifindex，不能在中继用例中临时从 IPv4 WAN 搬迁。
+        network = network.replace("option device '@wan'", "option device 'eth2'")
     (overlay / "etc/config/network").write_text(network, encoding="utf-8")
     template = (ROOT / "files/n1-dhcp.template").read_text(encoding="utf-8")
     (overlay / "etc/config/dhcp").write_text(template.replace("@IGNORE@", "0" if role == "router" else "1").replace("@IPV6@", "server" if role == "router" else "disabled"), encoding="utf-8")
@@ -356,6 +360,10 @@ def guest_policy(address, metadata):
     wan = ssh(address, "uci -q get network.wan.device || true", capture_output=True).stdout.strip()
     if wan != ("eth1" if metadata["role"] == "router" else ""):
         raise AssertionError("WAN 网口配置不符")
+    if metadata["role"] == "router":
+        wan6 = ssh(address, "uci -q get network.wan6.device", capture_output=True).stdout.strip()
+        if wan6 != "eth2":
+            raise AssertionError("仿真 IPv6 专用上游必须从开机起使用第三网口")
 
 
 def main():

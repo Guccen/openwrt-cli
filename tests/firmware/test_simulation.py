@@ -11,6 +11,21 @@ import simulation
 
 
 class SimulationIsolationTests(unittest.TestCase):
+    def test_virtual_ipv6_uplink_is_stable_without_changing_hardware_defaults(self):
+        for device, role in [("jdcloud-ax1800", "router"), ("phicomm-n1", "router"), ("phicomm-n1", "bypass")]:
+            with self.subTest(device=device, role=role), tempfile.TemporaryDirectory() as temp:
+                directory = Path(temp)
+                (directory / "ssh-key.pub").write_text("isolated-fixture-public-key\n")
+                with patch.object(simulation, "WORK", directory), patch.object(simulation, "run"):
+                    simulation.prepare_overlay(device, role)
+                network = (directory / "overlay/etc/config/network").read_text()
+                if role == "router":
+                    self.assertIn("option device 'eth2'", network.split("config interface 'wan6'", 1)[1])
+                    self.assertIn("option device 'eth1'", network.split("config interface 'wan'", 1)[1].split("config interface 'wan6'", 1)[0])
+                else:
+                    self.assertNotIn("config interface 'wan6'", network)
+        self.assertIn("option device '@wan'", simulation.firmware.n1_network("router", "eth1"))
+
     def preflight_result(self, links, namespaces=""):
         return [
             subprocess.CompletedProcess([], 0, stdout=json.dumps(links)),

@@ -12,6 +12,8 @@
 
 `simulate.sh` 在下载 ImageBuilder、生成镜像前执行 [qemu_host.py](../scripts/qemu_host.py)，用空 ROM 搜索目录检查 ARM64 TCG、VirtIO 磁盘、双网卡和随机数设备能否创建。测试直接通过 `-kernel` 启动，两张网卡都显式设置 `romfile=` 关闭 PXE ROM，避免精简安装依赖时因缺少 `efi-virtio.rom` 而退出。正式启动使用相同网卡参数；提前退出时会把 QEMU 错误直接写入任务日志。
 
+正式联调额外加入第三网口 `eth2` 作为独立 IPv6 上游，主路由仿真从开机起将 `wan6` 固定到该口，IPv4 WAN 保持 `eth1`。这样 DHCPv6 中继用例不混入运行中搬迁物理网口的行为；真实设备默认仍使用 `@wan`，没有修改硬件配置。odhcpd 对已有逻辑接口保留 ifindex 的实现见[固定上游源码](https://github.com/openwrt/odhcpd/blob/5d7be43f8b9dec0eb47e245cfab81108bb131273/src/config.c)。中继用例仍需完成真实 Relay-Forward/Reply 租约交换，并命中 WAN UDP 547 规则；失败时额外保留设备状态和桥组播表。
+
 ## 覆盖范围
 
 每次分别测试 AX1800 主路由、N1 旁路由、N1 主路由三种配置：
