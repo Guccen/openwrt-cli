@@ -54,7 +54,7 @@ bun run check
 
 | 主题       | 文档                                                                                                                                                                                                    |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 安装与恢复 | [首次使用](docs/getting-started.md) · [刷机步骤](docs/flashing.md) · [磁盘与扩容](docs/storage.md)                                                                                                      |
+| 安装与恢复 | [首次使用](docs/getting-started.md) · [刷机步骤](docs/flashing.md) · [N1 写入 eMMC](docs/n1-emmc.md) · [磁盘与扩容](docs/storage.md)                                                                    |
 | 网络与无线 | [网络配置](docs/configuration.md) · [N1 接线方案](docs/n1-wireless.md) · [功能清单](docs/router-basics.md)                                                                                              |
 | 状态与维护 | [状态和租约](docs/system-status.md) · [系统维护](docs/maintenance.md) · [消息通知](docs/notifications.md)                                                                                               |
 | 灯效与计划 | [状态指示灯](docs/leds.md) · [定时任务](docs/scheduled-tasks.md)                                                                                                                                        |
