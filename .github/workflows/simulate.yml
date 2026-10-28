@@ -2,7 +2,16 @@ name: Simulate OpenWrt installation
 
 on:
   workflow_dispatch:
+    inputs:
+      browser_tests:
+        description: 执行无界面页面回归
+        type: boolean
+        default: true
   workflow_call:
+    inputs:
+      browser_tests:
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -87,20 +96,26 @@ jobs:
           path: .cache/simulation-downloads
           key: simulation-imagebuilder-${{ hashFiles('configs/simulation.json') }}
       - name: Restore Playwright browser cache
+        if: inputs.browser_tests
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package.json') }}
-      - name: Install browser test dependencies
+      - name: 构建验证用前端资源
         timeout-minutes: 15
         run: |
           bun install --frozen-lockfile
           bun run build
+      - name: Install browser test dependencies
+        if: inputs.browser_tests
+        timeout-minutes: 15
+        run: |
           bunx playwright install --with-deps --only-shell chromium
       - name: Boot OpenWrt and test installed package
         env:
           DEVICE: ${{ matrix.device }}
           ROLE: ${{ matrix.role }}
+          SIM_BROWSER_TESTS: ${{ inputs.browser_tests && '1' || '0' }}
         run: bash scripts/simulate.sh "$DEVICE" "$ROLE" build/simulation-package/router-ui.apk
       - name: Upload test reports and screenshots
         if: always()
@@ -116,10 +131,12 @@ jobs:
           DEVICE: ${{ matrix.device }}
           ROLE: ${{ matrix.role }}
           RESULT: ${{ job.status }}
+          BROWSER_TESTS: ${{ inputs.browser_tests && '1' || '0' }}
         run: |
           {
             echo "### OpenWrt simulation: $DEVICE / $ROLE"
             echo "Result: $RESULT"
-            echo 'ARM64 QEMU guest, real APK installation, reboot, RPC, DHCP, NAT and browser tests.'
+            echo 'ARM64 QEMU guest, real APK installation, reboot, RPC, DHCP and NAT tests.'
+            if [ "$BROWSER_TESTS" = 1 ]; then echo '页面浏览器回归已启用。'; else echo '本次仅执行原生验证，不启动浏览器。'; fi
             echo "Reports: simulation-$DEVICE-$ROLE artifact. Physical hardware drivers are outside this test."
           } >> "$GITHUB_STEP_SUMMARY"

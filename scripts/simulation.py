@@ -371,6 +371,7 @@ def main():
     parser.add_argument("--device", choices=firmware.DEVICES, required=True)
     parser.add_argument("--role", choices=("router", "bypass"), required=True)
     parser.add_argument("--package", type=Path, required=True)
+    parser.add_argument("--without-browser", action="store_true", help="仅运行原生设备验证，不启动浏览器")
     args = parser.parse_args()
     firmware.validate_role(args.device, args.role, "eth1")
     if args.package.suffix != ".apk" or not args.package.is_file():
@@ -436,7 +437,8 @@ def main():
         run("python3", ROOT / "tests/runtime/status.py", env=env)
         run("python3", ROOT / "tests/runtime/routing.py", env=env)
         run("python3", ROOT / "tests/runtime/router_basics.py", env=env)
-        run("bun", "run", "test:e2e", env=env)
+        if not args.without_browser:
+            run("bun", "run", "test:e2e", env=env)
         success = True
     finally:
         if processes:
@@ -456,7 +458,7 @@ def main():
         wan_log.close()
         if network_created:
             network_down()
-        (REPORT / "summary.json").write_text(json.dumps({"device": args.device, "role": args.role, "runtime": f"OpenWrt {SIMULATION_VERSION} ARM64 / QEMU virt", "package_sha256": hashlib.sha256(args.package.read_bytes()).hexdigest(), "passed": success, "hardware_emulated": False}, indent=2) + "\n")
+        (REPORT / "summary.json").write_text(json.dumps({"device": args.device, "role": args.role, "runtime": f"OpenWrt {SIMULATION_VERSION} ARM64 / QEMU virt", "package_sha256": hashlib.sha256(args.package.read_bytes()).hexdigest(), "passed": success, "browser_tests_enabled": not args.without_browser, "hardware_emulated": False}, indent=2) + "\n")
         shutil.rmtree(WORK)
     if not success:
         raise RuntimeError("模拟测试失败")

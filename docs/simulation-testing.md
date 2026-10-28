@@ -8,6 +8,8 @@
 
 普通 push / pull request 只自动执行快速代码检查，同分支新提交会取消尚未结束的旧检查。先在本地验证并集中推送，按需要手动运行固件配置、QEMU 模拟或完整固件构建；不再每次提交重复运行耗时任务。
 
+不使用浏览器时，手动运行取消 `browser_tests` 选项，或命令行设置 `SIM_BROWSER_TESTS=0` 后调用 `simulate.sh`。该模式保留真实安装、重启、权限、配置回滚、网络与维护验证，跳过浏览器安装和页面回归；报告通过 `browser_tests_enabled` 明确标记范围。无需启动开发模式。
+
 ## QEMU 启动检查
 
 `simulate.sh` 在下载 ImageBuilder、生成镜像前执行 [qemu_host.py](../scripts/qemu_host.py)，用空 ROM 搜索目录检查 ARM64 TCG、VirtIO 磁盘、双网卡和随机数设备能否创建。测试直接通过 `-kernel` 启动，两张网卡都显式设置 `romfile=` 关闭 PXE ROM，避免精简安装依赖时因缺少 `efi-virtio.rom` 而退出。正式启动使用相同网卡参数；提前退出时会把 QEMU 错误直接写入任务日志。

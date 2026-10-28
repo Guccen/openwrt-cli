@@ -15,4 +15,6 @@ fi
 export SIM_PASSWORD
 SIM_PASSWORD=$(openssl rand -hex 24)
 if [[ -n "${GITHUB_ACTIONS:-}" ]]; then printf '::add-mask::%s\n' "$SIM_PASSWORD"; fi
-python3 scripts/simulation.py --device "$DEVICE" --role "$ROLE" --package "$PACKAGE"
+test_options=()
+if [[ "${SIM_BROWSER_TESTS:-1}" == 0 ]]; then test_options+=(--without-browser); fi
+python3 scripts/simulation.py --device "$DEVICE" --role "$ROLE" --package "$PACKAGE" "${test_options[@]}"
