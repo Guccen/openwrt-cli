@@ -1,7 +1,53 @@
 import { expect, test } from "bun:test";
 import { RouterClient, RpcError } from "../../frontend/src/lib/rpc";
 import { createRouterStore } from "../../frontend/src/stores/router";
-import type { Snapshot } from "../../frontend/src/lib/types";
+import type { Device, Snapshot } from "../../frontend/src/lib/types";
+
+test("设备信息失败可重试，重复读取共用请求且不会清除已识别设备", async () => {
+  let finish!: (device: Device | null) => void;
+  let reads = 0;
+  const device = { device: "phicomm-n1", role: "router", model: "N1" } as Device;
+  const store = createRouterStore({
+    device: () => {
+      reads++;
+      return new Promise<Device | null>((resolve) => {
+        finish = resolve;
+      });
+    },
+  } as unknown as RouterClient);
+  const first = store.getState().loadDevice();
+  const duplicate = store.getState().loadDevice();
+  expect(reads).toBe(1);
+  expect(store.getState().deviceLoading).toBe(true);
+  finish(null);
+  await Promise.all([first, duplicate]);
+  expect(store.getState().deviceError).toContain("重试");
+  expect(store.getState().deviceLoading).toBe(false);
+  const retry = store.getState().loadDevice();
+  finish(device);
+  await retry;
+  expect(store.getState().device).toEqual(device);
+  expect(store.getState().deviceError).toBeNull();
+  const disconnected = store.getState().loadDevice();
+  finish(null);
+  await disconnected;
+  expect(store.getState().device).toEqual(device);
+});
+
+test("首次设备读取失败后登录刷新会重新识别设备", async () => {
+  let reads = 0;
+  const device = { device: "phicomm-n1", role: "router", model: "N1" } as Device;
+  const store = createRouterStore({
+    device: async () => (++reads === 1 ? null : device),
+    login: async () => "a".repeat(32),
+    snapshot: async () => ({ updatedAt: 1 }),
+  } as unknown as RouterClient);
+  await store.getState().loadDevice();
+  await store.getState().login("测试密码");
+  expect(reads).toBe(2);
+  expect(store.getState().device).toEqual(device);
+  expect(store.getState().deviceError).toBeNull();
+});
 
 test("退出登录后到达的旧状态不会重新显示", async () => {
   let finish!: (snapshot: Snapshot) => void;

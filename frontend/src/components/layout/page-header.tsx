@@ -10,7 +10,8 @@ import { useSchedule } from "@/stores/schedule";
 import { useClients } from "@/stores/clients";
 
 export function PageHeader({ page }: { page: Page | null }) {
-  const { device, snapshot, loading, refresh } = useRouter();
+  const { device, deviceLoading, deviceError, loadDevice, snapshot, loading, refresh } =
+    useRouter();
   const settings = useSettings();
   const wireless = useWireless();
   const maintenance = useMaintenance();
@@ -19,6 +20,7 @@ export function PageHeader({ page }: { page: Page | null }) {
   const clients = useClients();
   const busy =
     loading ||
+    deviceLoading ||
     settings.loading ||
     wireless.loading ||
     maintenance.loading ||
@@ -37,6 +39,7 @@ export function PageHeader({ page }: { page: Page | null }) {
         variant="outline"
         disabled={busy || !!settings.pending || !!settings.destination}
         onClick={() => {
+          if (!device || deviceError) void loadDevice();
           if (page === "wirelessStatus") void wireless.load();
           else if (page === "clients") void clients.load();
           else if (page === "leds") void leds.load();

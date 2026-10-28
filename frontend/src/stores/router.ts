@@ -13,6 +13,8 @@ interface RouterState {
   sessionReady: boolean;
   sessionRestoreError: string | null;
   device: Device | null;
+  deviceLoading: boolean;
+  deviceError: string | null;
   snapshot: Snapshot | null;
   history: OverviewSample[];
   loading: boolean;
@@ -30,6 +32,7 @@ export function createRouterStore(client = new RouterClient(), storage?: Session
   // 登录代次用于忽略退出登录或重新登录后才返回的旧请求。
   let generation = 0;
   let restoring: Promise<void> | null = null;
+  let deviceRequest: Promise<void> | null = null;
   const readSession = () => {
     try {
       return storage?.read() ?? null;
@@ -50,11 +53,33 @@ export function createRouterStore(client = new RouterClient(), storage?: Session
     sessionReady: false,
     sessionRestoreError: null,
     device: null,
+    deviceLoading: false,
+    deviceError: null,
     snapshot: null,
     history: [],
     loading: false,
     error: null,
-    loadDevice: async () => set({ device: await client.device() }),
+    loadDevice: () => {
+      if (deviceRequest) return deviceRequest;
+      set({ deviceLoading: true, deviceError: null });
+      const operation = (async () => {
+        try {
+          const device = await client.device();
+          if (!device) throw new Error("无法识别设备，请检查连接后重试");
+          set({ device, deviceError: null });
+        } catch {
+          // 短暂断线时保留已识别的设备，避免页面退回无限加载。
+          set({ deviceError: "设备信息读取失败，请检查连接后重试" });
+        } finally {
+          set({ deviceLoading: false });
+        }
+      })();
+      deviceRequest = operation;
+      void operation.finally(() => {
+        if (deviceRequest === operation) deviceRequest = null;
+      });
+      return operation;
+    },
     forgetSession: (message) => {
       ++generation;
       saveSession(null);
@@ -178,6 +203,7 @@ export function createRouterStore(client = new RouterClient(), storage?: Session
     refresh: async () => {
       const session = get().session;
       if (!session || get().loading) return;
+      if (!get().device) void get().loadDevice();
       const request = generation;
       set({ loading: true, error: null });
       try {

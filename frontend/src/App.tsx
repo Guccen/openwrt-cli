@@ -5,6 +5,7 @@ import { loginPath, pageForPath, pageRoutes, returnPath } from "@/lib/routes";
 import { LoginPage } from "@/pages/login-page";
 import { NotFoundPage } from "@/pages/not-found-page";
 import { DeviceLoading } from "@/components/status/device-loading";
+import { DeviceIdentityStatus } from "@/components/status/device-identity-status";
 import { Button } from "@/components/ui/button";
 import { ErrorAlert } from "@/components/status/error-alert";
 import { useRouter } from "@/stores/router";
@@ -51,6 +52,7 @@ const DiagnosticsPage = lazy(() =>
 );
 
 export function App() {
+  const device = useRouter((state) => state.device);
   const session = useRouter((state) => state.session);
   const sessionReady = useRouter((state) => state.sessionReady);
   const sessionRestoreError = useRouter((state) => state.sessionRestoreError);
@@ -104,6 +106,12 @@ export function App() {
   const page = pageForPath(location);
   if (page && location !== pageRoutes[page].path)
     return <Redirect key={pageRoutes[page].path} replace to={pageRoutes[page].path} />;
+  if (!device)
+    return (
+      <DeviceLayout>
+        <DeviceIdentityStatus />
+      </DeviceLayout>
+    );
   return (
     <DeviceLayout>
       <Suspense fallback={<DeviceLoading />}>

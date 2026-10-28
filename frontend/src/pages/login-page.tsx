@@ -6,12 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ErrorAlert } from "@/components/status/error-alert";
+import { DeviceIdentityStatus } from "@/components/status/device-identity-status";
 import { useSearch } from "wouter";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useRouter } from "@/stores/router";
 
 export function LoginPage() {
-  const { device, loading, error, login } = useRouter();
+  const { device, deviceError, loading, error, login } = useRouter();
   const query = new URLSearchParams(useSearch());
   const [password, setPassword] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -36,6 +37,11 @@ export function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {deviceError && !device && (
+              <div className="mb-4">
+                <DeviceIdentityStatus />
+              </div>
+            )}
             {query.get("passwordChanged") === "1" && (
               <Alert className="mb-4">
                 <AlertDescription>
