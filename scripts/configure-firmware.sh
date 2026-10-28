@@ -17,7 +17,7 @@ cd "$SOURCE"
 python3 "$ROOT/scripts/firmware.py" verify-revisions --device "$DEVICE" --source "$SOURCE"
 python3 "$ROOT/scripts/firmware.py" prepare-storage --device "$DEVICE" --source "$SOURCE"
 make defconfig
-python3 "$ROOT/scripts/firmware.py" verify --device "$DEVICE" --role "$ROLE" --source "$SOURCE"
+# 校验失败时也保留实际解析结果，避免产物只有日志而没有配置。
 cp .config "$ARTIFACTS/build.config"
 cp build-inputs.json resolved-sources.json "$ARTIFACTS/"
 git diff -- include/target.mk target/linux feeds.conf.default package/network/services/odhcpd/Makefile > "$ARTIFACTS/source-changes.patch"
@@ -28,4 +28,5 @@ if [[ "$ROLE" == router ]]; then
     cp "$ROOT/patches/odhcpd/900-keep-configured-interfaces.patch" "$ARTIFACTS/odhcpd-link-recovery.patch"
 fi
 ./scripts/diffconfig.sh > "$ARTIFACTS/resolved.config"
+python3 "$ROOT/scripts/firmware.py" verify --device "$DEVICE" --role "$ROLE" --source "$SOURCE"
 echo "源码与配置检查通过：$DEVICE / $ROLE"

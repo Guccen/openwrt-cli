@@ -30,6 +30,8 @@ N1 为单射频，2.4 GHz / 5 GHz 二选一；当前页面仅开放一个热点�
 
 本地覆盖了三种接线方案、WAN/LAN 隔离、IPv6 归属、密码切换、禁用保护及频段/信道校验。构建检查必需用户空间包，并在打包结束后检查实际固件、驱动和服务文件，缺失即失败；不把另一套内核的 `kmod-brcmfmac` 装入 ophub 镜像。
 
+WiFi 5 用户空间能力由 `router-ui` 的 ARM64 目标条件依赖选择。上游 `DRIVER_11AC_SUPPORT` 是隐藏选项，仅写入输入 `.config` 会在解析时重置；不能通过关闭校验或安装通用内核驱动绕过。构建产物在校验失败时也保留 `build.config` 和 `resolved.config`。
+
 2026-10-28，旧版 U 盘镜像出现一次软件重启后管理地址和 SSH 长时间不可达、保持原 U 盘断电再上电后恢复的情况。恢复后只读核对根文件系统正常挂载，约 33 秒建立千兆有线链路，未留有上次失败的持久崩溃日志。该现象的根因尚未定位，不能认定已由无线改动修复。若仅执行重启且超过三分钟未恢复，先检查网线和地址，再保持启动 U 盘原位断电约十秒重新上电；仍失败时保留 HDMI 或串口启动记录。升级、恢复、扩容或网络待确认期间不能套用此断电处理。
 
 硬件和文件依据：[固定板型记录](https://github.com/ophub/amlogic-s9xxx-armbian/blob/72621c6f32942e40757deb1a5de63dca575c7658/build-armbian/armbian-files/common-files/etc/model_database.conf)、[固定无线固件](https://github.com/ophub/firmware/tree/a9d0e8337cc8aa2ca4b482acd7b19c74ce05860f/firmware/brcm)、[固定无线配置栈](https://github.com/immortalwrt/immortalwrt/tree/84b665b5de552e297d0f7d755b88a46fc0cfeb13/package/network/config/wifi-scripts)。

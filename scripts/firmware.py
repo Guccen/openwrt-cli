@@ -219,8 +219,9 @@ def verify(source, device, role):
         required += ["sfdisk", "partx-utils", "blockdev", "btrfs-progs", "wpad-basic-openssl", "wifi-scripts", "iw", "iwinfo", "rpcd-mod-iwinfo", "wireless-regdb"]
         if any(config.get(f"CONFIG_PACKAGE_{name}") in ("y", "m") for name in ("kmod-fs-btrfs", "kmod-cfg80211", "kmod-mac80211", "kmod-brcmfmac")):
             raise ValueError("N1 必须使用 ophub 配套内核，不能混入通用内核模块")
-        if config.get("CONFIG_WIFI_SCRIPTS_UCODE") != "y" or config.get("CONFIG_DRIVER_11AC_SUPPORT") != "y":
-            raise ValueError("N1 缺少无线配置脚本或 WiFi 5 支持")
+        missing_options = [name for name in ("CONFIG_WIFI_SCRIPTS_UCODE", "CONFIG_DRIVER_11AC_SUPPORT") if config.get(name) != "y"]
+        if missing_options:
+            raise ValueError(f"N1 无线能力选项未启用：{', '.join(missing_options)}")
         target = "CONFIG_TARGET_armsr_armv8_DEVICE_generic"
         if config.get("CONFIG_TARGET_ROOTFS_TARGZ") != "y":
             raise ValueError("N1 必须生成根文件系统压缩包")

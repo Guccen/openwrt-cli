@@ -12,7 +12,8 @@ define Package/router-ui
   SECTION:=admin
   CATEGORY:=Administration
   TITLE:=轻量设备管理页面
-  DEPENDS:=+uhttpd +uhttpd-mod-ubus +rpcd +jsonfilter +ucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +coreutils-timeout
+  # N1 的驱动由打包器提供，须显式选择无线服务的隐藏能力选项。
+  DEPENDS:=+uhttpd +uhttpd-mod-ubus +rpcd +jsonfilter +ucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +coreutils-timeout +@TARGET_armsr_armv8:DRIVER_11AC_SUPPORT
 endef
 
 define Package/router-ui/description

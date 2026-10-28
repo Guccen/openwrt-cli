@@ -137,16 +137,18 @@ exit 0
     def test_missing_or_forbidden_packages_fail_validation(self):
         with tempfile.TemporaryDirectory() as temp:
             source = Path(temp)
-            (source / ".config").write_text(firmware.merge_config("phicomm-n1", "bypass"))
+            # 此处只验证解析结果；隐藏能力须由 Kconfig 的条件依赖选中。
+            config = firmware.merge_config("phicomm-n1", "bypass") + "CONFIG_DRIVER_11AC_SUPPORT=y\n"
+            (source / ".config").write_text(config)
             firmware.verify(source, "phicomm-n1", "bypass")
             with (source / ".config").open("a") as output:
                 output.write("CONFIG_PACKAGE_luci-base=y\n")
             with self.assertRaises(ValueError):
                 firmware.verify(source, "phicomm-n1", "bypass")
-            (source / ".config").write_text(firmware.merge_config("phicomm-n1", "bypass") + "CONFIG_PACKAGE_kmod-fs-btrfs=y\n")
+            (source / ".config").write_text(config + "CONFIG_PACKAGE_kmod-fs-btrfs=y\n")
             with self.assertRaises(ValueError):
                 firmware.verify(source, "phicomm-n1", "bypass")
-            (source / ".config").write_text(firmware.merge_config("phicomm-n1", "bypass") + "CONFIG_TARGET_armsr_armv8_DEVICE_other=y\n")
+            (source / ".config").write_text(config + "CONFIG_TARGET_armsr_armv8_DEVICE_other=y\n")
             with self.assertRaises(ValueError):
                 firmware.verify(source, "phicomm-n1", "bypass")
             (source / ".config").write_text("CONFIG_TARGET_armsr=y\n")
@@ -263,7 +265,7 @@ exit 0
     def test_n1_wireless_requires_userspace_and_matching_kernel(self):
         with tempfile.TemporaryDirectory() as temp:
             source = Path(temp)
-            config = firmware.merge_config("phicomm-n1", "router")
+            config = firmware.merge_config("phicomm-n1", "router") + "CONFIG_DRIVER_11AC_SUPPORT=y\n"
             (source / ".config").write_text(config)
             firmware.verify(source, "phicomm-n1", "router")
             for package in ("wpad-basic-openssl", "wifi-scripts", "iw", "rpcd-mod-iwinfo", "wireless-regdb"):
@@ -274,6 +276,10 @@ exit 0
                 with self.subTest(package=package):
                     (source / ".config").write_text(config + f"CONFIG_PACKAGE_{package}=y\n")
                     with self.assertRaises(ValueError): firmware.verify(source, "phicomm-n1", "router")
+            for option in ("CONFIG_WIFI_SCRIPTS_UCODE", "CONFIG_DRIVER_11AC_SUPPORT"):
+                with self.subTest(option=option):
+                    (source / ".config").write_text(config.replace(f"{option}=y", f"# {option} is not set"))
+                    with self.assertRaisesRegex(ValueError, option): firmware.verify(source, "phicomm-n1", "router")
             metadata = firmware.overlay(source / "overlay", "phicomm-n1", "router", "eth2")
             self.assertEqual(metadata["wan"], "eth2")
             wireless = (source / "overlay/etc/config/wireless").read_text()
