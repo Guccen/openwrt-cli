@@ -108,18 +108,13 @@ test("firmware checksum and device compatibility failures never start a flash", 
   expect(calls).not.toContain("upgrade");
 });
 
-test("unsupported storage exposes guidance and no reset or firmware upload controls", async ({
-  page,
-}) => {
+test("不支持的设备隐藏升级固件和恢复出厂卡片", async ({ page }) => {
   await mockMaintenance(page, { supported: false });
   await loginPage(page);
   await navigate(page, "系统维护");
-  await expect(
-    page.getByText(
-      "当前设备或存储布局不支持此操作。N1 请按刷机文档重新写入启动卡，保留旧卡用于回滚。",
-      { exact: true },
-    ),
-  ).toHaveCount(2);
+  await expect(page.getByText("升级固件", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("恢复出厂设置", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("恢复系统配置", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "恢复出厂设置", exact: true })).toHaveCount(0);
   await expect(page.getByLabel("固件镜像", { exact: true })).toHaveCount(0);
 });

@@ -93,16 +93,8 @@ export function SystemPage() {
       <TimeCard disabled={disabled} />
       <SystemBackupCard disabled={disabled} />
       <RecoveryCard kind="restore" disabled={disabled} />
-      <RecoveryCard
-        kind="upgrade"
-        supported={snapshot?.upgradeSupported ?? false}
-        disabled={disabled}
-      />
-      <RecoveryCard
-        kind="reset"
-        supported={snapshot?.resetSupported ?? false}
-        disabled={disabled}
-      />
+      {snapshot?.upgradeSupported && <RecoveryCard kind="upgrade" disabled={disabled} />}
+      {snapshot?.resetSupported && <RecoveryCard kind="reset" disabled={disabled} />}
       <RebootCard disabled={disabled} />
     </div>
   );
