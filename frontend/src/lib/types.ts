@@ -5,6 +5,7 @@ export interface Device {
   address: string;
   source: string;
   revision: string;
+  wan?: string;
 }
 
 export interface Board {

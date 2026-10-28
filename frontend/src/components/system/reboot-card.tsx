@@ -25,6 +25,7 @@ import { useMaintenanceOperation } from "@/stores/maintenance-operation";
 const rpc = new RouterClient();
 export function RebootCard({ disabled }: { disabled: boolean }) {
   const session = useRouter((state) => state.session);
+  const n1 = useRouter((state) => state.device?.device === "phicomm-n1");
   const [open, setOpen] = useState(false);
   const operation = useMaintenanceOperation((state) => state.kind);
   const waiting =
@@ -99,7 +100,9 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
           <Alert>
             <AlertDescription>
               {expired
-                ? "暂未检测到设备重新上线，请检查连接和管理地址后重新登录。"
+                ? n1 && operation === "reboot"
+                  ? "超过 3 分钟仍未检测到 N1 上线。请先检查网线与管理地址；确认仅执行重启后，可保持启动 U 盘原位，断电约 10 秒再上电。仍失败时请查看 HDMI 启动画面。"
+                  : "暂未检测到设备重新上线，请检查连接和管理地址后重新登录。"
                 : operation === "reboot"
                   ? "已发送重启请求，正在等待设备恢复连接…"
                   : "已发送维护请求，请等待设备重启；恢复或重置后管理地址和密码可能改变。"}

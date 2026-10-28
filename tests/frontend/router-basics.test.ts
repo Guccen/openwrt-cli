@@ -117,6 +117,7 @@ test("射频设置来自真实能力，只改指定射频，换国家时先自�
                 results: [
                   { channel: 1, mhz: 2412, restricted: false },
                   { channel: 14, mhz: 2484, restricted: true },
+                  { channel: 36, mhz: 5180, restricted: true },
                 ],
               }
             : { results: [{ iso3166: "CN", country: "China" }] };
@@ -126,6 +127,7 @@ test("射频设置来自真实能力，只改指定射频，换国家时先自�
     s = settingsFixture();
   expect(calls).toEqual(["phyname", "info", "freqlist", "countrylist"]);
   expect(caps.channels.map((c) => c.channel)).toEqual([1]);
+  expect(caps.bands).toEqual(["2g", "5g"]);
   const draft = { ...radioDraft(s, "radio0"), country: "CN", mode: "HE20" };
   expect(radioPlan(s, "radio0", draft, caps).edits).toEqual([
     { config: "wireless", section: "radio0", values: { country: "CN", htmode: "HE20" } },

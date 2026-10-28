@@ -356,9 +356,7 @@ test("network backup previews, rejects the wrong role and restores DNS and DHCP 
   }
 });
 
-test("wireless runtime status refreshes on demand and stays unavailable on N1", async ({
-  page,
-}, testInfo) => {
+test("无线状态按需刷新，两款设备均保留状态入口", async ({ page }, testInfo) => {
   await loginPage(page);
   let reads = 0;
   page.on("request", (request) => {
@@ -368,12 +366,6 @@ test("wireless runtime status refreshes on demand and stays unavailable on N1", 
     )
       ++reads;
   });
-  if (process.env.SIM_DEVICE !== "jdcloud-ax1800") {
-    await page.goto(pageRoutes.wirelessStatus.path);
-    await expect(page.getByText("此设备未开放无线状态。", { exact: true })).toBeVisible();
-    expect(reads).toBe(0);
-    return;
-  }
   await navigate(page, "无线状态");
   await expect.poll(() => reads).toBeGreaterThan(0);
   await expect(page.getByRole("button", { name: "刷新", exact: true })).toBeEnabled();

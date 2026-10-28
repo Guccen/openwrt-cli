@@ -13,7 +13,13 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { wanPlan, wanProtocolNames, type WanDraft, type WanProtocol } from "@/lib/wan-settings";
+import {
+  wanPlan,
+  wanProtocolNames,
+  wirelessWan,
+  type WanDraft,
+  type WanProtocol,
+} from "@/lib/wan-settings";
 import type { SettingsFormProps } from "./settings-section";
 
 export function WanForm({
@@ -23,6 +29,7 @@ export function WanForm({
   disabled,
 }: SettingsFormProps & { initial: WanDraft }) {
   const [draft, setDraft] = useState(initial);
+  const station = wirelessWan(snapshot);
   const field = (key: keyof WanDraft, value: string | boolean) =>
     setDraft((current) => ({ ...current, [key]: value }));
   return (
@@ -31,7 +38,9 @@ export function WanForm({
         <CardTitle className="flex flex-wrap items-center justify-between gap-2">
           上网方式
           <Badge variant="outline">
-            {String(snapshot.network.wan.device ?? snapshot.network.wan.ifname ?? "由系统管理")}
+            {station
+              ? "无线连接上游"
+              : String(snapshot.network.wan.device ?? snapshot.network.wan.ifname ?? "由系统管理")}
           </Badge>
         </CardTitle>
         <CardDescription>修改会中断上网。管理地址保持不变，检查连接后再确认保留。</CardDescription>
@@ -67,11 +76,13 @@ export function WanForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(wanProtocolNames).map(([value, title]) => (
-                  <SelectItem key={value} value={value}>
-                    {title}
-                  </SelectItem>
-                ))}
+                {Object.entries(wanProtocolNames)
+                  .filter(([value]) => !station || value === "dhcp")
+                  .map(([value, title]) => (
+                    <SelectItem key={value} value={value}>
+                      {title}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

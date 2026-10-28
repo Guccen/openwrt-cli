@@ -1,6 +1,7 @@
 """用真实 ucode 验证固定操作的目标校验，不在宿主执行网络命令或修改系统时间。"""
 import json
 import os
+import re
 from pathlib import Path
 import shlex
 import shutil
@@ -43,3 +44,16 @@ class RouterBasicsTests(unittest.TestCase):
         print(results);
         """
         self.assertEqual(self.evaluate('time-settings.uc', body), ['Asia/Shanghai', True, True, True, True, True, 'Europe/Custom'])
+
+    def test_n1_wireless_mac_is_stable_local_unicast_and_distinct_from_lan(self):
+        text = (ROOT / 'files/router-defaults.sh').read_text(encoding='utf-8')
+        expression = re.search(r"wlan_mac=\$\(ucode -e '([^']+)'\)", text).group(1)
+        for address, expected in [('fc:7c:02:11:22:33', 'fa:7c:02:11:22:33'), ('02:11:22:33:44:55', '06:11:22:33:44:55')]:
+            source = expression.replace('readfile("/sys/class/net/eth0/address")', json.dumps(address))
+            result = subprocess.run([*self.command, '-e', source], capture_output=True, encoding='utf-8', timeout=15)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, expected)
+        for address in ['', '01:11:22:33:44:55', 'bad-address']:
+            source = expression.replace('readfile("/sys/class/net/eth0/address")', json.dumps(address))
+            result = subprocess.run([*self.command, '-e', source], capture_output=True, encoding='utf-8', timeout=15)
+            self.assertEqual(result.stdout, '')

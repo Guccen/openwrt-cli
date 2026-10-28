@@ -155,9 +155,10 @@ export function parseBackup(input: string, target: Device): NetworkBackup {
   )
     throw new Error("备份中的无线接口数量不正确");
   const wireless = data.wireless.map(readWifi);
+  if (target.device === "phicomm-n1" && wireless.some((wifi) => wifi.encryption === "sae-mixed"))
+    throw new Error("N1 无线备份仅支持 WPA2 个人版。");
   if (new Set(wireless.map((radio) => radio.section)).size !== wireless.length)
     throw new Error("备份包含重复的无线接口");
-  if (target.device === "phicomm-n1" && wireless.length) throw new Error("N1 备份不支持无线设置");
   let dhcp: DhcpDraft | null = null;
   if (data.version === 2) {
     if (target.role === "bypass") {
@@ -194,7 +195,7 @@ export function parseBackup(input: string, target: Device): NetworkBackup {
 export function createBackup(snapshot: SettingsSnapshot, device: Device): NetworkBackup {
   const omittedWireless: string[] = [];
   const wireless: WifiBackup[] = [];
-  if (device.device === "jdcloud-ax1800") {
+  {
     for (const draft of wifiDrafts(snapshot)) {
       const section = snapshot.wireless[draft.section];
       try {

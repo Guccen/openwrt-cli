@@ -124,6 +124,7 @@ def n1_network(role, wan):
 config device
     option name 'br-lan'
     option type 'bridge'
+    option bridge_empty '1'
     list ports 'eth0'
 
 config interface 'lan'
@@ -154,6 +155,8 @@ def overlay(destination, device, role, wan="eth1"):
     shutil.copytree(ROOT / "files/common", destination, dirs_exist_ok=True)
     address = "192.168.68.1" if device == "jdcloud-ax1800" else ("192.168.69.1" if role == "router" else "192.168.68.2")
     metadata = {"device": device, "model": "京东云 AX1800" if device == "jdcloud-ax1800" else "斐讯 N1", "role": role, "address": address, "source": SOURCES[device]["version"], "revision": SOURCES[device]["revision"]}
+    if device == "phicomm-n1" and role == "router":
+        metadata["wan"] = wan
     (destination / "www").mkdir(exist_ok=True)
     (destination / "www/device.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     config = destination / "etc/config"
@@ -213,9 +216,11 @@ def verify(source, device, role):
         required += AX_STORAGE + ["wpad-openssl", "rpcd-mod-iwinfo", "ath11k-firmware-ipq6018", "ipq-wifi-jdcloud_re-ss-01", "kmod-ath11k-ahb", "kmod-qca-nss-dp", "kmod-qca-nss-drv", "kmod-qca-nss-ecm", "nss-firmware-ipq60xx"]
         target = "CONFIG_TARGET_qualcommax_ipq60xx_DEVICE_jdcloud_re-ss-01"
     else:
-        required += ["sfdisk", "partx-utils", "blockdev", "btrfs-progs"]
-        if config.get("CONFIG_PACKAGE_kmod-fs-btrfs") in ("y", "m"):
-            raise ValueError("N1 必须使用 ophub 配套 Btrfs 内核，不能混入通用内核模块")
+        required += ["sfdisk", "partx-utils", "blockdev", "btrfs-progs", "wpad-basic-openssl", "wifi-scripts", "iw", "iwinfo", "rpcd-mod-iwinfo", "wireless-regdb"]
+        if any(config.get(f"CONFIG_PACKAGE_{name}") in ("y", "m") for name in ("kmod-fs-btrfs", "kmod-cfg80211", "kmod-mac80211", "kmod-brcmfmac")):
+            raise ValueError("N1 必须使用 ophub 配套内核，不能混入通用内核模块")
+        if config.get("CONFIG_WIFI_SCRIPTS_UCODE") != "y" or config.get("CONFIG_DRIVER_11AC_SUPPORT") != "y":
+            raise ValueError("N1 缺少无线配置脚本或 WiFi 5 支持")
         target = "CONFIG_TARGET_armsr_armv8_DEVICE_generic"
         if config.get("CONFIG_TARGET_ROOTFS_TARGZ") != "y":
             raise ValueError("N1 必须生成根文件系统压缩包")

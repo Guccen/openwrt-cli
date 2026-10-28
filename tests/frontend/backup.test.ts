@@ -219,6 +219,7 @@ describe("本地网络备份", () => {
     ])
       expect(() => parseBackup(encode({ ...backup, wireless: [wifi] }), device)).toThrow();
     const n1 = { ...device, device: "phicomm-n1" as const };
-    expect(() => parseBackup(encode({ ...backup, device: n1.device }), n1)).toThrow("不支持无线");
+    const n1Backup = parseBackup(encode({ ...backup, device: n1.device }), n1);
+    expect(n1Backup.wireless).toEqual(backup.wireless);
   });
 });

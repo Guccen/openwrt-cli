@@ -25,6 +25,17 @@ export const wanProtocolNames: Record<WanProtocol, string> = {
   static: "静态 IPv4",
   pppoe: "宽带拨号（PPPoE）",
 };
+export function wirelessWan(snapshot: SettingsSnapshot) {
+  return Object.values(snapshot.wireless).some(
+    (iface) =>
+      iface[".type"] === "wifi-iface" &&
+      iface.mode === "sta" &&
+      (Array.isArray(iface.network)
+        ? iface.network
+        : String(iface.network ?? "").split(/\s+/)
+      ).includes("wan"),
+  );
+}
 export function wanDraft(snapshot: SettingsSnapshot): WanDraft {
   const wan = snapshot.network.wan;
   if (!wan || !["dhcp", "static", "pppoe"].includes(String(wan.proto)))
@@ -52,6 +63,8 @@ export function wanDraft(snapshot: SettingsSnapshot): WanDraft {
 }
 export function wanPlan(snapshot: SettingsSnapshot, draft: WanDraft, bypass: boolean): ConfigPlan {
   if (bypass) throw new Error("旁路由通过 LAN 网关上网，不开放独立 WAN 配置。");
+  if (wirelessWan(snapshot) && draft.protocol !== "dhcp")
+    throw new Error("无线 WAN 通过上游 WiFi 自动获取地址，请先在无线设置切换为有线方案。");
   const old = wanDraft(snapshot),
     raw = snapshot.network.wan;
   if (!Object.hasOwn(wanProtocolNames, draft.protocol))

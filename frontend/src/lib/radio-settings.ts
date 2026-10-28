@@ -1,7 +1,8 @@
 import { RouterClient } from "./rpc";
 import { lanDraft, type ConfigPlan, type SettingsSnapshot } from "./settings";
-import { wifiBand } from "./wifi-band";
+import { wifiBand, type WifiBand } from "./wifi-band";
 export interface RadioCapabilities {
+  bands?: WifiBand[];
   modes: string[];
   channels: { channel: number; mhz: number; dfs: boolean }[];
   countries: { code: string; name: string }[];
@@ -31,6 +32,13 @@ export class RadioClient {
       ),
     ]);
     return {
+      bands: [
+        ...new Set(
+          (frequencies.results ?? [])
+            .map((f) => wifiBand({}, f.mhz))
+            .filter((band) => band !== "unknown"),
+        ),
+      ],
       modes: [
         ...new Set(
           (info.htmodes ?? []).filter((m) => /^(HT|VHT|HE|EHT)(20|40|80|160|320)$/.test(m)),
@@ -54,6 +62,7 @@ export function radioDraft(snapshot: SettingsSnapshot, section: string) {
   if (radio?.[".type"] !== "wifi-device" || (radio.type && radio.type !== "mac80211"))
     throw new Error("该射频使用高级驱动，请通过 SSH 管理。");
   return {
+    band: wifiBand(radio),
     country: String(radio.country ?? "00"),
     channel: String(radio.channel ?? "auto"),
     mode: String(radio.htmode ?? ""),
@@ -67,20 +76,29 @@ export function radioPlan(
 ): ConfigPlan {
   const old = radioDraft(snapshot, section),
     values: Record<string, string> = {};
+  const band = draft.band;
+  if (
+    band !== old.band &&
+    !(caps.bands?.includes(band) ?? caps.channels.some((c) => wifiBand({}, c.mhz) === band))
+  )
+    throw new Error("请选择当前硬件支持的频段。");
   if (draft.country !== old.country && !caps.countries.some((c) => c.code === draft.country))
     throw new Error("请选择硬件支持的国家/地区。");
   if (draft.country !== old.country && draft.channel !== "auto")
     throw new Error("修改国家/地区时请先使用自动信道，应用后再读取可用信道。");
   if (
-    draft.channel !== old.channel &&
+    (draft.channel !== old.channel || band !== old.band) &&
     draft.channel !== "auto" &&
-    !caps.channels.some((c) => String(c.channel) === draft.channel)
+    !caps.channels.some((c) => String(c.channel) === draft.channel && wifiBand({}, c.mhz) === band)
   )
     throw new Error("请选择当前地区和硬件允许的信道。");
-  if (draft.mode !== old.mode && !caps.modes.includes(draft.mode))
+  if ((draft.mode !== old.mode || band !== old.band) && !caps.modes.includes(draft.mode))
     throw new Error("请选择硬件支持的无线模式/带宽。");
-  const band = wifiBand(snapshot.wireless[section]);
-  if (draft.mode !== old.mode && band === "2g" && /(?:80|160|320)$/.test(draft.mode))
+  if (
+    (draft.mode !== old.mode || band !== old.band) &&
+    band === "2g" &&
+    (/^VHT/.test(draft.mode) || /(?:80|160|320)$/.test(draft.mode))
+  )
     throw new Error("2.4 GHz 不支持该带宽。");
   for (const [key, value] of Object.entries({
     country: draft.country,
@@ -90,6 +108,7 @@ export function radioPlan(
     const previous = key === "htmode" ? old.mode : old[key as "country" | "channel"];
     if (value !== previous) values[key] = value;
   }
+  if (band !== old.band) values.band = band;
   return {
     label: "无线射频参数",
     address: lanDraft(snapshot).address,

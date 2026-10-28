@@ -5,16 +5,14 @@ import { DeviceLoading } from "@/components/status/device-loading";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useRouter } from "@/stores/router";
 import { useWireless } from "@/stores/wireless";
-import { NotFoundPage } from "./not-found-page";
 
 export function WirelessStatusPage() {
   const device = useRouter((state) => state.device);
   const { session, snapshot, load, error } = useWireless();
   useEffect(() => {
-    if (session && device?.device === "jdcloud-ax1800") void load();
-  }, [device?.device, session, load]);
+    if (session && device) void load();
+  }, [device, session, load]);
   if (!device) return <DeviceLoading />;
-  if (device.device !== "jdcloud-ax1800") return <NotFoundPage message="此设备未开放无线状态。" />;
   return (
     <div className="space-y-3">
       <ErrorAlert message={error} />

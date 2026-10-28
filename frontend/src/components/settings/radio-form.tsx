@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RadioClient, radioDraft, radioPlan, type RadioCapabilities } from "@/lib/radio-settings";
-import { wifiBand, wifiBandLabel } from "@/lib/wifi-band";
+import { wifiBand, wifiBandLabel, type WifiBand } from "@/lib/wifi-band";
 import { useRouter } from "@/stores/router";
 import type { SettingsFormProps } from "./settings-section";
 const client = new RadioClient();
@@ -19,7 +19,8 @@ export function RadioForm({
   review,
   disabled,
   section,
-}: SettingsFormProps & { section: string }) {
+  singleRadio = false,
+}: SettingsFormProps & { section: string; singleRadio?: boolean }) {
   const session = useRouter((s) => s.session),
     [draft, setDraft] = useState(() => radioDraft(snapshot, section));
   const [caps, setCaps] = useState<RadioCapabilities | null>(null),
@@ -46,9 +47,11 @@ export function RadioForm({
       active = false;
     };
   }, [session, section, attempt]);
-  const band = wifiBand(snapshot.wireless[section]);
+  const band = draft.band;
   const countries = caps?.countries ?? [],
-    modes = (caps?.modes ?? []).filter((m) => band !== "2g" || !/(?:80|160|320)$/.test(m));
+    modes = (caps?.modes ?? []).filter(
+      (m) => band !== "2g" || (!/^VHT/.test(m) && !/(?:80|160|320)$/.test(m)),
+    );
   const channels =
     caps?.channels.filter((c) =>
       band === "2g" ? c.mhz < 3000 : band === "5g" ? c.mhz >= 4900 && c.mhz < 5925 : true,
@@ -87,6 +90,46 @@ export function RadioForm({
           }}
         >
           <div className="grid gap-3 sm:grid-cols-3">
+            {singleRadio && (
+              <div className="space-y-1.5">
+                <Label htmlFor={`${section}-band`}>工作频段</Label>
+                <Select
+                  disabled={locked}
+                  value={band}
+                  onValueChange={(value) => {
+                    const next = value as WifiBand;
+                    const available =
+                      caps?.channels.filter((c) => wifiBand({}, c.mhz) === next && !c.dfs) ?? [];
+                    const mode =
+                      next === "2g" ? "HT20" : caps?.modes.includes("VHT80") ? "VHT80" : "HT20";
+                    setDraft({
+                      ...draft,
+                      band: next,
+                      channel: available.length ? String(available[0].channel) : "auto",
+                      mode,
+                    });
+                  }}
+                >
+                  <SelectTrigger id={`${section}-band`} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(["2g", "5g"] as const)
+                      .filter(
+                        (value) =>
+                          value === band ||
+                          caps?.bands?.includes(value) ||
+                          caps?.channels.some((c) => wifiBand({}, c.mhz) === value),
+                      )
+                      .map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {wifiBandLabel(value)}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor={`${section}-country`}>国家/地区</Label>
               <Select

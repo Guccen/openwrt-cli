@@ -6,16 +6,29 @@ import { DeviceLoading } from "@/components/status/device-loading";
 import { wifiDrafts } from "@/lib/settings";
 import { radioDraft } from "@/lib/radio-settings";
 import { useRouter } from "@/stores/router";
-import { NotFoundPage } from "./not-found-page";
+import { n1Topology } from "@/lib/n1-wireless";
 
 export function WirelessPage() {
   const device = useRouter((state) => state.device);
   if (!device) return <DeviceLoading />;
-  if (device.device !== "jdcloud-ax1800") return <NotFoundPage message="此设备未开放无线设置。" />;
   return (
     <SettingsSection>
       {(props) => {
-        const radios = wifiDrafts(props.snapshot);
+        const n1 = device.device === "phicomm-n1";
+        const radios = wifiDrafts(props.snapshot, n1);
+        if (n1 && radios.length) {
+          try {
+            n1Topology(props.snapshot, device);
+          } catch (error) {
+            return (
+              <Alert>
+                <AlertDescription>
+                  {error instanceof Error ? error.message : "无线配置不可用"}
+                </AlertDescription>
+              </Alert>
+            );
+          }
+        }
         return radios.length ? (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
@@ -23,13 +36,18 @@ export function WirelessPage() {
             </p>
             <div className="grid gap-3 xl:grid-cols-2">
               {radios.map((radio) => (
-                <WifiForm key={radio.section} {...props} initial={radio} />
+                <WifiForm
+                  key={radio.section}
+                  {...props}
+                  initial={radio}
+                  n1={n1 ? device : undefined}
+                />
               ))}
             </div>
             {[...new Set(radios.map((radio) => radio.device))].map((section) => {
               try {
                 radioDraft(props.snapshot, section);
-                return <RadioForm key={section} {...props} section={section} />;
+                return <RadioForm key={section} {...props} section={section} singleRadio={n1} />;
               } catch (error) {
                 return (
                   <p className="text-xs text-muted-foreground" key={section}>
@@ -42,7 +60,8 @@ export function WirelessPage() {
         ) : (
           <Alert>
             <AlertDescription>
-              未检测到无线接口。请确认 WiFi 驱动和设备配置已正确加载。
+              未检测到无线接口。请确认 WiFi 驱动和设备配置已正确加载。旧版 N1
+              镜像需要刷入包含无线支持的新镜像。
             </AlertDescription>
           </Alert>
         );

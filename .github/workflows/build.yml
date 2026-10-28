@@ -12,7 +12,7 @@ on:
           - jdcloud-ax1800
           - phicomm-n1
       n1_role:
-        description: N1 模式（主路由需要额外 USB 有线网卡）
+        description: N1 模式（主路由默认 USB WAN，可在页面切换无线方案）
         type: choice
         default: both
         options:
@@ -20,7 +20,7 @@ on:
           - bypass
           - router
       n1_wan:
-        description: N1 主路由的 WAN 网口名称
+        description: N1 主路由默认 USB WAN 网口名称
         type: string
         default: eth1
       publish:

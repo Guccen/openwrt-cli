@@ -54,6 +54,11 @@ if [ -f /etc/config/wireless ]; then
         config_load wireless
         config_foreach disable_radio wifi-device
     )
+    if [ '@HOSTNAME@' = 'phicomm-n1' ] && [ -z "$(uci -q get wireless.default_radio0.macaddr || true)" ]; then
+        # 配套 NVRAM 含固定示例地址；依据本机网口生成稳定且不同的本地无线地址。
+        wlan_mac=$(ucode -e 'import { readfile } from "fs"; let m=trim(readfile("/sys/class/net/eth0/address") || ""); if(!match(m,/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i) || (int(substr(m,0,2),16)&1)) exit(1); print(sprintf("%02x%s",((int(substr(m,0,2),16)|2)^4)&254,substr(m,2)));')
+        uci set "wireless.default_radio0.macaddr=$wlan_mac"
+    fi
     uci commit wireless
 fi
 

@@ -217,7 +217,7 @@ export function dnsPlan(snapshot: SettingsSnapshot, input: string): ConfigPlan {
   };
 }
 
-export function wifiDrafts(snapshot: SettingsSnapshot): WifiDraft[] {
+export function wifiDrafts(snapshot: SettingsSnapshot, allowStation = false): WifiDraft[] {
   return Object.entries(snapshot.wireless)
     .filter(([, section]) => section[".type"] === "wifi-iface")
     .map(([name, section]) => {
@@ -236,13 +236,19 @@ export function wifiDrafts(snapshot: SettingsSnapshot): WifiDraft[] {
           ["psk2", "sae-mixed"].includes(encryption) &&
           typeof section.key === "string" &&
           section.key.length >= 8,
-        editable: section.mode === "ap" && ["none", "psk2", "sae-mixed"].includes(encryption),
+        editable:
+          (section.mode === "ap" || (allowStation && section.mode === "sta")) &&
+          ["none", "psk2", "sae-mixed"].includes(encryption),
       };
     });
 }
 
-export function wifiPlan(snapshot: SettingsSnapshot, draft: WifiDraft): ConfigPlan {
-  const old = wifiDrafts(snapshot).find((item) => item.section === draft.section);
+export function wifiPlan(
+  snapshot: SettingsSnapshot,
+  draft: WifiDraft,
+  allowStation = false,
+): ConfigPlan {
+  const old = wifiDrafts(snapshot, allowStation).find((item) => item.section === draft.section);
   if (!old || !old.editable || draft.device !== old.device || !snapshot.wireless[old.device])
     throw new Error("此无线接口使用高级配置，请通过 SSH 管理");
   if (

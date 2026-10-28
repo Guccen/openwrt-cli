@@ -224,19 +224,63 @@ exit 0
             (rootfs / "lib/firmware/brcm").mkdir(parents=True)
             (rootfs / "lib/firmware/rtl_nic").mkdir()
             (rootfs / "lib/firmware/brcm/unused.bin").write_text("test")
-            (rootfs / "usr/bin").mkdir(parents=True)
+            for name in ("brcmfmac43455-sdio.bin", "brcmfmac43455-sdio.clm_blob", "brcmfmac43455-sdio.phicomm,n1.bin", "brcmfmac43455-sdio.phicomm,n1.txt"):
+                (rootfs / "lib/firmware/brcm" / name).write_text("test")
+            for module in ("cfg80211", "brcmutil", "brcmfmac", "brcmfmac-wcc"):
+                target = rootfs / "lib/modules/6.18.58" / f"{module}.ko"
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("test")
+            for path in ("sbin/wifi", "lib/wifi/mac80211.uc", "lib/netifd/wireless/mac80211.sh", "usr/share/ucode/wifi/hostapd.uc", "usr/sbin/hostapd", "usr/sbin/wpa_supplicant", "usr/sbin/iw", "usr/bin/iwinfo", "usr/lib/rpcd/iwinfo.so", "lib/firmware/regulatory.db"):
+                target = rootfs / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("test")
+            (rootfs / "usr/bin").mkdir(parents=True, exist_ok=True)
             for name in ("btrfs", "sfdisk", "partx", "blockdev"):
                 (rootfs / "usr/bin" / name).write_text("test")
             (rootfs / "root").mkdir()
             (rootfs / "root/.todo_rootfs_resize").write_text("yes")
             n1_packer.finalize(directory, overlay, rootfs)
             self.assertFalse((rootfs / "root/.todo_rootfs_resize").exists())
-            self.assertFalse((rootfs / "lib/firmware/brcm").exists())
+            self.assertFalse((rootfs / "lib/firmware/brcm/unused.bin").exists())
+            self.assertTrue((rootfs / "lib/firmware/brcm/brcmfmac43455-sdio.phicomm,n1.txt").is_file())
+            self.assertTrue((rootfs / "lib/firmware/regulatory.db").is_file())
+            self.assertEqual((rootfs / "etc/modules.d/brcmfmac").read_text(), "cfg80211\nbrcmutil\nbrcmfmac\n")
             self.assertTrue((rootfs / "lib/firmware/rtl_nic").is_dir())
             self.assertEqual((rootfs / "etc/config/network").read_bytes(), (overlay / "etc/config/network").read_bytes())
+            required = rootfs / "lib/firmware/brcm/brcmfmac43455-sdio.phicomm,n1.bin"
+            required.unlink()
+            with self.assertRaisesRegex(ValueError, "BCM43455"):
+                n1_packer.finalize(directory, overlay, rootfs)
+            required.write_text("test")
+            (rootfs / "usr/sbin/iw").unlink()
+            with self.assertRaisesRegex(ValueError, "usr/sbin/iw"):
+                n1_packer.finalize(directory, overlay, rootfs)
+            (rootfs / "usr/sbin/iw").write_text("test")
             (rootfs / "usr/bin/btrfs").unlink()
             with self.assertRaisesRegex(ValueError, "btrfs"):
                 n1_packer.finalize(directory, overlay, rootfs)
+
+    def test_n1_wireless_requires_userspace_and_matching_kernel(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp)
+            config = firmware.merge_config("phicomm-n1", "router")
+            (source / ".config").write_text(config)
+            firmware.verify(source, "phicomm-n1", "router")
+            for package in ("wpad-basic-openssl", "wifi-scripts", "iw", "rpcd-mod-iwinfo", "wireless-regdb"):
+                with self.subTest(package=package):
+                    (source / ".config").write_text(config.replace(f"CONFIG_PACKAGE_{package}=y", f"# CONFIG_PACKAGE_{package} is not set"))
+                    with self.assertRaises(ValueError): firmware.verify(source, "phicomm-n1", "router")
+            for package in ("kmod-brcmfmac", "kmod-cfg80211", "kmod-mac80211"):
+                with self.subTest(package=package):
+                    (source / ".config").write_text(config + f"CONFIG_PACKAGE_{package}=y\n")
+                    with self.assertRaises(ValueError): firmware.verify(source, "phicomm-n1", "router")
+            metadata = firmware.overlay(source / "overlay", "phicomm-n1", "router", "eth2")
+            self.assertEqual(metadata["wan"], "eth2")
+            wireless = (source / "overlay/etc/config/wireless").read_text()
+            self.assertIn("option disabled '1'", wireless)
+            self.assertIn("option country 'CN'", wireless)
+            self.assertIn("option ifname 'wlan0'", wireless)
+            self.assertNotIn("option key", wireless)
 
 
 if __name__ == "__main__":

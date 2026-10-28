@@ -36,7 +36,12 @@ export function RadioCard({ radio }: { radio: WirelessRadio }) {
                 {iface.ssid || iface.section || "未命名接口"}
               </span>
               <span className="text-muted-foreground">
-                {iface.name || "未启动"} · {iface.mode || "—"}
+                {iface.name || "未启动"} ·{" "}
+                {iface.mode === "sta"
+                  ? "连接上游"
+                  : iface.mode === "ap"
+                    ? "无线热点"
+                    : iface.mode || "—"}
                 {iface.channel ? ` · 信道 ${iface.channel}` : ""}
                 {iface.frequency ? ` · ${iface.frequency} MHz` : ""}
               </span>

@@ -4,7 +4,7 @@ import { SettingsSection } from "@/components/settings/settings-section";
 import { WanForm } from "@/components/settings/wan-form";
 import { WanLinkForm } from "@/components/settings/wan-link-form";
 import { wanLinkDraft } from "@/lib/wan-link";
-import { wanDraft } from "@/lib/wan-settings";
+import { wanDraft, wirelessWan } from "@/lib/wan-settings";
 import { useRouter } from "@/stores/router";
 import { NotFoundPage } from "./not-found-page";
 
@@ -19,7 +19,13 @@ export function WanPage() {
         try {
           let link;
           try {
-            link = <WanLinkForm {...props} initial={wanLinkDraft(props.snapshot)} />;
+            link = wirelessWan(props.snapshot) ? (
+              <p className="text-xs text-muted-foreground">
+                无线 WAN 的名称、密码和频段请在无线设置管理。
+              </p>
+            ) : (
+              <WanLinkForm {...props} initial={wanLinkDraft(props.snapshot)} />
+            );
           } catch (error) {
             link = (
               <p className="text-xs text-muted-foreground">

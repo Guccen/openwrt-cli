@@ -65,18 +65,39 @@ def finalize(directory, overlay, rootfs):
     if metadata["device"] != "phicomm-n1":
         raise ValueError("N1 打包器只能应用 N1 配置")
     shutil.copytree(overlay, rootfs, dirs_exist_ok=True, symlinks=True)
-    # N1 当前仅走有线网络；保留 USB 有线网卡可能使用的固件。
+    # 仅保留 N1 的 BCM43455、地区数据库以及 USB 有线网卡固件。
     firmware = rootfs / "lib/firmware"
     if firmware.exists():
         for child in firmware.iterdir():
-            if child.name != "rtl_nic":
+            if child.name not in ("rtl_nic", "brcm", "regulatory.db", "regulatory.db.p7s"):
                 bounded_remove(rootfs, child)
+    brcm = firmware / "brcm"
+    needed = ("brcmfmac43455-sdio.bin", "brcmfmac43455-sdio.clm_blob", "brcmfmac43455-sdio.phicomm,n1.bin", "brcmfmac43455-sdio.phicomm,n1.txt")
+    if not all((brcm / name).is_file() and (brcm / name).stat().st_size for name in needed):
+        raise ValueError("N1 镜像缺少 BCM43455 无线固件或板级参数")
+    for child in brcm.iterdir():
+        if child.name not in needed:
+            bounded_remove(rootfs, child)
     modules = rootfs / "etc/modules.d"
     prefixes = ("ath10k", "brcm", "bcmdhd", "rtl818", "rtw88", "rt2500", "rt2800", "rt2x00", "mt76", "mt79", "ssv6051", "rk_", "rknpu", "snd-", "drm-rockchip", "panfrost")
     if modules.is_dir():
         for child in modules.iterdir():
             if child.name.startswith(prefixes):
                 bounded_remove(rootfs, child)
+    modules.mkdir(parents=True, exist_ok=True)
+    (modules / "brcmfmac").write_text("cfg80211\nbrcmutil\nbrcmfmac\n", encoding="utf-8", newline="\n")
+    # 使用当前固定上游的 ucode 配置栈，清理打包器为旧版 shell 脚本添加的替换。
+    wireless_script = rootfs / "lib/netifd/wireless/mac80211.sh"
+    original = wireless_script.with_suffix(".sh.bak")
+    if original.is_file():
+        shutil.copyfile(original, wireless_script)
+        original.unlink()
+    for module in ("cfg80211", "brcmutil", "brcmfmac", "brcmfmac-wcc"):
+        if not list((rootfs / "lib/modules").rglob(f"{module}.ko*")):
+            raise ValueError(f"N1 镜像缺少配套无线驱动：{module}")
+    for path in ("sbin/wifi", "lib/wifi/mac80211.uc", "lib/netifd/wireless/mac80211.sh", "usr/share/ucode/wifi/hostapd.uc", "usr/sbin/hostapd", "usr/sbin/wpa_supplicant", "usr/sbin/iw", "usr/bin/iwinfo", "usr/lib/rpcd/iwinfo.so", "lib/firmware/regulatory.db"):
+        if not (rootfs / path).is_file():
+            raise ValueError(f"N1 镜像缺少无线服务文件：{path}")
     startup = rootfs / "etc/rc.local"
     if startup.is_file():
         lines = startup.read_text(encoding="utf-8").splitlines()
@@ -93,7 +114,7 @@ def finalize(directory, overlay, rootfs):
         if not module_files:
             raise ValueError("主路由镜像缺少 RTL8152/8153 USB 网卡驱动")
     (rootfs / "etc/uci-defaults/zz-router-lite").chmod(0o755)
-    for name in ("rpcd", "uhttpd", "network", "dhcp"):
+    for name in ("rpcd", "uhttpd", "network", "dhcp", "wireless"):
         if (rootfs / f"etc/config/{name}").read_bytes() != (overlay / f"etc/config/{name}").read_bytes():
             raise ValueError(f"设备配置未生效：{name}")
 

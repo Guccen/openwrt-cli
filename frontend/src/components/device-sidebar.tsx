@@ -50,9 +50,7 @@ export function DeviceSidebar({
       items: [
         { id: "overview", icon: Activity },
         { id: "network", icon: Network },
-        ...(device?.device === "jdcloud-ax1800"
-          ? [{ id: "wirelessStatus" as const, icon: Wifi }]
-          : []),
+        ...(device ? [{ id: "wirelessStatus" as const, icon: Wifi }] : []),
         { id: "clients", icon: Monitor },
       ],
     },
@@ -69,7 +67,7 @@ export function DeviceSidebar({
           : []),
         { id: "ipv6", icon: Globe },
         { id: "dns", icon: Globe },
-        ...(device?.device === "jdcloud-ax1800" ? [{ id: "wireless" as const, icon: Wifi }] : []),
+        ...(device ? [{ id: "wireless" as const, icon: Wifi }] : []),
       ],
     },
     {
