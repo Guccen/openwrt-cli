@@ -6,6 +6,28 @@ if [ "$(uci -q get router-lite.setup.initialized || true)" = '1' ]; then
 fi
 
 uci set system.@system[0].hostname='@HOSTNAME@'
+uci set system.@system[0].zonename='Asia/Shanghai'
+uci set system.@system[0].timezone='CST-8'
+uci set system.ntp='timeserver'
+uci set system.ntp.enabled='1'
+uci set system.ntp.use_dhcp='0'
+uci set system.ntp.enable_server='0'
+uci -q delete system.ntp.server || true
+for server in ntp.aliyun.com ntp1.aliyun.com ntp2.aliyun.com; do
+    uci add_list "system.ntp.server=$server"
+done
+# 只替换已知发行版的镜像前缀，保留版本、架构、签名与自定义仓库。
+for repositories in /etc/apk/repositories.d/distfeeds.list /etc/apk/repositories; do
+    [ -f "$repositories" ] || continue
+    sed -i \
+        -e 's#^https\?://downloads\.immortalwrt\.org/#https://mirror.nju.edu.cn/immortalwrt/#' \
+        -e 's#^https\?://mirrors\.vsean\.net/openwrt/#https://mirror.nju.edu.cn/immortalwrt/#' \
+        -e 's#^https\?://downloads\.openwrt\.org/#https://mirrors.ustc.edu.cn/openwrt/#' \
+        "$repositories"
+done
+if uci -q get system.@imm_init[0] >/dev/null; then
+    uci set system.@imm_init[0].apk_mirror='https://mirror.nju.edu.cn/immortalwrt'
+fi
 uci set network.lan.ipaddr='@ADDRESS@'
 # 每台设备首次启动时生成稳定的本地 IPv6 前缀，保留上游已有值。
 if [ -z "$(uci -q get network.globals.ula_prefix || true)" ]; then

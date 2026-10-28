@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="设备控制台">
+  <rect width="64" height="64" rx="16" fill="#2563eb" />
+  <path d="M22 21a16 16 0 0 1 20 0M27 27a8 8 0 0 1 10 0" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" />
+  <path d="M18 29v9m28-9v9" stroke="#fff" stroke-width="3.5" stroke-linecap="round" />
+  <rect x="13" y="35" width="38" height="16" rx="5" fill="#fff" />
+  <path d="M21 43h3m5 0h3" stroke="#2563eb" stroke-width="3" stroke-linecap="round" />
+  <circle cx="43" cy="43" r="2.5" fill="#10b981" />
+</svg>

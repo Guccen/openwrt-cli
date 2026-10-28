@@ -31,6 +31,17 @@ class FirmwareTests(unittest.TestCase):
                 text = text.replace("/sbin/wifi", (root / "no-wifi").as_posix())
                 wireless = root / "wireless"
                 wireless.write_text("config wifi-device 'radio0'\nconfig wifi-device 'radio1'\n")
+                repositories = root / "distfeeds.list"
+                repositories.write_text("\n".join([
+                    "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/targets/armsr/armv8/packages/packages.adb",
+                    "http://downloads.openwrt.org/releases/25.12.6/packages/aarch64_generic/base/packages.adb",
+                    "https://mirrors.vsean.net/openwrt/releases/25.12-SNAPSHOT/packages/aarch64_generic/packages/packages.adb",
+                    "https://downloads.immortalwrt.org.example.invalid/custom/packages.adb",
+                    "https://custom.example.invalid/feed/packages.adb",
+                    "# https://downloads.openwrt.org/custom/packages.adb",
+                ]) + "\n", encoding="utf-8", newline="\n")
+                text = text.replace("/etc/apk/repositories.d/distfeeds.list", repositories.as_posix())
+                text = text.replace("/etc/apk/repositories;", (root / "no-repositories").as_posix() + ";")
                 functions = root / "functions.sh"
                 # OpenWrt 库使用未定义的可选环境变量；初始化须兼容这种调用。
                 functions.write_text('config_load() { [ -n "$IPKG_INSTROOT" ] && return 0; return 0; }\nconfig_foreach() { "$1" radio0; "$1" radio1; }\n', encoding="utf-8", newline="\n")
@@ -69,10 +80,24 @@ exit 0
                     self.assertIn("set wireless.radio0.disabled=1", log.read_text())
                     self.assertIn("set wireless.radio1.disabled=1", log.read_text())
                     self.assertIn("commit wireless", log.read_text())
+                    self.assertIn("set system.@system[0].zonename=Asia/Shanghai", log.read_text())
+                    self.assertIn("set system.@system[0].timezone=CST-8", log.read_text())
+                    self.assertIn("set system.ntp.use_dhcp=0", log.read_text())
+                    for server in ("ntp.aliyun.com", "ntp1.aliyun.com", "ntp2.aliyun.com"):
+                        self.assertIn(f"add_list system.ntp.server={server}", log.read_text())
+                    feeds = repositories.read_text()
+                    self.assertIn("https://mirror.nju.edu.cn/immortalwrt/releases/25.12-SNAPSHOT/targets/armsr/armv8/packages/packages.adb", feeds)
+                    self.assertIn("https://mirrors.ustc.edu.cn/openwrt/releases/25.12.6/packages/aarch64_generic/base/packages.adb", feeds)
+                    self.assertIn("https://mirror.nju.edu.cn/immortalwrt/releases/25.12-SNAPSHOT/packages/aarch64_generic/packages/packages.adb", feeds)
+                    self.assertIn("https://downloads.immortalwrt.org.example.invalid/custom/packages.adb", feeds)
+                    self.assertIn("https://custom.example.invalid/feed/packages.adb", feeds)
+                    self.assertIn("# https://downloads.openwrt.org/custom/packages.adb", feeds)
                     log.write_text("")
                     subprocess.run([bash, script.as_posix()], env=env, check=True)
                     self.assertNotIn("set network", log.read_text())
                     self.assertNotIn("set wireless", log.read_text())
+                    self.assertNotIn("set system", log.read_text())
+                    self.assertEqual(repositories.read_text(), feeds)
 
     def test_role_configuration(self):
         bypass = firmware.merge_config("phicomm-n1", "bypass")
@@ -96,7 +121,7 @@ exit 0
                 self.assertIn(f"option ra '{ipv6}'", lan)
                 self.assertEqual("config interface 'wan'" in network, role == "router")
                 self.assertEqual("option device 'eth1'" in network, role == "router")
-                self.assertNotIn("@", (root / "etc/uci-defaults/zz-router-lite").read_text(encoding="utf-8").replace("@system", ""))
+                self.assertNotRegex((root / "etc/uci-defaults/zz-router-lite").read_text(encoding="utf-8"), r"@[A-Z][A-Z_]*@")
 
     def test_reject_invalid_wan(self):
         for wan in ("", "eth0", "lo", "br-lan", "eth1'; reboot", "eth1\n"):

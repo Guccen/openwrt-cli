@@ -33,6 +33,8 @@ test("设备提供的文本经过转义，网络表格使用 shadcn 组件", () 
   expect(overview).not.toContain("<script>alert");
   expect(overview).toContain("&lt;script&gt;");
   expect(overview).toContain('data-slot="card"');
+  expect(overview.match(/内存使用/g)).toHaveLength(1);
+  expect(overview).not.toContain("内存占用");
   const table = renderToStaticMarkup(<NetworkTable snapshot={snapshot} />);
   expect(table).toContain('data-slot="table"');
   expect(table).toContain("192.168.68.2/24");

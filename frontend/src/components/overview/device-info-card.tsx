@@ -1,12 +1,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
-import { memoryUsage } from "@/lib/format";
 import type { Snapshot } from "@/lib/types";
 
 export function DeviceInfoCard({ snapshot }: { snapshot: Snapshot }) {
-  const { board, info } = snapshot;
-  const memory = memoryUsage(info.memory);
+  const { board } = snapshot;
   return (
     <Card size="sm">
       <CardHeader>
@@ -26,12 +22,6 @@ export function DeviceInfoCard({ snapshot }: { snapshot: Snapshot }) {
           <dt className="text-muted-foreground">内核版本</dt>
           <dd>{board.kernel}</dd>
         </dl>
-        <Separator className="my-4" />
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">内存占用</span>
-          <span>{memory.percent}%</span>
-        </div>
-        <Progress value={memory.percent} aria-label="内存占用" className="mt-2 h-1" />
       </CardContent>
     </Card>
   );

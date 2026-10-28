@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { bytes } from "@/lib/format";
+import { temperatureLabel } from "@/lib/status";
 import type { Telemetry } from "@/lib/types";
 
 export function HealthCard({ telemetry }: { telemetry: Telemetry }) {
@@ -15,7 +16,9 @@ export function HealthCard({ telemetry }: { telemetry: Telemetry }) {
           {telemetry.temperatures.length ? (
             telemetry.temperatures.map((sensor, index) => (
               <div key={`${sensor.name}-${index}`}>
-                <span className="text-muted-foreground">{sensor.name}</span>
+                <span className="text-muted-foreground">
+                  {temperatureLabel(sensor.name, index)}
+                </span>
                 <span className="ml-2 font-medium tabular-nums">
                   {sensor.celsius.toFixed(1)} °C
                 </span>

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { ArrowRight, LoaderCircle, Router, ShieldCheck } from "lucide-react";
+import { ArrowRight, LoaderCircle, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +24,7 @@ export function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-muted/30 p-5">
       <div className="w-full max-w-sm space-y-4">
         <div className="flex items-center gap-2">
-          <Router className="size-5" />
+          <img src="/icon.svg" alt="" className="size-7 rounded-lg" />
           <span className="text-sm font-semibold">设备控制台</span>
           <Badge variant="outline" className="ml-auto">
             轻量版

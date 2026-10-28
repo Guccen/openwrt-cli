@@ -4,7 +4,6 @@ import {
   Globe,
   LogOut,
   Network,
-  Router,
   Settings2,
   Wifi,
   Wrench,
@@ -97,7 +96,7 @@ export function DeviceSidebar({
                     if (isMobile) setOpenMobile(false);
                   }}
                 >
-                  <Router className="size-4 shrink-0" />
+                  <img src="/icon.svg" alt="" className="size-5 shrink-0 rounded-md" />
                   <span className="text-sm font-semibold">设备控制台</span>
                 </Link>
               </SidebarMenuButton>
