@@ -304,6 +304,18 @@ def install_package(address, package):
         ssh(address, "sha256sum -c -", input="\n".join(lines) + "\n", stdout=log, stderr=subprocess.STDOUT)
 
 
+def install_relay_package(address, package):
+    # 官方镜像仍带有旧服务，先安装同一源码补丁的包，再重启验证持久化。
+    with package.open("rb") as stream:
+        ssh(address, "cat > /tmp/router-ui-odhcpd.apk", stdin=stream, capture_output=True)
+    expected = hashlib.sha256(package.read_bytes()).hexdigest()
+    actual = ssh(address, "sha256sum /tmp/router-ui-odhcpd.apk", capture_output=True).stdout.split()[0]
+    if actual != expected:
+        raise ValueError("传入虚拟机的中继修正版校验失败")
+    with (REPORT / "odhcpd-install.log").open("w") as log:
+        ssh(address, "apk add --no-network --allow-untrusted /tmp/router-ui-odhcpd.apk && apk info -a odhcpd-ipv6only && sha256sum /usr/sbin/odhcpd", stdout=log, stderr=subprocess.STDOUT, timeout=90)
+
+
 def test_network(role, address, expected_pool=None, report_name="network"):
     hook = WORK / "dhcp-hook.sh"
     hook.write_text("""#!/bin/sh
@@ -371,11 +383,14 @@ def main():
     parser.add_argument("--device", choices=firmware.DEVICES, required=True)
     parser.add_argument("--role", choices=("router", "bypass"), required=True)
     parser.add_argument("--package", type=Path, required=True)
+    parser.add_argument("--odhcpd-package", type=Path, help="主路由必须安装本次编译的中继修正版")
     parser.add_argument("--without-browser", action="store_true", help="仅运行原生设备验证，不启动浏览器")
     args = parser.parse_args()
     firmware.validate_role(args.device, args.role, "eth1")
     if args.package.suffix != ".apk" or not args.package.is_file():
         raise ValueError("需要本次构建的 router-ui APK 文件")
+    if args.role == "router" and (not args.odhcpd_package or args.odhcpd_package.suffix != ".apk" or not args.odhcpd_package.is_file()):
+        raise ValueError("主路由仿真需要同次编译的中继修正版安装包")
     if not os.environ.get("SIM_PASSWORD"):
         raise ValueError("需要一次性 SIM_PASSWORD")
     if "udhcpc" not in run("busybox", "--list", capture_output=True).stdout.splitlines():
@@ -414,6 +429,8 @@ def main():
         password = os.environ["SIM_PASSWORD"]
         ssh(address, "passwd root", input=password + "\n" + password + "\n", capture_output=True)
         install_package(address, args.package.resolve())
+        if args.role == "router":
+            install_relay_package(address, args.odhcpd_package.resolve())
         # 同一磁盘重新启动，验证已安装的文件和首次启动状态能够保留。
         boot_id = ssh(address, "cat /proc/sys/kernel/random/boot_id", capture_output=True).stdout.strip()
         ssh(address, "(sleep 1; reboot) >/dev/null 2>&1 &", capture_output=True)
@@ -458,7 +475,7 @@ def main():
         wan_log.close()
         if network_created:
             network_down()
-        (REPORT / "summary.json").write_text(json.dumps({"device": args.device, "role": args.role, "runtime": f"OpenWrt {SIMULATION_VERSION} ARM64 / QEMU virt", "package_sha256": hashlib.sha256(args.package.read_bytes()).hexdigest(), "passed": success, "browser_tests_enabled": not args.without_browser, "hardware_emulated": False}, indent=2) + "\n")
+        (REPORT / "summary.json").write_text(json.dumps({"device": args.device, "role": args.role, "runtime": f"OpenWrt {SIMULATION_VERSION} ARM64 / QEMU virt", "package_sha256": hashlib.sha256(args.package.read_bytes()).hexdigest(), "odhcpd_package_sha256": hashlib.sha256(args.odhcpd_package.read_bytes()).hexdigest() if args.role == "router" else None, "passed": success, "browser_tests_enabled": not args.without_browser, "hardware_emulated": False}, indent=2) + "\n")
         shutil.rmtree(WORK)
     if not success:
         raise RuntimeError("模拟测试失败")

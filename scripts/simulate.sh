@@ -17,4 +17,9 @@ SIM_PASSWORD=$(openssl rand -hex 24)
 if [[ -n "${GITHUB_ACTIONS:-}" ]]; then printf '::add-mask::%s\n' "$SIM_PASSWORD"; fi
 test_options=()
 if [[ "${SIM_BROWSER_TESTS:-1}" == 0 ]]; then test_options+=(--without-browser); fi
+if [[ "$ROLE" == router ]]; then
+    RELAY_PACKAGE=${4:-$ROOT/build/simulation-package/odhcpd-ipv6only.apk}
+    [[ "$RELAY_PACKAGE" == *.apk && -s "$RELAY_PACKAGE" ]] || { echo '主路由必须提供本次编译的中继修正版安装包'; exit 1; }
+    test_options+=(--odhcpd-package "$RELAY_PACKAGE")
+fi
 python3 scripts/simulation.py --device "$DEVICE" --role "$ROLE" --package "$PACKAGE" "${test_options[@]}"

@@ -1,3 +1,5 @@
 * text=auto eol=lf
 *.png binary
 *.gz binary
+# 统一差异以空格标记上下文，其后的制表符属于原始代码缩进。
+*.patch whitespace=-space-before-tab

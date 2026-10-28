@@ -19,6 +19,9 @@ make defconfig
 python3 "$ROOT/scripts/firmware.py" verify --device "$DEVICE" --role "$ROLE" --source "$SOURCE"
 cp .config "$ARTIFACTS/build.config"
 cp build-inputs.json resolved-sources.json "$ARTIFACTS/"
-git diff -- include/target.mk target/linux feeds.conf.default > "$ARTIFACTS/source-changes.patch"
+git diff -- include/target.mk target/linux feeds.conf.default package/network/services/odhcpd/Makefile > "$ARTIFACTS/source-changes.patch"
+if [[ "$ROLE" == router ]]; then
+    cp "$ROOT/patches/odhcpd/900-keep-configured-interfaces.patch" "$ARTIFACTS/odhcpd-link-recovery.patch"
+fi
 ./scripts/diffconfig.sh > "$ARTIFACTS/resolved.config"
 echo "源码与配置检查通过：$DEVICE / $ROLE"

@@ -7,6 +7,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from odhcpd_patch import prepare as patch_odhcpd
+
 ROOT = Path(__file__).resolve().parent.parent
 SOURCES = json.loads((ROOT / "configs/sources.json").read_text(encoding="utf-8"))
 DEVICES = ("jdcloud-ax1800", "phicomm-n1")
@@ -174,6 +176,7 @@ def prepare(source, device, role, wan):
     if not (bundle / "htdocs/index.html").is_file():
         raise ValueError("请先运行 bun run build 生成前端安装包")
     patch_defaults(source, device, role)
+    relay_patch = patch_odhcpd(source / "package/network/services/odhcpd") if role == "router" else None
     config = SOURCES[device]
     feeds = "".join(f"src-git {name} {feed['url']}^{feed['revision']}\n" for name, feed in config["feeds"].items())
     (source / "feeds.conf.default").write_text(feeds, encoding="utf-8", newline="\n")
@@ -182,7 +185,7 @@ def prepare(source, device, role, wan):
     # N1 打包结束时会再次覆盖这些文件，保证两台设备使用同一份前端。
     shutil.copytree(bundle / "htdocs", source / "files/www", dirs_exist_ok=True)
     (source / ".config").write_text(merge_config(device, role), encoding="utf-8", newline="\n")
-    (source / "build-inputs.json").write_text(json.dumps({"device": metadata, "sources": config, "n1_packager": SOURCES["n1_packager"] if device == "phicomm-n1" else None}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (source / "build-inputs.json").write_text(json.dumps({"device": metadata, "sources": config, "odhcpd_link_recovery": relay_patch, "n1_packager": SOURCES["n1_packager"] if device == "phicomm-n1" else None}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def verify_revisions(source, device):

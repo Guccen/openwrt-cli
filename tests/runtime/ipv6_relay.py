@@ -196,6 +196,14 @@ def firewall_packets(address):
     return counters[0]
 
 
+def relay_listeners_ready(address):
+    # 配置已提交不等于中继已监听；两个接口都须实际加入请求组。
+    memberships = ssh(address, "cat /proc/net/igmp6", capture_output=True, timeout=5).stdout
+    joined = {parts[1] for line in memberships.splitlines()
+              if len(parts := line.split()) >= 3 and parts[2].lower() == "ff020000000000000000000000010002"}
+    return {"br-lan", "eth2"}.issubset(joined)
+
+
 def stage_section(api, config, name, section_type, values):
     existing = api.values(config).get(name)
     if existing:
@@ -239,7 +247,8 @@ def run_test(api, address):
                 # 避免把异步 rollback/apply 期间仍为 up 的旧接口当成中继就绪。
                 if (wan6.get("up") and wan6.get("l3_device") == "eth2"
                         and wan6.get("delegation") is False and not wan6.get("ipv6-prefix")
-                        and lan.get("up") and not lan.get("ipv6-prefix-assignment")):
+                        and lan.get("up") and not lan.get("ipv6-prefix-assignment")
+                        and relay_listeners_ready(address)):
                     baseline = firewall_packets(address)
                     break
             except (RpcFailure, OSError, subprocess.SubprocessError, AssertionError, StopIteration):
@@ -286,7 +295,7 @@ def run_test(api, address):
         cleanup_errors = []
         if failure:
             try:
-                detail = ssh(address, "uci -q show dhcp; ip -6 addr show; cat /proc/net/udp6; cat /proc/net/igmp6; logread -e odhcpd | tail -n 100", capture_output=True, timeout=10)
+                detail = ssh(address, "uci -q show dhcp; ubus call network.interface dump; ip -6 addr show; cat /proc/net/udp6; cat /proc/net/igmp6; logread -e odhcpd | tail -n 100", capture_output=True, timeout=10)
                 (REPORT / "ipv6-relay-device.log").write_text(detail.stdout[-65536:])
                 bridge = subprocess.run(["sudo", "bridge", "mdb", "show", "dev", BRIDGE], capture_output=True, text=True, timeout=5)
                 (REPORT / "ipv6-relay-bridge.log").write_text(bridge.stdout[-16384:] + bridge.stderr[-2048:])
