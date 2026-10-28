@@ -6,7 +6,7 @@
 
 `Simulate OpenWrt installation` 在 Actions 中手动运行，完整固件构建也会调用它作为前置检查。它通过官方 SDK 构建真正的 `router-ui.apk`，使用校验 SHA-256 的 OpenWrt 25.12.6 ImageBuilder 生成 ARM64 测试系统，在 QEMU 中启动。接口来自运行中的 `procd`、`netifd`、`rpcd` 和 `uhttpd`，不是本地演示接口。
 
-主路由还会通过 SDK 编译带有[断链恢复补丁](ipv6-link-recovery.md)的 `odhcpd-ipv6only.apk`，安装后再重启测试机。`simulate.sh` 的第四个参数可指定该包，默认读取 `build/simulation-package/odhcpd-ipv6only.apk`；缺失时拒绝运行主路由验证。完整固件编译后的仿真使用同次固件构建的服务包，报告记录安装包摘要与版本。N1 旁路由不安装此服务。
+主路由还会通过 SDK 编译带有[断链恢复补丁](ipv6-link-recovery.md)的 `odhcpd-ipv6only.apk`，安装后再重启测试机。`simulate.sh` 的第四个参数可指定该包，默认读取 `build/simulation-package/odhcpd-ipv6only.apk`；缺失时拒绝运行主路由验证。编译后仿真使用本次运行前置阶段生成的通用架构服务包，其源码、修订号与补丁和设备固件一致，报告记录安装包摘要、架构及版本；AX1800 的设备架构包不能直接混装到通用测试系统。N1 旁路由不安装此服务。
 
 普通 push / pull request 只自动执行快速代码检查，同分支新提交会取消尚未结束的旧检查。先在本地验证并集中推送，按需要手动运行固件配置、QEMU 模拟或完整固件构建；不再每次提交重复运行耗时任务。
 

@@ -126,6 +126,12 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package.json') }}
+      - name: 下载通用仿真平台的中继修正版
+        if: ${{ !inputs.skip_tests }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: simulation-package
+          path: build/simulation-package
       - name: Test compiled package in OpenWrt
         if: ${{ !inputs.skip_tests }}
         timeout-minutes: 30
@@ -136,12 +142,7 @@ jobs:
           (( ${#packages[@]} == 1 )) || { echo 'Expected exactly one router-ui APK'; exit 1; }
           ROLE=router
           if [[ "$DEVICE" == phicomm-n1 ]]; then ROLE="$N1_ROLE"; fi
-          relay_packages=()
-          if [[ "$ROLE" == router ]]; then
-            relay_packages=(build/openwrt/bin/packages/*/*/odhcpd-ipv6only-*.apk)
-            (( ${#relay_packages[@]} == 1 )) || { echo '必须提供唯一的中继修正版安装包'; exit 1; }
-          fi
-          bash scripts/simulate.sh "$DEVICE" "$ROLE" "${packages[0]}" "${relay_packages[@]}"
+          bash scripts/simulate.sh "$DEVICE" "$ROLE" "${packages[0]}"
       - name: Package N1 boot image
         if: matrix.device == 'phicomm-n1'
         run: |

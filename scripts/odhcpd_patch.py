@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import json
 from pathlib import Path
 import re
 import shutil
@@ -31,4 +32,8 @@ def prepare(package):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("package", type=Path)
-    prepare(parser.parse_args().package.resolve())
+    parser.add_argument("--metadata", type=Path)
+    args = parser.parse_args()
+    metadata = prepare(args.package.resolve())
+    if args.metadata:
+        args.metadata.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
