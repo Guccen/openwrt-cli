@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { SchedulePolicy } from "../../frontend/src/lib/schedule";
-import { loginPage, navigate } from "./helpers";
+import { loginPage, mockRpc, navigate } from "./helpers";
 
 // 专用 RPC 使用受控响应，浏览器回归不会在共享设备上启用重启计划。
 async function mockSchedule(page: Page, options: { cronRunning?: boolean; error?: string } = {}) {
@@ -110,16 +110,9 @@ test("staged network configuration blocks schedule changes without sending a wri
   page,
 }) => {
   const writes = await mockSchedule(page);
-  await page.route("**/ubus", async (route) => {
-    const body = route.request().postDataJSON();
-    if (body?.params?.[1] !== "uci" || body.params[2] !== "changes") return route.fallback();
-    await route.fulfill({
-      json: {
-        jsonrpc: "2.0",
-        id: body.id,
-        result: [0, { changes: { network: [["set", "lan", "ipaddr", "192.168.68.1"]] } }],
-      },
-    });
+  await mockRpc(page, (body) => {
+    if (body.params[1] !== "uci" || body.params[2] !== "changes") return;
+    return [0, { changes: { network: [["set", "lan", "ipaddr", "192.168.68.1"]] } }];
   });
   await loginPage(page);
   await navigate(page, "LAN 设置");

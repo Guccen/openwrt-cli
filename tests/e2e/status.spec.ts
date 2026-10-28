@@ -1,23 +1,16 @@
 import { expect, test } from "@playwright/test";
 import { telemetryFixture, clientsFixture } from "../helpers/status-fixture";
-import { loginPage, navigate } from "./helpers";
+import { loginPage, mockRpc, navigate } from "./helpers";
 
 test("overview health, upstream, physical ports and DHCP leases are separated and responsive", async ({
   page,
 }, testInfo) => {
   let clientReads = 0;
-  await page.route("**/ubus", async (route) => {
-    const body = route.request().postDataJSON();
+  await mockRpc(page, (body) => {
     const [, object, method] = body.params ?? [];
-    if (object !== "router.status") return route.continue();
+    if (object !== "router.status") return;
     if (method === "clients") clientReads++;
-    await route.fulfill({
-      json: {
-        jsonrpc: "2.0",
-        id: body.id,
-        result: [0, method === "summary" ? telemetryFixture() : clientsFixture()],
-      },
-    });
+    return [0, method === "summary" ? telemetryFixture() : clientsFixture()];
   });
   await loginPage(page);
   await expect(page.getByText("58.5 °C", { exact: true })).toBeVisible();
@@ -57,8 +50,7 @@ test("missing sensors and empty unavailable leases are explicit, and bypass upst
       },
     }),
   );
-  await page.route("**/ubus", async (route) => {
-    const body = route.request().postDataJSON();
+  await mockRpc(page, (body) => {
     const [, object, method] = body.params ?? [];
     let data: unknown;
     if (object === "router.status")
@@ -79,8 +71,8 @@ test("missing sensors and empty unavailable leases are explicit, and bypass upst
           },
         ],
       };
-    else return route.continue();
-    await route.fulfill({ json: { jsonrpc: "2.0", id: body.id, result: [0, data] } });
+    else return;
+    return [0, data];
   });
   await loginPage(page);
   await expect(

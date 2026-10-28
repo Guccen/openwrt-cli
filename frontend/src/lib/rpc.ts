@@ -2,6 +2,19 @@ import axios, { type AxiosInstance } from "axios";
 import type { Board, Device, NetworkInterface, Snapshot, SystemInfo, Telemetry } from "./types";
 
 const anonymous = "00000000000000000000000000000000";
+const defaultHttp = axios.create({ timeout: 12000 });
+// 只合并已知的快读接口；写入、诊断和无线驱动读取各自发送。
+const fastReads = new Set([
+  "system.board",
+  "system.info",
+  "network.interface.dump",
+  "router.status.summary",
+  "router.status.clients",
+  "router.status.wireless",
+  "uci.get",
+  "uci.changes",
+]);
+const wirelessReads = new Set(["info", "assoclist", "phyname", "freqlist", "countrylist"]);
 const sessionRejections = new Set<(session: string) => void>();
 export function onSessionRejection(listener: (session: string) => void) {
   sessionRejections.add(listener);
@@ -24,10 +37,117 @@ export class RpcError extends Error {
   }
 }
 
-export class RouterClient {
-  private id = 0;
+interface RpcRequest {
+  jsonrpc: "2.0";
+  id: number;
+  method: "call";
+  params: [string, string, string, object];
+}
+interface PendingRead {
+  request: RpcRequest;
+  resolve: (value: unknown) => void;
+  reject: (reason: unknown) => void;
+}
 
-  constructor(private readonly http: AxiosInstance = axios.create({ timeout: 12000 })) {}
+class RpcTransport {
+  private id = 0;
+  private batches = new Map<string, PendingRead[]>();
+  private wireless = new Map<string, Promise<unknown>>();
+  private wirelessTail: Promise<void> = Promise.resolve();
+
+  constructor(private readonly http: AxiosInstance) {}
+
+  request(session: string, object: string, method: string, args: object, timeout?: number) {
+    const request: RpcRequest = {
+      jsonrpc: "2.0",
+      id: ++this.id,
+      method: "call",
+      params: [session, object, method, args],
+    };
+    if (object === "iwinfo" && wirelessReads.has(method)) {
+      const key = JSON.stringify([
+        session,
+        method,
+        Object.entries(args).sort(([a], [b]) => a.localeCompare(b)),
+        timeout ?? null,
+      ]);
+      const pending = this.wireless.get(key);
+      if (pending) return pending;
+      // 同一设备端点最多执行一条驱动读取，等待队列不占用实际请求的超时时间。
+      const operation = this.wirelessTail.then(() => this.send(request, timeout));
+      this.wireless.set(key, operation);
+      const cleanup = () => {
+        this.wireless.delete(key);
+      };
+      this.wirelessTail = operation.then(cleanup, cleanup);
+      return operation;
+    }
+    if (!fastReads.has(`${object}.${method}`)) return this.send(request, timeout);
+    const key = JSON.stringify([session, timeout ?? null]);
+    return new Promise<unknown>((resolve, reject) => {
+      const batch = this.batches.get(key);
+      if (batch) batch.push({ request, resolve, reject });
+      else {
+        this.batches.set(key, [{ request, resolve, reject }]);
+        // 同一轮发起的快查询合并；不额外延迟，也不混用会话或超时设置。
+        queueMicrotask(() => {
+          const reads = this.batches.get(key)!;
+          this.batches.delete(key);
+          void this.flush(reads, timeout);
+        });
+      }
+    });
+  }
+
+  private async send(request: RpcRequest | RpcRequest[], timeout?: number): Promise<unknown> {
+    const { data } = await this.http.post("/ubus", request, timeout ? { timeout } : undefined);
+    return data;
+  }
+
+  private async flush(reads: PendingRead[], timeout?: number) {
+    try {
+      if (reads.length === 1) {
+        reads[0].resolve(await this.send(reads[0].request, timeout));
+        return;
+      }
+      const data = await this.send(
+        reads.map(({ request }) => request),
+        timeout,
+      );
+      if (!Array.isArray(data)) throw new RpcError("设备返回的批量状态格式不正确");
+      const responses = new Map<number, unknown>();
+      const duplicates = new Set<number>();
+      for (const response of data) {
+        if (!response || typeof response !== "object" || !Number.isInteger(response.id)) continue;
+        if (responses.has(response.id)) duplicates.add(response.id);
+        responses.set(response.id, response);
+      }
+      // 批量响应允许乱序；缺失或重复编号只使对应查询失败，不误用其他项的数据。
+      for (const { request, resolve, reject } of reads) {
+        if (!responses.has(request.id) || duplicates.has(request.id))
+          reject(new RpcError("设备返回的批量状态编号不正确"));
+        else resolve(responses.get(request.id));
+      }
+    } catch (error) {
+      for (const { reject } of reads) reject(error);
+    }
+  }
+}
+
+const transports = new WeakMap<AxiosInstance, RpcTransport>();
+
+export class RouterClient {
+  private readonly transport: RpcTransport;
+
+  constructor(private readonly http: AxiosInstance = defaultHttp) {
+    // 页面中的多个客户端共用同一个端点队列，避免切页后叠加无线请求。
+    let transport = transports.get(http);
+    if (!transport) {
+      transport = new RpcTransport(http);
+      transports.set(http, transport);
+    }
+    this.transport = transport;
+  }
 
   async call<T>(
     session: string,
@@ -37,16 +157,10 @@ export class RouterClient {
     timeout?: number,
   ): Promise<T> {
     try {
-      const { data } = await this.http.post(
-        "/ubus",
-        {
-          jsonrpc: "2.0",
-          id: ++this.id,
-          method: "call",
-          params: [session, object, method, args],
-        },
-        timeout ? { timeout } : undefined,
-      );
+      const data = (await this.transport.request(session, object, method, args, timeout)) as {
+        error?: { code?: number };
+        result?: unknown[];
+      } | null;
       if (data?.error) {
         throw new RpcError("设备暂时无法完成请求", data.error.code);
       }

@@ -64,14 +64,21 @@ test("扩展状态读取失败保留基本概览，会话过期仍触发重新�
   const api = new RouterClient(
     axios.create({
       adapter: async (config) => {
-        const [, object] = JSON.parse(config.data).params;
-        const value = object === "system" ? { release: {}, memory: {} } : { interface: [] };
+        const body = JSON.parse(config.data);
+        const respond = (request: { id: number; params: string[] }) => {
+          const [, object] = request.params;
+          const value = object === "system" ? { release: {}, memory: {} } : { interface: [] };
+          return {
+            id: request.id,
+            result: object === "router.status" ? [expired ? 6 : 4] : [0, value],
+          };
+        };
         return {
           config,
           status: 200,
           statusText: "OK",
           headers: {},
-          data: { result: object === "router.status" ? [expired ? 6 : 4] : [0, value] },
+          data: Array.isArray(body) ? body.map(respond) : respond(body),
         };
       },
     }),

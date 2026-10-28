@@ -48,24 +48,12 @@ function restore() {
   transaction = null;
 }
 
-Bun.serve({
-  hostname: "127.0.0.1",
-  port: Number(process.env.PREVIEW_PORT ?? 4174),
-  async fetch(request) {
-    if (new URL(request.url).pathname === "/device.json")
-      return Response.json({
-        device,
-        model: `${device === "phicomm-n1" ? "斐讯 N1" : "京东云 AX1800"}（本地演示）`,
-        role: bypass ? "bypass" : "router",
-        address: initial.network.lan.ipaddr,
-        source: "演示",
-        revision: "preview",
-      });
-    if (request.method !== "POST") return new Response("Not found", { status: 404 });
-    const body = (await request.json()) as {
-      id: number;
-      params: [string, string, string, Record<string, unknown>];
-    };
+interface RpcRequest {
+  id: number;
+  params: [string, string, string, Record<string, unknown>];
+}
+const rpc = {
+  respond(body: RpcRequest) {
     const [sid, object, method, args = {}] = body.params;
     let result: unknown[] = [6];
     if (object === "session" && method === "login" && args.password === "preview-only") {
@@ -435,7 +423,26 @@ Bun.serve({
         }
       }
     }
-    return Response.json({ jsonrpc: "2.0", id: body.id, result });
+    return { jsonrpc: "2.0", id: body.id, result };
+  },
+};
+
+Bun.serve({
+  hostname: "127.0.0.1",
+  port: Number(process.env.PREVIEW_PORT ?? 4174),
+  async fetch(request) {
+    if (new URL(request.url).pathname === "/device.json")
+      return Response.json({
+        device,
+        model: `${device === "phicomm-n1" ? "斐讯 N1" : "京东云 AX1800"}（本地演示）`,
+        role: bypass ? "bypass" : "router",
+        address: initial.network.lan.ipaddr,
+        source: "演示",
+        revision: "preview",
+      });
+    if (request.method !== "POST") return new Response("Not found", { status: 404 });
+    const body = (await request.json()) as RpcRequest | RpcRequest[];
+    return Response.json(Array.isArray(body) ? body.map(rpc.respond) : rpc.respond(body));
   },
 });
 console.log(`本地演示接口，设备：${device}，演示密码：preview-only`);

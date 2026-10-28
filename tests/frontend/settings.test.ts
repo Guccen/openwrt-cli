@@ -117,25 +117,38 @@ function harness(
     new RouterClient(
       axios.create({
         adapter: async (config) => {
-          const [, object, method, args] = JSON.parse(config.data).params;
-          calls.push({ object, method, args });
-          let result: unknown[] = [0, {}];
-          if (object === "uci" && method === "get")
-            result = [0, { values: snapshot[args.config as keyof typeof snapshot] }];
-          if (object === "uci" && method === "changes")
-            result = [0, { changes: options.otherChanges ? { network: [["set", "lan"]] } : {} }];
-          if (method === "apply" && options.ambiguous) throw new Error("connection interrupted");
-          if (method === "set" && options.failStage) result = [6];
-          if (object === "network.interface")
-            result = [
-              0,
-              {
-                interface: [
-                  { interface: "lan", up: true, "ipv4-address": [{ address: "192.168.69.1" }] },
-                ],
-              },
-            ];
-          return { data: { result }, status: 200, statusText: "OK", headers: {}, config };
+          const body = JSON.parse(config.data);
+          const respond = (request: {
+            id: number;
+            params: [string, string, string, Record<string, unknown>];
+          }) => {
+            const [, object, method, args] = request.params;
+            calls.push({ object, method, args });
+            let result: unknown[] = [0, {}];
+            if (object === "uci" && method === "get")
+              result = [0, { values: snapshot[args.config as keyof typeof snapshot] }];
+            if (object === "uci" && method === "changes")
+              result = [0, { changes: options.otherChanges ? { network: [["set", "lan"]] } : {} }];
+            if (method === "apply" && options.ambiguous) throw new Error("connection interrupted");
+            if (method === "set" && options.failStage) result = [6];
+            if (object === "network.interface")
+              result = [
+                0,
+                {
+                  interface: [
+                    { interface: "lan", up: true, "ipv4-address": [{ address: "192.168.69.1" }] },
+                  ],
+                },
+              ];
+            return { id: request.id, result };
+          };
+          return {
+            data: Array.isArray(body) ? body.map(respond) : respond(body),
+            status: 200,
+            statusText: "OK",
+            headers: {},
+            config,
+          };
         },
       }),
     ),
