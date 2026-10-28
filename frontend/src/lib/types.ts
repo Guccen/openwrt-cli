@@ -53,7 +53,21 @@ export interface Telemetry {
   ok: true;
   localTime: string;
   temperatures: { name: string; celsius: number }[];
-  storage: { name: string; path: string; total: number; used: number; available: number }[];
+  storage: {
+    name: string;
+    path: string;
+    source?: string;
+    total: number;
+    used: number;
+    available: number;
+  }[];
+  blockDisks?: {
+    device: string;
+    total: number;
+    system: boolean;
+    partitioned: number | null;
+    unallocated: number | null;
+  }[];
   ports: {
     name: string;
     link: boolean | null;

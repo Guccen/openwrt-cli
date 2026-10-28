@@ -1,0 +1,68 @@
+#!/bin/sh
+# 首次启动只扩大标准 USB 镜像的末尾根分区，不移动分区或格式化已有文件系统。
+set -eu
+export LC_ALL=C
+
+note() { logger -t router-ui-storage "$*"; }
+fail() { note "$*；保留初始化脚本，下次启动重试"; exit 1; }
+skip() { note "$*；未修改磁盘"; exit 0; }
+
+[ "$(jsonfilter -i /www/device.json -e '@.device')" = phicomm-n1 ] || skip '仅适用于斐讯 N1'
+root=$(awk '$2 == "/" && $3 == "btrfs" && $4 ~ /(^|,)rw(,|$)/ {print $1}' /proc/mounts)
+case "$root" in /dev/sd*2) ;; *) skip '根文件系统不是 USB Btrfs 分区' ;; esac
+name=${root#/dev/}
+case "$name" in *[!a-z2]* | sd2) skip '根分区名称不受支持' ;; esac
+disk=${root%2}
+disk_name=${disk#/dev/}
+[ -b "$root" ] && [ -b "$disk" ] || skip '根块设备不存在'
+case "$(readlink -f "/sys/class/block/$disk_name")" in */usb*/*) ;; *) skip '系统不从 USB 磁盘启动' ;; esac
+
+for tool in ucode sfdisk partx blockdev btrfs; do command -v "$tool" >/dev/null || fail "缺少扩容工具 $tool"; done
+mkdir -p /var/lock
+lock=/var/lock/router-ui-rootfs-expand
+mkdir "$lock" 2>/dev/null || fail '已有扩容操作'
+work=$(mktemp -d /tmp/router-ui-expand.XXXXXX) || { rmdir "$lock"; exit 1; }
+trap 'rm -rf "$work"; rmdir "$lock"' EXIT
+trap 'exit 1' HUP INT TERM
+umask 077
+
+sectors=$(cat "/sys/class/block/$disk_name/size")
+start=$(cat "/sys/class/block/$name/start")
+size=$(cat "/sys/class/block/$name/size")
+sector_size=$(blockdev --getss "$disk") || fail '无法读取扇区大小'
+case "$sectors:$start:$size:$sector_size" in *[!0-9:]* | *::* | :* | *:) fail '磁盘几何信息无效' ;; esac
+sfdisk --json "$disk" > "$work/table.json" || fail '无法读取分区表'
+# 只将已验证的设备名和数字交给规划器，不执行客户端输入。
+printf '{"state":{"device":"phicomm-n1","filesystem":"btrfs","usb":true,"sectorSize":%s,"root":"%s","sectors":%s,"start":%s,"size":%s},"table":' \
+    "$sector_size" "$root" "$sectors" "$start" "$size" > "$work/input.json"
+cat "$work/table.json" >> "$work/input.json"
+printf '}\n' >> "$work/input.json"
+ucode /usr/libexec/router-ui/n1-storage.uc "$work/input.json" > "$work/plan.json" || fail '无法规划扩容'
+[ "$(jsonfilter -i "$work/plan.json" -e '@.ok')" = true ] || skip "$(jsonfilter -i "$work/plan.json" -e '@.reason')"
+target=$(jsonfilter -i "$work/plan.json" -e '@.size')
+case "$target" in '' | *[!0-9]*) fail '扩容目标无效' ;; esac
+# 多设备 Btrfs 不适用此流程，避免只改变其中一个设备。
+btrfs filesystem show --raw / > "$work/btrfs.txt" || fail '无法确认 Btrfs 设备'
+awk -v root="$root" '$1 == "Total" && $2 == "devices" && $3 == 1 {single++} $1 == "devid" && $NF == root {device++} END {exit !(single == 1 && device == 1)}' "$work/btrfs.txt" || skip '不是单设备 Btrfs 根文件系统'
+
+if [ "$(jsonfilter -i "$work/plan.json" -e '@.grow')" = true ]; then
+    backup=$(mktemp -d /root/router-ui-storage-backup.XXXXXX) || fail '无法建立备份目录'
+    chmod 700 "$backup"
+    sfdisk --dump "$disk" > "$backup/partition-table.txt" || fail '无法备份分区表'
+    dd if="$disk" of="$backup/first-4MiB.bin" bs=512 count=8192 2>/dev/null || fail '无法备份启动区域'
+    [ "$(wc -c < "$backup/first-4MiB.bin")" -eq 4194304 ] || fail '启动区域备份不完整'
+    sha256sum "$backup/partition-table.txt" "$backup/first-4MiB.bin" > "$backup/sha256sums"
+    sync
+    printf 'start=%s, size=%s, type=83\n' "$start" "$target" > "$work/resize.txt"
+    # 精确保留起始扇区，只修改第二个分区；禁止擦除签名和自动重新读取整张分区表。
+    sfdisk --no-act --no-reread --no-tell-kernel --wipe never --wipe-partitions never --lock=nonblock -N 2 "$disk" < "$work/resize.txt" > "$work/check.log" 2>&1 || fail '分区扩容预检查失败'
+    sfdisk --no-reread --no-tell-kernel --wipe never --wipe-partitions never --lock=nonblock -N 2 "$disk" < "$work/resize.txt" > "$work/resize.log" 2>&1 || fail '分区扩容失败'
+    sync
+    partx --update --nr 2 "$disk" || fail '内核尚未更新分区容量'
+fi
+[ "$(cat "/sys/class/block/$name/start")" = "$start" ] || fail '分区起点发生异常'
+[ "$(blockdev --getsz "$root")" = "$target" ] || fail '内核分区容量尚未更新'
+# 扩分区后即使本步中断，下次启动也只重试扩大文件系统，绝不回写较小的旧分区表。
+btrfs filesystem resize max / > "$work/filesystem.log" 2>&1 || fail 'Btrfs 文件系统扩容失败'
+sync
+note 'USB 根分区和 Btrfs 文件系统已扩展至可用磁盘尾部'

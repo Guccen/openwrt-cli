@@ -82,6 +82,11 @@ def finalize(directory, overlay, rootfs):
         lines = startup.read_text(encoding="utf-8").splitlines()
         startup.write_text("\n".join(line for line in lines if "/etc/custom_service/start_service.sh" not in line) + "\n", encoding="utf-8")
     bounded_remove(rootfs, rootfs / "etc/custom_service")
+    # 扩容由本项目的首次启动入口负责，避免上游通用分区脚本再次处理。
+    bounded_remove(rootfs, rootfs / "root/.todo_rootfs_resize")
+    for tool in ("btrfs", "sfdisk", "partx", "blockdev"):
+        if not any((rootfs / path / tool).is_file() for path in ("bin", "sbin", "usr/bin", "usr/sbin")):
+            raise ValueError(f"N1 镜像缺少首次启动扩容工具：{tool}")
     # 首版保留配套内核模块，不按文件名盲目删除模块及其依赖。
     if metadata["role"] == "router":
         module_files = list((rootfs / "lib/modules").rglob("r8152.ko*"))

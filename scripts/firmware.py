@@ -8,12 +8,14 @@ import subprocess
 from pathlib import Path
 
 from odhcpd_patch import prepare as patch_odhcpd
+from n1_storage import prepare as prepare_n1_storage
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCES = json.loads((ROOT / "configs/sources.json").read_text(encoding="utf-8"))
 DEVICES = ("jdcloud-ax1800", "phicomm-n1")
 CORE = ["dnsmasq", "firewall4"]
 ROUTING = ["odhcp6c", "odhcpd-ipv6only", "ppp", "ppp-mod-pppoe"]
+AX_STORAGE = ["e2fsprogs", "mkf2fs", "kmod-fs-ext4", "kmod-fs-f2fs"]
 AX_HARDWARE = [
     "uboot-envtools", "wpad-openssl", "kmod-ath11k", "kmod-ath11k-ahb",
     "kmod-dsa", "kmod-dsa-qca8k", "kmod-phy-qca83xx",
@@ -68,7 +70,7 @@ def patch_defaults(source, device, role):
     target.write_text(text, encoding="utf-8", newline="\n")
     if device == "jdcloud-ax1800":
         target = source / "target/linux/qualcommax/Makefile"
-        target.write_text(assignment(target.read_text(encoding="utf-8"), "DEFAULT_PACKAGES", AX_HARDWARE), encoding="utf-8", newline="\n")
+        target.write_text(assignment(target.read_text(encoding="utf-8"), "DEFAULT_PACKAGES", AX_HARDWARE + AX_STORAGE), encoding="utf-8", newline="\n")
         target = source / "target/linux/qualcommax/ipq60xx/target.mk"
         target.write_text(assignment(target.read_text(encoding="utf-8"), "DEFAULT_PACKAGES", ["ath11k-firmware-ipq6018", "nss-firmware-ipq60xx"]), encoding="utf-8", newline="\n")
     else:
@@ -157,6 +159,8 @@ def overlay(destination, device, role, wan="eth1"):
     config = destination / "etc/config"
     if device == "phicomm-n1":
         shutil.copytree(ROOT / "files/n1", destination, dirs_exist_ok=True)
+        for name in ("etc/uci-defaults/00-router-ui-storage", "usr/libexec/router-ui/expand-rootfs"):
+            (destination / name).chmod(0o755)
         (config / "network").write_text(n1_network(role, wan), encoding="utf-8", newline="\n")
         dhcp = (ROOT / "files/n1-dhcp.template").read_text(encoding="utf-8")
         dhcp = dhcp.replace("@IGNORE@", "0" if role == "router" else "1")
@@ -206,9 +210,12 @@ def verify(source, device, role):
     config = dict(re.findall(r"^(CONFIG_[^=\s]+)=(.+)$", (source / ".config").read_text(encoding="utf-8"), re.M))
     required = ["base-files", "busybox", "procd", "netifd", "logd", "uci", "router-ui", "dropbear", "dnsmasq", "firewall4", "rpcd", "jsonfilter", "ucode", "ucode-mod-fs", "uhttpd", "uhttpd-mod-ubus", "px5g-openssl", "libustream-openssl"]
     if device == "jdcloud-ax1800":
-        required += ["wpad-openssl", "rpcd-mod-iwinfo", "ath11k-firmware-ipq6018", "ipq-wifi-jdcloud_re-ss-01", "kmod-ath11k-ahb", "kmod-qca-nss-dp", "kmod-qca-nss-drv", "kmod-qca-nss-ecm", "nss-firmware-ipq60xx"]
+        required += AX_STORAGE + ["wpad-openssl", "rpcd-mod-iwinfo", "ath11k-firmware-ipq6018", "ipq-wifi-jdcloud_re-ss-01", "kmod-ath11k-ahb", "kmod-qca-nss-dp", "kmod-qca-nss-drv", "kmod-qca-nss-ecm", "nss-firmware-ipq60xx"]
         target = "CONFIG_TARGET_qualcommax_ipq60xx_DEVICE_jdcloud_re-ss-01"
     else:
+        required += ["sfdisk", "partx-utils", "blockdev", "btrfs-progs"]
+        if config.get("CONFIG_PACKAGE_kmod-fs-btrfs") in ("y", "m"):
+            raise ValueError("N1 必须使用 ophub 配套 Btrfs 内核，不能混入通用内核模块")
         target = "CONFIG_TARGET_armsr_armv8_DEVICE_generic"
         if config.get("CONFIG_TARGET_ROOTFS_TARGZ") != "y":
             raise ValueError("N1 必须生成根文件系统压缩包")
@@ -224,7 +231,7 @@ def verify(source, device, role):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("fetch", "prepare", "verify", "verify-revisions", "overlay"))
+    parser.add_argument("command", choices=("fetch", "prepare", "prepare-storage", "verify", "verify-revisions", "overlay"))
     parser.add_argument("--device", choices=DEVICES, required=True)
     parser.add_argument("--role", choices=("router", "bypass"), default="router")
     parser.add_argument("--wan", default="eth1")
@@ -236,6 +243,11 @@ def main():
         checkout(SOURCES[args.device]["url"], SOURCES[args.device]["revision"], source)
     elif args.command == "prepare":
         prepare(source, args.device, args.role, args.wan)
+    elif args.command == "prepare-storage":
+        if args.device == "phicomm-n1":
+            inputs = json.loads((source / "build-inputs.json").read_text(encoding="utf-8"))
+            inputs["n1_storage"] = prepare_n1_storage(source)
+            (source / "build-inputs.json").write_text(json.dumps(inputs, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     elif args.command == "verify":
         verify(source, args.device, args.role)
     elif args.command == "verify-revisions":

@@ -35,6 +35,9 @@ export function HealthCard({ telemetry }: { telemetry: Telemetry }) {
               <div className="flex flex-wrap justify-between gap-1">
                 <span>
                   {disk.name} <span className="text-muted-foreground">{disk.path}</span>
+                  {disk.source?.startsWith("/dev/") && (
+                    <span className="ml-2 text-muted-foreground">{disk.source}</span>
+                  )}
                 </span>
                 <span className="tabular-nums">
                   可用 {bytes(disk.available)} / 总计 {bytes(disk.total)}
@@ -53,6 +56,30 @@ export function HealthCard({ telemetry }: { telemetry: Telemetry }) {
         })}
         {!telemetry.storage.length && <p className="text-muted-foreground">存储状态暂不可用。</p>}
         <p className="text-[11px] text-muted-foreground">临时空间通常使用内存，重启后清空。</p>
+        {!!telemetry.blockDisks?.length && (
+          <details className="rounded-lg border p-3">
+            <summary className="cursor-pointer font-medium">整盘与分区容量</summary>
+            <div className="mt-3 space-y-3">
+              {telemetry.blockDisks.map((disk) => (
+                <div key={disk.device} className="space-y-1">
+                  <p className="font-medium">
+                    {disk.system ? "系统磁盘" : "磁盘"} {disk.device}
+                  </p>
+                  <p className="text-muted-foreground">
+                    整盘 {bytes(disk.total)}
+                    {disk.partitioned !== null && ` · 已分区 ${bytes(disk.partitioned)}`}
+                    {disk.unallocated !== null && ` · 尾部未分配 ${bytes(disk.unallocated)}`}
+                  </p>
+                  {disk.system && (disk.unallocated ?? 0) > 512 * 1024 * 1024 && (
+                    <p className="leading-relaxed text-amber-700 dark:text-amber-400">
+                      当前系统分区只使用了磁盘的一部分。剩余空间可在备份后扩容，或另建数据分区；不属于上方文件系统的可用容量。
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
       </CardContent>
     </Card>
   );

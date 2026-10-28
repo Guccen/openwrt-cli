@@ -15,11 +15,15 @@ cd "$SOURCE"
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 python3 "$ROOT/scripts/firmware.py" verify-revisions --device "$DEVICE" --source "$SOURCE"
+python3 "$ROOT/scripts/firmware.py" prepare-storage --device "$DEVICE" --source "$SOURCE"
 make defconfig
 python3 "$ROOT/scripts/firmware.py" verify --device "$DEVICE" --role "$ROLE" --source "$SOURCE"
 cp .config "$ARTIFACTS/build.config"
 cp build-inputs.json resolved-sources.json "$ARTIFACTS/"
 git diff -- include/target.mk target/linux feeds.conf.default package/network/services/odhcpd/Makefile > "$ARTIFACTS/source-changes.patch"
+if [[ "$DEVICE" == phicomm-n1 ]]; then
+    git -C feeds/packages diff -- utils/btrfs-progs/Makefile > "$ARTIFACTS/n1-storage-tools.patch"
+fi
 if [[ "$ROLE" == router ]]; then
     cp "$ROOT/patches/odhcpd/900-keep-configured-interfaces.patch" "$ARTIFACTS/odhcpd-link-recovery.patch"
 fi

@@ -143,6 +143,9 @@ exit 0
                 output.write("CONFIG_PACKAGE_luci-base=y\n")
             with self.assertRaises(ValueError):
                 firmware.verify(source, "phicomm-n1", "bypass")
+            (source / ".config").write_text(firmware.merge_config("phicomm-n1", "bypass") + "CONFIG_PACKAGE_kmod-fs-btrfs=y\n")
+            with self.assertRaises(ValueError):
+                firmware.verify(source, "phicomm-n1", "bypass")
             (source / ".config").write_text(firmware.merge_config("phicomm-n1", "bypass") + "CONFIG_TARGET_armsr_armv8_DEVICE_other=y\n")
             with self.assertRaises(ValueError):
                 firmware.verify(source, "phicomm-n1", "bypass")
@@ -165,6 +168,17 @@ exit 0
         self.assertNotIn("system", acl["write"]["uci"])
         rpcd = (ROOT / "files/common/etc/config/rpcd").read_text(encoding="utf-8")
         self.assertNotIn("'*'", rpcd)
+
+    def test_ax_emmc_overlay_cannot_drop_its_initialization_tools_or_drivers(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp)
+            config = firmware.merge_config("jdcloud-ax1800", "router")
+            (source / ".config").write_text(config)
+            firmware.verify(source, "jdcloud-ax1800", "router")
+            for package in firmware.AX_STORAGE:
+                with self.subTest(package=package):
+                    (source / ".config").write_text(config.replace(f"CONFIG_PACKAGE_{package}=y", f"# CONFIG_PACKAGE_{package} is not set"))
+                    with self.assertRaises(ValueError): firmware.verify(source, "jdcloud-ax1800", "router")
 
     def test_sources_and_feeds_use_fixed_revisions(self):
         for device in firmware.DEVICES:
@@ -210,10 +224,19 @@ exit 0
             (rootfs / "lib/firmware/brcm").mkdir(parents=True)
             (rootfs / "lib/firmware/rtl_nic").mkdir()
             (rootfs / "lib/firmware/brcm/unused.bin").write_text("test")
+            (rootfs / "usr/bin").mkdir(parents=True)
+            for name in ("btrfs", "sfdisk", "partx", "blockdev"):
+                (rootfs / "usr/bin" / name).write_text("test")
+            (rootfs / "root").mkdir()
+            (rootfs / "root/.todo_rootfs_resize").write_text("yes")
             n1_packer.finalize(directory, overlay, rootfs)
+            self.assertFalse((rootfs / "root/.todo_rootfs_resize").exists())
             self.assertFalse((rootfs / "lib/firmware/brcm").exists())
             self.assertTrue((rootfs / "lib/firmware/rtl_nic").is_dir())
             self.assertEqual((rootfs / "etc/config/network").read_bytes(), (overlay / "etc/config/network").read_bytes())
+            (rootfs / "usr/bin/btrfs").unlink()
+            with self.assertRaisesRegex(ValueError, "btrfs"):
+                n1_packer.finalize(directory, overlay, rootfs)
 
 
 if __name__ == "__main__":

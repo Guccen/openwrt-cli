@@ -19,22 +19,55 @@ function temperatures() {
 function parseDisk(output, name, path) {
     for (let line in split(output || '', '\n')) {
         let cols = split(trim(line), /\s+/);
-        if (length(cols) < 6 || !match(cols[1], /^[0-9]+$/) || !match(cols[2], /^[0-9]+$/) || !match(cols[3], /^[0-9]+$/)) continue;
+        if (length(cols) < 6 || cols[5] != path || !match(cols[1], /^[0-9]+$/) || !match(cols[2], /^[0-9]+$/) || !match(cols[3], /^[0-9]+$/)) continue;
         let total = +cols[1] * 1024, used = +cols[2] * 1024, available = +cols[3] * 1024;
-        if (total > 0 && used <= total && available <= total) return { name, path, total, used, available };
+        if (total > 0 && used <= total && available <= total) return { name, path, source: cols[0], total, used, available };
     }
     return null;
 }
 function disks() {
-    let result = [];
+    // 合并查询，避免每次状态刷新分别为根目录和临时目录创建子进程。
+    let fd = popen('df -kP / /tmp 2>/dev/null', 'r');
+    if (!fd) return [];
+    let output = fd.read(16384), code = fd.close(), result = [];
+    if (code != 0) return result;
     for (let item in [
-        { name: '可写存储', path: '/', command: 'df -kP / 2>/dev/null' },
-        { name: '临时空间', path: '/tmp', command: 'df -kP /tmp 2>/dev/null' }
+        { name: '可写存储', path: '/' },
+        { name: '临时空间', path: '/tmp' }
     ]) {
-        let fd = popen(item.command, 'r');
-        if (!fd) continue;
-        let output = fd.read(16384), code = fd.close();
-        let disk = code == 0 ? parseDisk(output, item.name, item.path) : null;
+        let disk = parseDisk(output, item.name, item.path);
+        if (disk) push(result, disk);
+    }
+    return result;
+}
+function diskLayout(name, sectors, partitions, rootSource) {
+    if (!match(name, /^(sd[a-z]+|vd[a-z]+|mmcblk[0-9]+|nvme[0-9]+n[0-9]+)$/) || sectors <= 0) return null;
+    let total = sectors * 512, partitioned = 0, lastEnd = 0, device = '/dev/' + name, system = rootSource == device;
+    for (let part in partitions) {
+        if (part.start == null || part.sectors == null || part.start < 0 || part.sectors <= 0 || part.start + part.sectors > sectors) return null;
+        partitioned += part.sectors * 512;
+        lastEnd = max(lastEnd, (part.start + part.sectors) * 512);
+        if (rootSource == '/dev/' + part.name) system = true;
+    }
+    if (partitioned > total) return null;
+    // 无分区表时可能是整盘文件系统，不能把未挂载的已有数据误报为空闲空间。
+    if (!length(partitions)) return { device, total, system, partitioned: system ? total : null, unallocated: system ? 0 : null };
+    return { device, total, system, partitioned, unallocated: max(0, total - lastEnd) };
+}
+function physicalDisks(storage) {
+    let rootSource = null, result = [];
+    for (let mounted in storage) if (mounted.path == '/') rootSource = mounted.source;
+    for (let path in slice(glob('/sys/class/block/*') || [], 0, 64)) {
+        let name = substr(path, length('/sys/class/block/'));
+        if (!match(name, /^(sd[a-z]+|vd[a-z]+|mmcblk[0-9]+|nvme[0-9]+n[0-9]+)$/) || access(path + '/partition')) continue;
+        let sectors = number(path + '/size'), partitions = [];
+        for (let entry in slice(glob(path + '/*/partition') || [], 0, 128)) {
+            let base = substr(entry, 0, length(entry) - length('/partition'));
+            let part = match(base, /\/([^/]+)$/);
+            if (!part) continue;
+            push(partitions, { name: part[1], start: number(base + '/start'), sectors: number(base + '/size') });
+        }
+        let disk = sectors != null ? diskLayout(name, sectors, partitions, rootSource) : null;
         if (disk) push(result, disk);
     }
     return result;
@@ -109,7 +142,10 @@ function deviceTime() {
     return sprintf('%04d-%02d-%02d %02d:%02d:%02d', t.year, t.mon, t.mday, t.hour, t.min, t.sec);
 }
 try {
-    if (ARGV[0] == 'summary') print({ ok: true, localTime: deviceTime(), temperatures: temperatures(), storage: disks(), ports: ports() });
+    if (ARGV[0] == 'summary') {
+        let storage = disks();
+        print({ ok: true, localTime: deviceTime(), temperatures: temperatures(), storage, blockDisks: physicalDisks(storage), ports: ports() });
+    }
     else if (ARGV[0] == 'clients') print(clients());
     else print({ ok: false, error: 'unsupported_method' });
 } catch (e) { print({ ok: false, error: 'status_unavailable' }); }

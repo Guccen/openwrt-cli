@@ -1,0 +1,4 @@
+#!/bin/sh
+# 成功或不支持的布局在首次启动后移除此入口；失败则保留以便下次启动重试。
+[ -z "${IPKG_INSTROOT:-}" ] || exit 0
+/usr/libexec/router-ui/expand-rootfs

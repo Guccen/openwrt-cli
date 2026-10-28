@@ -59,6 +59,22 @@ class StatusDataTests(unittest.TestCase):
         self.assertEqual(result[0]["used"], 16384 * 1024)
         self.assertIsNone(result[1])
 
+    def test_block_capacity_distinguishes_tail_space_from_filesystem_free_space(self):
+        parts = [{"name": "sda1", "start": 8192, "sectors": 522240}, {"name": "sda2", "start": 532480, "sectors": 2097152}]
+        result = self.run_code("print([diskLayout('sda', 30218842, " + json.dumps(parts) + ", '/dev/sda2'), diskLayout('sdb', 100, [], null), diskLayout('sdc', 100, [], '/dev/sdc'), diskLayout('loop0', 100, [], null)]);")
+        self.assertEqual(result[0]["total"], 30218842 * 512)
+        self.assertEqual(result[0]["unallocated"], (30218842 - 532480 - 2097152) * 512)
+        self.assertTrue(result[0]["system"])
+        self.assertIsNone(result[1]["unallocated"])
+        self.assertEqual(result[2]["unallocated"], 0)
+        self.assertIsNone(result[3])
+
+    def test_combined_df_selects_only_requested_mountpoint(self):
+        output = "/dev/sda2 100 10 80 10% /\ntmpfs 200 5 195 2% /tmp\n"
+        result = self.run_code("print([parseDisk(" + json.dumps(output) + ", 'root', '/'), parseDisk(" + json.dumps(output) + ", 'tmp', '/tmp')]);")
+        self.assertEqual(result[0]["source"], "/dev/sda2")
+        self.assertEqual(result[1]["total"], 200 * 1024)
+
     def test_kernel_sensors_ports_and_missing_counters_are_not_fabricated(self):
         root = "/tmp/router-ui-status-" + uuid.uuid4().hex
         source = (ROOT / "package/router-ui/files/status.uc").read_text(encoding="utf-8").split("\ntry {")[0]
