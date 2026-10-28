@@ -192,8 +192,12 @@ def prepare(source, device, role, wan):
     metadata = overlay(source / "files", device, role, wan)
     # N1 打包结束时会再次覆盖这些文件，保证两台设备使用同一份前端。
     shutil.copytree(bundle / "htdocs", source / "files/www", dirs_exist_ok=True)
-    (source / ".config").write_text(merge_config(device, role), encoding="utf-8", newline="\n")
     (source / "build-inputs.json").write_text(json.dumps({"device": metadata, "sources": config, "odhcpd_link_recovery": relay_patch, "n1_packager": SOURCES["n1_packager"] if device == "phicomm-n1" else None}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def prepare_config(source, device, role):
+    # 在所有 feeds 与补丁就绪后写入合并配置，避免 feeds 刷新提前剔除外部包。
+    (source / ".config").write_text(merge_config(device, role), encoding="utf-8", newline="\n")
 
 
 def verify_revisions(source, device):
@@ -237,7 +241,7 @@ def verify(source, device, role):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("fetch", "prepare", "prepare-storage", "verify", "verify-revisions", "overlay"))
+    parser.add_argument("command", choices=("fetch", "prepare", "prepare-storage", "prepare-config", "verify", "verify-revisions", "overlay"))
     parser.add_argument("--device", choices=DEVICES, required=True)
     parser.add_argument("--role", choices=("router", "bypass"), default="router")
     parser.add_argument("--wan", default="eth1")
@@ -254,6 +258,8 @@ def main():
             inputs = json.loads((source / "build-inputs.json").read_text(encoding="utf-8"))
             inputs["n1_storage"] = prepare_n1_storage(source)
             (source / "build-inputs.json").write_text(json.dumps(inputs, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    elif args.command == "prepare-config":
+        prepare_config(source, args.device, args.role)
     elif args.command == "verify":
         verify(source, args.device, args.role)
     elif args.command == "verify-revisions":

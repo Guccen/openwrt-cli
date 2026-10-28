@@ -288,6 +288,16 @@ exit 0
             self.assertIn("option ifname 'wlan0'", wireless)
             self.assertNotIn("option key", wireless)
 
+    def test_prepare_config_writes_merged_configuration(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp)
+            firmware.prepare_config(source, "phicomm-n1", "router")
+            config = (source / ".config").read_text(encoding="utf-8")
+            self.assertIn("CONFIG_PACKAGE_btrfs-progs=y\n", config)
+            self.assertIn("CONFIG_PACKAGE_sfdisk=y\n", config)
+            self.assertIn("CONFIG_TARGET_armsr_armv8_DEVICE_generic=y\n", config)
+            self.assertIn("CONFIG_PACKAGE_ppp=y\n", config)
+
 
 if __name__ == "__main__":
     unittest.main()

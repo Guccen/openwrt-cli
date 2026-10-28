@@ -12,10 +12,14 @@ mkdir -p "$ARTIFACTS"
 python3 "$ROOT/scripts/firmware.py" fetch --device "$DEVICE" --role "$ROLE" --wan "$WAN" --source "$SOURCE"
 python3 "$ROOT/scripts/firmware.py" prepare --device "$DEVICE" --role "$ROLE" --wan "$WAN" --source "$SOURCE"
 cd "$SOURCE"
+# 确保在 feeds update 前没有遗留 .config，避免 scripts/feeds 提前调用 refresh_config 冲掉外部 feed 软件包。
+rm -f .config
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 python3 "$ROOT/scripts/firmware.py" verify-revisions --device "$DEVICE" --source "$SOURCE"
 python3 "$ROOT/scripts/firmware.py" prepare-storage --device "$DEVICE" --source "$SOURCE"
+python3 "$ROOT/scripts/firmware.py" prepare-config --device "$DEVICE" --role "$ROLE" --source "$SOURCE"
+rm -rf tmp
 make defconfig
 # 校验失败时也保留实际解析结果，避免产物只有日志而没有配置。
 cp .config "$ARTIFACTS/build.config"
