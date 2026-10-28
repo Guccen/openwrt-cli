@@ -18,9 +18,9 @@
 所以只要文件没下错、刷机过程不断电，“连引导都进不去”的真砖本来就很难发生；
 真正的风险是“刷完进不去系统、配置错乱”，而那都有回滚路径，见文末。
 
-另有一点必须先说明：本项目 0.5 镜像已通过 CI 的模拟与完整构建，
-但按[开发进度](development-status.md)，真机启动、WiFi、交换机、NSS（AX1800）与 USB 启动、网卡、存储、重启（N1）的实机验收尚未完成。
-也就是说，**你第一次实机刷入本身就是一次验收**，务必按下面“刷前准备”备好回滚再动手。
+实机验收范围见[开发进度](development-status.md)：N1 0.10 旁路由镜像已确认从 U 盘启动，SSH 可达，内核为 6.18.58，根文件系统位于外置存储。
+AX1800 的启动、WiFi、交换机、NSS，以及 N1 的完整网络功能、USB 网卡和重启仍需分别验收。
+**首次刷入对应设备和模式仍应保留回滚手段**，请按下面“刷前准备”操作。
 
 ## 产物与文件对照
 
@@ -31,8 +31,8 @@
 | `jdcloud-ax1800-router-<编号>` | `libwrt-qualcommax-ipq60xx-jdcloud_re-ss-01-squashfs-sysupgrade.bin`（约 15 MB） | AX1800 从 OpenWrt 升级用，**本次就用它**                   |
 | 同上                           | `libwrt-qualcommax-ipq60xx-jdcloud_re-ss-01-squashfs-factory.bin`（约 15 MB）    | 给原厂固件/救砖准备的，**已刷 OpenWrt 的机器本次不要用它** |
 | 同上                           | `sha256sums`                                                                     | 核对上面两个文件的 SHA-256                                 |
-| `phicomm-n1-bypass-<编号>`     | `phicomm-n1-bypass-k6.12.114.img.gz`（约 157 MB）                                | N1 旁路由的完整启动镜像，写卡用                            |
-| `phicomm-n1-router-<编号>`     | `phicomm-n1-router-k6.12.114.img.gz`                                             | N1 主路由的完整启动镜像，写卡用                            |
+| `phicomm-n1-bypass-<编号>`     | `phicomm-n1-bypass-k6.18.58.img.gz`（约 162 MiB）                                | N1 旁路由的完整启动镜像，写卡用                            |
+| `phicomm-n1-router-<编号>`     | `phicomm-n1-router-k6.18.58.img.gz`                                             | N1 主路由的完整启动镜像，写卡用                            |
 | 上述 N1 Artifact               | `immortalwrt-armsr-armv8-generic-rootfs.tar.gz`                                  | 仅用于再次打包，**不能直接刷入 N1**                        |
 
 注意：N1 旁路由和主路由是两个不同的镜像文件，下载时按你要的模式选对；
@@ -130,6 +130,16 @@ N1 没有“在原系统上升級”这回事：每次换镜像，都是把完�
 本项目不提供、也不自动执行写 eMMC 步骤。如果你确实想把系统装进 eMMC，
 那是超出本文档的手动操作，默认建议一直用卡启动：卡启动本身已够用，且回滚就是换卡。
 只有在卡启动长期验证稳定、且你确认 eMMC 写入流程后，再单独处理 eMMC。
+
+### 旧镜像的登录提示报错
+
+如果 SSH 登录时出现 `/etc/profile.d/30-sysinfo.sh: line 58: syntax error`，这是打包器附带的信息展示脚本与默认登录解释器不兼容。可在设备上执行以下命令，使用系统自带的忽略机制停用这段附加信息；原脚本保留，下一次登录即生效，无需重新刷机或重启：
+
+```sh
+touch /etc/profile.d/30-sysinfo.hush
+```
+
+新构建会自动包含该标记。此操作不会关闭 root 空密码警告；出现 `There is no root password defined` 时，应在 SSH 中自行执行 `passwd` 设置密码，`passwd` 本身是命令。
 
 ### 回滚
 

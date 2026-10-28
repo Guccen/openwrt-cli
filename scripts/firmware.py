@@ -156,6 +156,7 @@ def overlay(destination, device, role, wan="eth1"):
     (destination / "www/device.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     config = destination / "etc/config"
     if device == "phicomm-n1":
+        shutil.copytree(ROOT / "files/n1", destination, dirs_exist_ok=True)
         (config / "network").write_text(n1_network(role, wan), encoding="utf-8", newline="\n")
         dhcp = (ROOT / "files/n1-dhcp.template").read_text(encoding="utf-8")
         dhcp = dhcp.replace("@IGNORE@", "0" if role == "router" else "1")
