@@ -9,7 +9,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RadioClient, radioDraft, radioPlan, type RadioCapabilities } from "@/lib/radio-settings";
+import {
+  RadioClient,
+  defaultRadioMode,
+  radioDraft,
+  radioModes,
+  radioPlan,
+  type RadioCapabilities,
+} from "@/lib/radio-settings";
 import { wifiBand, wifiBandLabel, type WifiBand } from "@/lib/wifi-band";
 import { useRouter } from "@/stores/router";
 import type { SettingsFormProps } from "./settings-section";
@@ -49,9 +56,7 @@ export function RadioForm({
   }, [session, section, attempt]);
   const band = draft.band;
   const countries = caps?.countries ?? [],
-    modes = (caps?.modes ?? []).filter(
-      (m) => band !== "2g" || (!/^VHT/.test(m) && !/(?:80|160|320)$/.test(m)),
-    );
+    modes = caps ? radioModes(caps, band, draft.channel) : [];
   const channels =
     caps?.channels.filter((c) =>
       band === "2g" ? c.mhz < 3000 : band === "5g" ? c.mhz >= 4900 && c.mhz < 5925 : true,
@@ -100,13 +105,12 @@ export function RadioForm({
                     const next = value as WifiBand;
                     const available =
                       caps?.channels.filter((c) => wifiBand({}, c.mhz) === next && !c.dfs) ?? [];
-                    const mode =
-                      next === "2g" ? "HT20" : caps?.modes.includes("VHT80") ? "VHT80" : "HT20";
+                    const channel = available.length ? String(available[0].channel) : "auto";
                     setDraft({
                       ...draft,
                       band: next,
-                      channel: available.length ? String(available[0].channel) : "auto",
-                      mode,
+                      channel,
+                      mode: caps ? defaultRadioMode(caps, next, channel) : "",
                     });
                   }}
                 >
@@ -159,7 +163,16 @@ export function RadioForm({
               <Select
                 disabled={locked || draft.country !== radioDraft(snapshot, section).country}
                 value={draft.channel}
-                onValueChange={(channel) => setDraft({ ...draft, channel })}
+                onValueChange={(channel) =>
+                  setDraft({
+                    ...draft,
+                    channel,
+                    mode:
+                      caps && !radioModes(caps, band, channel).includes(draft.mode)
+                        ? defaultRadioMode(caps, band, channel)
+                        : draft.mode,
+                  })
+                }
               >
                 <SelectTrigger id={`${section}-channel`} className="w-full">
                   <SelectValue />
@@ -190,8 +203,8 @@ export function RadioForm({
                 </SelectTrigger>
                 <SelectContent>
                   {!modes.includes(draft.mode) && (
-                    <SelectItem value={draft.mode || "current"}>
-                      {draft.mode || "沿用默认"}
+                    <SelectItem value={draft.mode || "current"} disabled>
+                      {draft.mode ? `${draft.mode}（当前不可用）` : "请选择可用模式"}
                     </SelectItem>
                   )}
                   {modes.map((m) => (
@@ -204,8 +217,8 @@ export function RadioForm({
             </div>
           </div>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            HE 为 WiFi 6，VHT 为 WiFi 5。带宽越大不一定越快；拥挤的 2.4 GHz 通常适合 20 MHz。DFS
-            信道可能等待雷达检测后才出现，修改地区后请重新读取信道。
+            HE 为 WiFi 6，VHT 为 WiFi 5。带宽已按当前信道的驱动限制筛选，切换频段默认使用 20
+            MHz。带宽越大不一定越快；DFS 信道可能等待雷达检测后才出现，修改地区后请重新读取信道。
           </p>
           <Button disabled={locked}>应用射频参数</Button>
         </form>
