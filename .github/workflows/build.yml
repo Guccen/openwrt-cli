@@ -14,22 +14,19 @@ on:
       n1_role:
         description: N1 模式（主路由需要额外 USB 有线网卡）
         type: choice
-        default: bypass
+        default: both
         options:
+          - both
           - bypass
           - router
       n1_wan:
         description: N1 主路由的 WAN 网口名称
         type: string
         default: eth1
-      skip_tests:
-        description: 跳过检查与仿真，直接构建供实机验证的镜像
-        type: boolean
-        default: false
       publish:
         description: 同时创建独立版本的 Release
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
@@ -39,51 +36,53 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  check:
-    name: Run checks
-    if: ${{ !inputs.skip_tests }}
-    uses: ./.github/workflows/check.yml
-
-  simulate:
-    name: Verify simulated installation
-    if: ${{ !inputs.skip_tests }}
-    uses: ./.github/workflows/simulate.yml
-
   plan:
     name: Prepare build matrix
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      devices: ${{ steps.select.outputs.devices }}
+      targets: ${{ steps.select.outputs.targets }}
     steps:
       - name: Select target devices
         id: select
         env:
           DEVICE: ${{ inputs.device }}
+          N1_ROLE: ${{ inputs.n1_role }}
         run: |
-          case "$DEVICE" in
-            both) devices='["jdcloud-ax1800","phicomm-n1"]' ;;
-            jdcloud-ax1800|phicomm-n1) devices="[\"$DEVICE\"]" ;;
-            *) echo '设备参数无效'; exit 1 ;;
-          esac
-          echo "devices=$devices" >> "$GITHUB_OUTPUT"
+          python3 - <<'PY'
+          import json
+          import os
+
+          device = os.environ["DEVICE"]
+          role = os.environ["N1_ROLE"]
+          if device not in ("both", "jdcloud-ax1800", "phicomm-n1"):
+              raise SystemExit("设备参数无效")
+          if role not in ("both", "bypass", "router"):
+              raise SystemExit("运行模式无效")
+          targets = []
+          if device != "phicomm-n1":
+              targets.append({"device": "jdcloud-ax1800", "role": "router"})
+          if device != "jdcloud-ax1800":
+              roles = ("bypass", "router") if role == "both" else (role,)
+              targets.extend({"device": "phicomm-n1", "role": selected} for selected in roles)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("targets=" + json.dumps({"include": targets}, separators=(",", ":")) + "\n")
+          PY
 
   build:
-    name: Build ${{ matrix.device }}
-    needs: [check, plan, simulate]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && (inputs.skip_tests || (needs.check.result == 'success' && needs.simulate.result == 'success')) }}
+    name: Build ${{ matrix.device }} ${{ matrix.role }}
+    needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     permissions:
       contents: write
     strategy:
       fail-fast: false
-      matrix:
-        device: ${{ fromJSON(needs.plan.outputs.devices) }}
+      matrix: ${{ fromJSON(needs.plan.outputs.targets) }}
     env:
       TZ: Asia/Shanghai
       DEVICE: ${{ matrix.device }}
-      N1_ROLE: ${{ inputs.n1_role }}
+      ROLE: ${{ matrix.role }}
       N1_WAN: ${{ inputs.n1_wan }}
     steps:
       - name: Checkout repository
@@ -102,8 +101,7 @@ jobs:
             swig unzip zlib1g-dev file wget curl time jq subversion \
             btrfs-progs dosfstools e2fsprogs uuid-runtime kpartx parted pigz \
             zstd xz-utils u-boot-tools qemu-utils libfuse-dev libelf-dev \
-            device-tree-compiler fdisk bc gperf help2man autoconf automake libtool \
-            qemu-system-arm iproute2 iptables busybox-static openssh-client openssl
+            device-tree-compiler fdisk bc gperf help2man autoconf automake libtool
           df -h .
       - name: Build frontend package
         run: |
@@ -117,32 +115,7 @@ jobs:
           restore-keys: downloads-${{ matrix.device }}-
       - name: Compile firmware and frontend package
         run: |
-          ROLE=router
-          if [[ "$DEVICE" == phicomm-n1 ]]; then ROLE="$N1_ROLE"; fi
           bash scripts/build-firmware.sh "$DEVICE" "$ROLE" "$N1_WAN"
-      - name: Restore Playwright browser cache
-        if: ${{ !inputs.skip_tests }}
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package.json') }}
-      - name: 下载通用仿真平台的中继修正版
-        if: ${{ !inputs.skip_tests }}
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: simulation-package
-          path: build/simulation-package
-      - name: Test compiled package in OpenWrt
-        if: ${{ !inputs.skip_tests }}
-        timeout-minutes: 30
-        run: |
-          bunx playwright install --with-deps --only-shell chromium
-          shopt -s nullglob
-          packages=(build/artifacts/router-ui*.apk)
-          (( ${#packages[@]} == 1 )) || { echo 'Expected exactly one router-ui APK'; exit 1; }
-          ROLE=router
-          if [[ "$DEVICE" == phicomm-n1 ]]; then ROLE="$N1_ROLE"; fi
-          bash scripts/simulate.sh "$DEVICE" "$ROLE" "${packages[0]}"
       - name: Package N1 boot image
         if: matrix.device == 'phicomm-n1'
         run: |
@@ -156,19 +129,18 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: ${{ matrix.device }}-${{ matrix.device == 'phicomm-n1' && inputs.n1_role || 'router' }}-${{ github.run_number }}
+          name: ${{ matrix.device }}-${{ matrix.role }}-${{ github.run_number }}
           path: |
             build/artifacts/
             build/openwrt/.config
             build/openwrt/logs/
-            build/simulation-report/
           if-no-files-found: warn
           retention-days: 14
       - name: Preserve N1 rootfs and package after failure
         if: failure() && matrix.device == 'phicomm-n1'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: n1-build-recovery-${{ github.run_number }}
+          name: n1-${{ matrix.role }}-build-recovery-${{ github.run_number }}
           path: |
             build/openwrt/bin/targets/armsr/armv8/*rootfs.tar.gz
             build/openwrt/bin/targets/armsr/armv8/*.manifest
@@ -180,15 +152,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ROLE=router
-          if [[ "$DEVICE" == phicomm-n1 ]]; then ROLE="$N1_ROLE"; fi
           TAG="$DEVICE-$ROLE-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          DEVICE_NAME='京东云 AX1800'
+          IMAGE_NOTE='已刷 OpenWrt 的设备使用 sysupgrade.bin；factory.bin 供原厂刷入或救砖使用。'
+          if [[ "$DEVICE" == phicomm-n1 ]]; then
+            DEVICE_NAME='斐讯 N1'
+            IMAGE_NOTE='将对应模式的 .img.gz 写入新 U 盘；rootfs.tar.gz 仅用于再次打包。'
+          fi
+          ROLE_NAME='主路由'
+          if [[ "$ROLE" == bypass ]]; then ROLE_NAME='旁路由'; fi
+          VERSION=$(jq -r .version package.json)
           cat > build/release-notes.md <<EOF
-          设备：$DEVICE
-          运行模式：$ROLE
+          设备：$DEVICE_NAME
+          运行模式：$ROLE_NAME
+          控制台版本：$VERSION
           项目提交：$GITHUB_SHA
+          构建记录：https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+
+          $IMAGE_NOTE
+          下载后按 sha256sums 核对镜像与安装包摘要。
           源码、feeds 与 N1 内核版本见 build-inputs.json。
-          首次使用和接线方式见项目 README。
+          本次直接构建与发布镜像，未执行模拟机安装测试，功能验收以实机为准。
+          刷机步骤：https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/flashing.md
           EOF
-          gh release create "$TAG" build/artifacts/* --title "$TAG" \
+          gh release create "$TAG" build/artifacts/* --title "$DEVICE_NAME $ROLE_NAME · $VERSION · $GITHUB_RUN_NUMBER" \
             --target "$GITHUB_SHA" --notes-file build/release-notes.md

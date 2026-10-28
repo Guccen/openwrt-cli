@@ -1,16 +1,16 @@
-# 模拟安装与功能测试
+# 本地模拟安装与功能测试
 
 [返回项目首页](../README.md) · [固件构建](firmware-build.md) · [前端开发](frontend-development.md) · [验收记录](development-status.md)
 
-## GitHub Actions 运行方式
+## 运行范围
 
-`Simulate OpenWrt installation` 在 Actions 中手动运行，完整固件构建也会调用它作为前置检查。它通过官方 SDK 构建真正的 `router-ui.apk`，使用校验 SHA-256 的 OpenWrt 25.12.6 ImageBuilder 生成 ARM64 测试系统，在 QEMU 中启动。接口来自运行中的 `procd`、`netifd`、`rpcd` 和 `uhttpd`，不是本地演示接口。
+模拟机 Actions 工作流已移除，完整固件构建直接编译、打包并按选择发布，不再以模拟测试作为前置或后置步骤。以下脚本保留供 Linux 本地按需排查；它通过官方 SDK 构建真正的 `router-ui.apk`，使用校验 SHA-256 的 OpenWrt 25.12.6 ImageBuilder 生成 ARM64 测试系统，在 QEMU 中启动。接口来自运行中的 `procd`、`netifd`、`rpcd` 和 `uhttpd`，不是本地演示接口。
 
 主路由还会通过 SDK 编译带有[断链恢复补丁](ipv6-link-recovery.md)的 `odhcpd-ipv6only.apk`，安装后再重启测试机。`simulate.sh` 的第四个参数可指定该包，默认读取 `build/simulation-package/odhcpd-ipv6only.apk`；缺失时拒绝运行主路由验证。编译后仿真使用本次运行前置阶段生成的通用架构服务包，其源码、修订号与补丁和设备固件一致，报告记录安装包摘要、架构及版本；AX1800 的设备架构包不能直接混装到通用测试系统。N1 旁路由不安装此服务。
 
-普通 push / pull request 只自动执行快速代码检查，同分支新提交会取消尚未结束的旧检查。先在本地验证并集中推送，按需要手动运行固件配置、QEMU 模拟或完整固件构建；不再每次提交重复运行耗时任务。
+普通 push / pull request 只自动执行快速代码检查，同分支新提交会取消尚未结束的旧检查。固件配置和完整构建仍可在 Actions 中独立手动触发，本地模拟结果不影响镜像发布。
 
-不使用浏览器时，手动运行取消 `browser_tests` 选项，或命令行设置 `SIM_BROWSER_TESTS=0` 后调用 `simulate.sh`。该模式保留真实安装、重启、权限、配置回滚、网络与维护验证，跳过浏览器安装和页面回归；报告通过 `browser_tests_enabled` 明确标记范围。无需启动开发模式。
+不使用浏览器时，命令行设置 `SIM_BROWSER_TESTS=0` 后调用 `simulate.sh`。该模式保留真实安装、重启、权限、配置回滚、网络与维护验证，跳过浏览器安装和页面回归；报告通过 `browser_tests_enabled` 明确标记范围。无需启动开发模式。
 
 ## QEMU 启动检查
 
@@ -20,7 +20,7 @@
 
 ## 覆盖范围
 
-每次分别测试 AX1800 主路由、N1 旁路由、N1 主路由三种配置：
+本地脚本可分别测试 AX1800 主路由、N1 旁路由、N1 主路由三种配置：
 
 - 安装软件包，并逐文件核对前端资源和 ACL；重启同一磁盘后继续测试。
 - 验证真实 root 登录、错误密码、未登录访问、系统和网络状态读取、受限权限及退出后的会话失效。
@@ -39,25 +39,30 @@
 
 ## 报告与产物
 
-打开运行记录，在 Artifacts 下载 `simulation-设备-模式`：包含 HTML/JUnit 报告、页面截图、安装记录、启动日志、DHCP、网络、`configuration.json` 配置事务、`maintenance.json` 维护结果、`schedule.json` 定时任务权限与 cron 安装结果，以及 `routing.json` 上网及地址池结果。定时任务检查不触发计划重启。失败时通常保留 Playwright trace；系统导出测试关闭 trace，归档仅在内存或浏览器临时目录校验后删除，不上传归档或其中的测试密钥。浏览器依赖仅用于开发和 CI，不进入固件；测试密码和 SSH 密钥每次临时生成，模拟磁盘及私钥不上传。
+本地输出位于 `build/simulation-report/`：包含安装记录、启动日志、DHCP、网络、`configuration.json` 配置事务、`maintenance.json` 维护结果、`schedule.json` 定时任务权限与 cron 安装结果，以及 `routing.json` 上网及地址池结果。启用浏览器回归时另有 HTML/JUnit 报告、截图及失败 trace。定时任务检查不触发计划重启。系统导出测试关闭 trace，归档仅在内存或浏览器临时目录校验后删除；不要上传归档或其中的测试密钥。浏览器依赖不进入固件；测试密码和 SSH 密钥每次临时生成，模拟磁盘及私钥只留在本地临时目录。
 
-`Build lightweight firmware` 默认先等待三种模拟配置通过，再编译设备固件。编译完成后，还会安装并测试本次真实编译生成的前端 APK，失败会阻止后续打包和 Release。启用 `skip_tests` 时跳过上述检查与仿真，产物须另行验收。正式构建的模拟报告放在设备构建 Artifact 中。
+正式构建的 Artifact 和 Release 不包含本地模拟报告，发布说明明确记录本次没有执行模拟机安装测试。
 
 ## 模拟边界
 
-模拟运行的是通用 ARM64 OpenWrt，AX1800 使用虚拟 WAN/LAN 替代物理交换机。官方测试系统通过 `openssl-util` 生成证书，设备构建使用对应 fork 的 `px5g-openssl`。它可以提前验证前端安装、系统服务和配置策略，但不能证明 LiBwrt/ImmortalWrt 的完整设备镜像能够启动，也不能验证 WiFi、NSS、N1 引导/eMMC、USB 网卡驱动或真实吞吐量。涉及这些能力的首次验证及相关变更仍需实机；日常前端和状态接口开发可优先依靠 CI。
+模拟运行的是通用 ARM64 OpenWrt，AX1800 使用虚拟 WAN/LAN 替代物理交换机。官方测试系统通过 `openssl-util` 生成证书，设备构建使用对应 fork 的 `px5g-openssl`。它可以提前验证前端安装、系统服务和配置策略，但不能证明 LiBwrt/ImmortalWrt 的完整设备镜像能够启动，也不能验证 WiFi、NSS、N1 引导/eMMC、USB 网卡驱动或真实吞吐量。涉及这些能力的首次验证及相关变更仍需实机。
 
 ## Linux 本地运行
 
-Linux 本地也可使用同一流程，所需依赖见 [simulate.yml](../.github/workflows/simulate.yml)。脚本会创建临时网桥和网络命名空间，需要可用的 `sudo`，不要并发运行多份：
+Linux 本地需要编译工具、QEMU 与网络测试工具。脚本会创建临时网桥和网络命名空间，需要可用的 `sudo`，不要并发运行多份：
 
 ```sh
+sudo apt-get install build-essential clang flex bison gawk gettext git \
+  libncurses-dev libssl-dev python3 python3-setuptools rsync swig unzip \
+  zlib1g-dev file wget curl zstd xsltproc uuid-runtime qemu-system-arm \
+  iproute2 iptables busybox-static openssh-client openssl
 bun install --frozen-lockfile
 bun run build
 bash scripts/build-simulation-package.sh
-bunx playwright install --with-deps --only-shell chromium
-bash scripts/simulate.sh phicomm-n1 bypass build/simulation-package/router-ui.apk
+SIM_BROWSER_TESTS=0 bash scripts/simulate.sh phicomm-n1 bypass build/simulation-package/router-ui.apk
 ```
+
+如需页面回归，先运行 `bunx playwright install --with-deps --only-shell chromium`，再移除 `SIM_BROWSER_TESTS=0`。
 
 再次运行使用新的干净 checkout，或移走本次 `build/simulation-tools/` 和 `build/simulation-report/`。临时密钥与磁盘位于 `build/simulation-private/`，测试结束自动清理。手动强制终止时，可检查并清理同名 QEMU 进程、`br-router-ci` / `tap-router-ci` 网桥网口及 `router-ci-client` 网络命名空间。
 

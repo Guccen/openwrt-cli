@@ -24,25 +24,25 @@ bun run check
 bun run dev
 ```
 
-本地演示接口与代理配置见[前端开发](docs/frontend-development.md)。构建固件时，在 GitHub Actions 手动运行 **Build lightweight firmware**，参数和产物说明见[构建文档](docs/firmware-build.md)。
+本地演示接口与代理配置见[前端开发](docs/frontend-development.md)。构建固件时，在 GitHub Actions 手动运行 **Build lightweight firmware**，直接编译所选镜像并默认发布到 Releases，不运行模拟机测试；参数和产物说明见[构建文档](docs/firmware-build.md)。
 
 ## 文档
 
-| 文档                                         | 内容                                         |
-| -------------------------------------------- | -------------------------------------------- |
-| [设备与首次使用](docs/getting-started.md)    | 主/旁路由分工、接线、默认地址、初始化        |
-| [刷机步骤](docs/flashing.md)                 | AX1800 升级、N1 写卡、校验与防砖、回滚       |
-| [前端开发](docs/frontend-development.md)     | 技术栈、本地演示、页面路由、组件、资源预算   |
-| [固件构建](docs/firmware-build.md)           | Actions 参数、版本锁定、Linux 编译、N1 打包  |
-| [上游版本记录](docs/upstream-versions.md)    | 最新兼容分支、源码提交、内核及校验记录       |
-| [模拟安装与测试](docs/simulation-testing.md) | QEMU、浏览器测试、CI 触发、报告及验收范围    |
-| [网络配置与备份恢复](docs/configuration.md)  | LAN、WAN、DHCP、DNS、双频 WiFi、确认回滚     |
-| [常用路由功能清单](docs/router-basics.md)    | IPv6、固定地址、端口转发、射频、诊断及缺失项 |
-| [系统维护与独立更新](docs/maintenance.md)    | 系统归档、重启、单独更新前端包               |
-| [状态指示灯](docs/leds.md)                   | 开机、正常、断网、故障灯效和探测规则         |
-| [定时任务](docs/scheduled-tasks.md)          | 按星期与设备时区定时重启、跳过保护和记录     |
-| [系统与客户端状态](docs/system-status.md)    | 温度、存储、上游、网口及 IPv4/IPv6 租约      |
-| [开发进度](docs/development-status.md)       | 已实现功能、构建记录及未完成事项             |
+| 文档                                             | 内容                                         |
+| ------------------------------------------------ | -------------------------------------------- |
+| [设备与首次使用](docs/getting-started.md)        | 主/旁路由分工、接线、默认地址、初始化        |
+| [刷机步骤](docs/flashing.md)                     | AX1800 升级、N1 写卡、校验与防砖、回滚       |
+| [前端开发](docs/frontend-development.md)         | 技术栈、本地演示、页面路由、组件、资源预算   |
+| [固件构建](docs/firmware-build.md)               | Actions 参数、版本锁定、Linux 编译、N1 打包  |
+| [上游版本记录](docs/upstream-versions.md)        | 最新兼容分支、源码提交、内核及校验记录       |
+| [本地模拟安装与测试](docs/simulation-testing.md) | 按需运行 QEMU、本地报告与验收范围            |
+| [网络配置与备份恢复](docs/configuration.md)      | LAN、WAN、DHCP、DNS、双频 WiFi、确认回滚     |
+| [常用路由功能清单](docs/router-basics.md)        | IPv6、固定地址、端口转发、射频、诊断及缺失项 |
+| [系统维护与独立更新](docs/maintenance.md)        | 系统归档、重启、单独更新前端包               |
+| [状态指示灯](docs/leds.md)                       | 开机、正常、断网、故障灯效和探测规则         |
+| [定时任务](docs/scheduled-tasks.md)              | 按星期与设备时区定时重启、跳过保护和记录     |
+| [系统与客户端状态](docs/system-status.md)        | 温度、存储、上游、网口及 IPv4/IPv6 租约      |
+| [开发进度](docs/development-status.md)           | 已实现功能、构建记录及未完成事项             |
 
 ## 上游与许可
 
