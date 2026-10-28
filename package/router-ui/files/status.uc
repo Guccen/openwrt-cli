@@ -1,4 +1,4 @@
-// 固定内核节点、挂载点和租约来源；不写文件、不扫描网络、不接受客户端路径。
+// 固定内核节点、挂载点、租约和无线状态来源；不写文件、不扫描网络、不接受客户端路径。
 import { readfile, glob, access, popen } from 'fs';
 import { connect } from 'ubus';
 
@@ -141,11 +141,41 @@ function deviceTime() {
     let t = localtime();
     return sprintf('%04d-%02d-%02d %02d:%02d:%02d', t.year, t.mon, t.mday, t.hour, t.min, t.sec);
 }
+function wirelessText(value) { return type(value) == 'string' ? substr(value, 0, 256) : ''; }
+function wirelessData(data) {
+    if (type(data) != 'object') return { ok: false, error: 'wireless_unavailable' };
+    let radios = {};
+    // 仅返回页面所需字段，不透传无线密码、认证参数或上游凭据。
+    for (let name in slice(keys(data), 0, 8)) {
+        let row = data[name];
+        if (type(row) != 'object') continue;
+        let config = type(row.config) == 'object' ? row.config : {}, interfaces = [];
+        for (let iface in slice(type(row.interfaces) == 'array' ? row.interfaces : [], 0, 32)) {
+            if (type(iface) != 'object') continue;
+            let options = type(iface.config) == 'object' ? iface.config : {};
+            push(interfaces, { section: wirelessText(iface.section), ifname: wirelessText(iface.ifname),
+                config: { ssid: wirelessText(options.ssid), mode: wirelessText(options.mode) } });
+        }
+        radios[name] = { up: row.up == true, pending: row.pending == true, disabled: row.disabled == true,
+            retry_setup_failed: row.retry_setup_failed == true,
+            config: { band: wirelessText(config.band), hwmode: wirelessText(config.hwmode),
+                channel: type(config.channel) == 'int' ? config.channel : wirelessText(config.channel) }, interfaces };
+    }
+    return { ok: true, radios };
+}
+function wireless() {
+    let bus = connect(null, 2);
+    // 网页网关附带的会话字段会被部分 netifd 拒绝；此处固定参数调用，不转发请求内容。
+    let response = bus ? bus.call('network.wireless', 'status', {}) : null;
+    bus?.disconnect();
+    return wirelessData(response);
+}
 try {
     if (ARGV[0] == 'summary') {
         let storage = disks();
         print({ ok: true, localTime: deviceTime(), temperatures: temperatures(), storage, blockDisks: physicalDisks(storage), ports: ports() });
     }
     else if (ARGV[0] == 'clients') print(clients());
+    else if (ARGV[0] == 'wireless') print(wireless());
     else print({ ok: false, error: 'unsupported_method' });
 } catch (e) { print({ ok: false, error: 'status_unavailable' }); }

@@ -17,13 +17,16 @@ def status(api, method):
 def run(address):
     api = Api(address)
     api.login()
-    for method in ("summary", "clients"):
+    for method in ("summary", "clients", "wireless"):
         try:
             status(Api(address), method)
         except RpcFailure as error:
             if error.code not in (6, -32002): raise
         else:
             raise AssertionError("匿名会话不能读取设备与客户端状态")
+    wireless = status(api, "wireless")
+    if not isinstance(wireless.get("radios"), dict):
+        raise AssertionError("无线状态格式不正确")
     summary = status(api, "summary")
     if len(summary.get("localTime", "")) != 19 or not isinstance(summary.get("temperatures"), list):
         raise AssertionError("系统时间或温度格式不正确")

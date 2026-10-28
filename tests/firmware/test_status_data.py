@@ -18,12 +18,62 @@ class StatusDataTests(unittest.TestCase):
         if not cls.command:
             raise unittest.SkipTest("需要真实 ucode")
 
-    def run_code(self, body):
+    def run_code(self, body, bus="function connect() { return null; }"):
         source = (ROOT / "package/router-ui/files/status.uc").read_text(encoding="utf-8").split("\ntry {")[0]
-        source = source.replace("import { connect } from 'ubus';", "function connect() { return null; }")
+        source = source.replace("import { connect } from 'ubus';", bus)
         result = subprocess.run([*self.command, "-e", source + body], capture_output=True, encoding="utf-8", timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
+
+    def test_wireless_calls_netifd_without_gateway_arguments_and_filters_credentials(self):
+        fixture = {"radio0": {"up": True, "pending": False, "disabled": False,
+            "config": {"band": "2g", "channel": "1", "key": "radio-secret"},
+            "interfaces": [{"section": "default_radio0", "ifname": "wlan0",
+                "config": {"ssid": "N1", "mode": "ap", "key": "wifi-secret", "password": "auth-secret"},
+                "stations": [{"key": "station-secret"}]}]},
+            "radio1": {"up": False, "disabled": True, "retry_setup_failed": True, "interfaces": []}}
+        bus = """
+let calls = [], disconnected = false;
+function connect(socket, timeout) {
+    push(calls, ['connect', socket, timeout]);
+    return { call: (object, method, args) => {
+        push(calls, [object, method, args]);
+        // 与实机行为一致：多余的会话字段会导致参数错误。
+        return length(keys(args)) ? null : json(FIXTURE);
+    }, disconnect: () => { disconnected = true; } };
+}
+""".replace("FIXTURE", json.dumps(json.dumps(fixture)))
+        result = self.run_code("let result = wireless(); print({result, calls, disconnected});", bus)
+        self.assertEqual(result["calls"], [["connect", None, 2], ["network.wireless", "status", {}]])
+        self.assertTrue(result["disconnected"])
+        self.assertTrue(result["result"]["ok"])
+        radio = result["result"]["radios"]["radio0"]
+        self.assertTrue(radio["up"])
+        self.assertEqual(radio["config"], {"band": "2g", "hwmode": "", "channel": "1"})
+        self.assertEqual(radio["interfaces"], [{"section": "default_radio0", "ifname": "wlan0", "config": {"ssid": "N1", "mode": "ap"}}])
+        self.assertTrue(result["result"]["radios"]["radio1"]["disabled"])
+        self.assertTrue(result["result"]["radios"]["radio1"]["retry_setup_failed"])
+        self.assertNotIn("secret", json.dumps(result))
+
+    def test_wireless_missing_source_is_not_reported_as_an_empty_or_disabled_radio(self):
+        result = self.run_code("print([wireless(), wirelessData(null), wirelessData([]), wirelessData({})]);")
+        self.assertEqual(result[:3], [{"ok": False, "error": "wireless_unavailable"}] * 3)
+        self.assertEqual(result[3], {"ok": True, "radios": {}})
+
+    def test_wireless_bounds_records_and_ignores_malformed_nested_fields(self):
+        result = self.run_code("""
+let fixture = {};
+for (let i = 0; i < 10; i++) {
+    let interfaces = [];
+    for (let j = 0; j < 40; j++) push(interfaces, { ifname: 'wlan0', config: { ssid: { key: 'secret' } } });
+    fixture['radio' + i] = { up: true, interfaces };
+}
+print(wirelessData(fixture));
+""")
+        self.assertEqual(len(result["radios"]), 8)
+        self.assertEqual(len(result["radios"]["radio0"]["interfaces"]), 32)
+        self.assertEqual(result["radios"]["radio0"]["interfaces"][0]["config"]["ssid"], "")
+        self.assertNotIn("secret", json.dumps(result))
 
     def test_leases_ignore_expired_malformed_duplicates_and_keep_permanent(self):
         content = "\n".join([

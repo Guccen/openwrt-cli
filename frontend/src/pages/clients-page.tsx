@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -28,7 +29,15 @@ export function ClientsPage() {
       <Alert>
         <AlertDescription>
           DHCP 租约表示分配记录，不代表设备当前在线。静态地址及 IPv6 SLAAC 客户端可能不在列表中。
-          {device?.role === "bypass" && "旁路由通常不负责分配地址，请到主路由查看完整租约。"}
+          {device?.role === "bypass" &&
+            "旁路由通常不负责分配地址，手机连上本机 WiFi 后也可能没有本机租约，请到主路由查看完整租约。"}
+          <span>
+            已连接本机 WiFi 的设备请查看
+            <Link href="/wireless/" className="underline underline-offset-4">
+              无线状态
+            </Link>
+            。
+          </span>
         </AlertDescription>
       </Alert>
       {snapshot && (

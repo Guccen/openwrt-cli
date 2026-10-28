@@ -91,4 +91,9 @@ test("missing sensors and empty unavailable leases are explicit, and bypass upst
   await expect(page.getByText("暂无 IPv4 DHCP 租约", { exact: true })).toBeVisible();
   await expect(page.getByText("IPv6 租约服务暂不可用或未启用。", { exact: true })).toBeVisible();
   await expect(page.getByRole("alert")).toContainText("旁路由通常不负责分配地址");
+  await expect(page.getByRole("alert")).toContainText("手机连上本机 WiFi 后也可能没有本机租约");
+  await expect(page.getByRole("alert").getByRole("link", { name: "无线状态" })).toHaveAttribute(
+    "href",
+    "/wireless/",
+  );
 });

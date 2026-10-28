@@ -5,9 +5,8 @@
       "ubus": {
         "system": ["board", "info"],
         "network.interface": ["dump"],
-        "network.wireless": ["status"],
         "iwinfo": ["info", "assoclist", "phyname", "freqlist", "countrylist"],
-        "router.status": ["summary", "clients"],
+        "router.status": ["summary", "clients", "wireless"],
         "router.diagnostics": ["run"],
         "router.maintenance": ["status", "backup", "led_status", "time_status", "schedule_status"],
         "session": ["access"],

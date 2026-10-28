@@ -62,9 +62,15 @@ export class WirelessClient {
   constructor(readonly rpc = new RouterClient()) {}
 
   async read(session: string): Promise<WirelessSnapshot> {
-    const raw = await this.rpc.call<unknown>(session, "network.wireless", "status");
+    const response = await this.rpc.call<{ ok: boolean; radios: unknown }>(
+      session,
+      "router.status",
+      "wireless",
+    );
+    if (response?.ok !== true) throw new RpcError("无线状态暂不可用，请稍后刷新。");
+    const raw = response.radios;
     if (!raw || typeof raw !== "object" || Array.isArray(raw))
-      throw new Error("无线状态格式不正确");
+      throw new RpcError("无线状态格式不正确");
     const radios = await Promise.all(
       Object.entries(raw)
         .slice(0, 8)

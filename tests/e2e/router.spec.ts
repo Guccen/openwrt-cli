@@ -94,6 +94,7 @@ test("real ubus login, permissions, interfaces and session invalidation", async 
       ["file", "exec"],
       ["system", "reboot"],
       ["iwinfo", "scan"],
+      ["network.wireless", "status"],
     ]) {
       const access = await rpc(request, session, "session", "access", {
         scope: "ubus",
@@ -102,14 +103,10 @@ test("real ubus login, permissions, interfaces and session invalidation", async 
       });
       expect(access.result).toEqual([0, { access: false }]);
     }
-    if (process.env.SIM_DEVICE === "jdcloud-ax1800") {
-      // 模拟机没有 AX1800 射频硬件：夹具路径找不到 PHY，netifd 搭建无线设备失败，
-      // network.wireless status 返回 2 而非 0。只要不是 ACL 拒绝（6）就证明读取权限已放行；
-      // 真机上有射频硬件时应返回 0 且数据为对象。
-      const wireless = await rpc(request, session, "network.wireless", "status");
-      expect([0, 2], JSON.stringify(wireless.error)).toContain(wireless.result?.[0]);
-      if (wireless.result?.[0] === 0) expect(typeof wireless.result[1]).toBe("object");
-    }
+    const wireless = await rpc(request, session, "router.status", "wireless");
+    expect(wireless.result?.[0]).toBe(0);
+    expect(wireless.result[1].ok).toBe(true);
+    expect(typeof wireless.result[1].radios).toBe("object");
     const maintenance = await rpc(request, session, "router.maintenance", "status");
     expect(maintenance.result[1]).toMatchObject({ ok: true, operationBusy: false });
     for (const method of ["info", "assoclist"]) {
@@ -362,7 +359,8 @@ test("无线状态按需刷新，两款设备均保留状态入口", async ({ pa
   page.on("request", (request) => {
     if (
       request.url().endsWith("/ubus") &&
-      request.postDataJSON()?.params?.[1] === "network.wireless"
+      request.postDataJSON()?.params?.[1] === "router.status" &&
+      request.postDataJSON()?.params?.[2] === "wireless"
     )
       ++reads;
   });
@@ -370,9 +368,9 @@ test("无线状态按需刷新，两款设备均保留状态入口", async ({ pa
   await expect.poll(() => reads).toBeGreaterThan(0);
   await expect(page.getByRole("button", { name: "刷新", exact: true })).toBeEnabled();
   const initial = reads;
-  // 模拟机没有射频硬件：netifd 返回 2，页面如实展示读取失败的提示；真机上有硬件时无提示。
-  await expect(page.getByText("无法读取设备状态", { exact: true })).toBeVisible();
-  await expect(page.getByRole("alert")).toHaveCount(1);
+  // 无射频硬件时仍能读取空状态或未运行的射频，不能再把网关参数错误当作硬件缺失。
+  await expect(page.getByText("无法读取设备状态", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("无线状态暂不可用，请稍后刷新。", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "刷新", exact: true }).click();
   await expect.poll(() => reads).toBe(initial + 1);
   await expect(page.getByRole("button", { name: "刷新", exact: true })).toBeEnabled();

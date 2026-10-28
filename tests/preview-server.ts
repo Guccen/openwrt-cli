@@ -181,29 +181,36 @@ Bun.serve({
             ],
           },
         ];
-      if (object === "network.wireless" && method === "status") {
+      if (object === "router.status" && method === "wireless") {
         result = [
           0,
-          device === "phicomm-n1"
-            ? {}
-            : Object.fromEntries(
-                ["radio0", "radio1"].map((name, index) => [
-                  name,
-                  {
-                    up: committed.wireless[name].disabled !== "1",
-                    disabled: committed.wireless[name].disabled === "1",
-                    pending: false,
-                    config: { band: committed.wireless[name].band, channel: "auto" },
-                    interfaces: [
+          {
+            ok: true,
+            radios:
+              device === "phicomm-n1"
+                ? {}
+                : Object.fromEntries(
+                    ["radio0", "radio1"].map((name, index) => [
+                      name,
                       {
-                        section: `default_${name}`,
-                        ifname: `phy${index}-ap0`,
-                        config: { ssid: committed.wireless[`default_${name}`].ssid, mode: "ap" },
+                        up: committed.wireless[name].disabled !== "1",
+                        disabled: committed.wireless[name].disabled === "1",
+                        pending: false,
+                        config: { band: committed.wireless[name].band, channel: "auto" },
+                        interfaces: [
+                          {
+                            section: `default_${name}`,
+                            ifname: `phy${index}-ap0`,
+                            config: {
+                              ssid: committed.wireless[`default_${name}`].ssid,
+                              mode: "ap",
+                            },
+                          },
+                        ],
                       },
-                    ],
-                  },
-                ]),
-              ),
+                    ]),
+                  ),
+          },
         ];
       }
       if (object === "iwinfo" && method === "info")
