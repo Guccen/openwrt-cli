@@ -14,7 +14,14 @@ const fastReads = new Set([
   "uci.get",
   "uci.changes",
 ]);
-const wirelessReads = new Set(["info", "assoclist", "phyname", "freqlist", "countrylist"]);
+const wirelessReads = new Set([
+  "info",
+  "assoclist",
+  "phyname",
+  "freqlist",
+  "countrylist",
+  "txpowerlist",
+]);
 export const WIRELESS_READ_TIMEOUT = 30000;
 const sessionRejections = new Set<(session: string) => void>();
 export function onSessionRejection(listener: (session: string) => void) {

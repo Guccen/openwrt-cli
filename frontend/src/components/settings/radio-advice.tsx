@@ -1,6 +1,11 @@
 import { Lightbulb } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { defaultRadioMode, radioModes, type RadioCapabilities } from "@/lib/radio-settings";
+import {
+  defaultRadioMode,
+  recommendedRadioMode,
+  radioModes,
+  type RadioCapabilities,
+} from "@/lib/radio-settings";
 import type { WifiBand } from "@/lib/wifi-band";
 
 export function RadioAdvice({
@@ -18,10 +23,7 @@ export function RadioAdvice({
   const modes = radioModes(caps, band, channel);
   const preferred = singleRadio
     ? defaultRadioMode(caps, band, channel)
-    : (band === "2g"
-        ? ["HE20", "HT20"]
-        : ["HE80", "VHT80", "HE40", "VHT40", "HE20", "VHT20", "HT20"]
-      ).find((mode) => modes.includes(mode));
+    : recommendedRadioMode(caps, band, channel, "speed");
   const candidates =
     band === "2g" ? (singleRadio ? [6, 11, 1] : [1, 6, 11]) : singleRadio ? [149, 36] : [36, 149];
   const channels = preferred

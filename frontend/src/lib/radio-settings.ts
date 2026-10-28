@@ -1,4 +1,4 @@
-import { RouterClient, WIRELESS_READ_TIMEOUT } from "./rpc";
+import { RouterClient, RpcError, WIRELESS_READ_TIMEOUT } from "./rpc";
 import { lanDraft, type ConfigPlan, type SettingsSnapshot } from "./settings";
 import { wifiBand, type WifiBand } from "./wifi-band";
 export interface RadioCapabilities {
@@ -6,6 +6,7 @@ export interface RadioCapabilities {
   modes: string[];
   channels: { channel: number; mhz: number; dfs: boolean; flags?: string[] }[];
   countries: { code: string; name: string }[];
+  powerLevels?: number[] | null;
 }
 export class RadioClient {
   constructor(readonly rpc = new RouterClient()) {}
@@ -13,6 +14,7 @@ export class RadioClient {
     session: string,
     section: string,
     cancelled?: AbortSignal,
+    includePower = false,
   ): Promise<RadioCapabilities> {
     const signal = AbortSignal.any([
       AbortSignal.timeout(WIRELESS_READ_TIMEOUT),
@@ -29,7 +31,7 @@ export class RadioClient {
       signal,
     );
     if (!/^phy\d+$/.test(phyname ?? "")) throw new Error("无法识别实际无线硬件。");
-    const [info, frequencies, countries] = await Promise.all([
+    const [info, frequencies, countries, powers] = await Promise.all([
       this.rpc.call<{ htmodes?: string[] }>(
         session,
         "iwinfo",
@@ -54,6 +56,22 @@ export class RadioClient {
         undefined,
         signal,
       ),
+      includePower
+        ? this.rpc
+            .call<{ results?: { dbm: number }[] }>(
+              session,
+              "iwinfo",
+              "txpowerlist",
+              { device: phyname },
+              undefined,
+              signal,
+            )
+            .catch((error) => {
+              if (signal.aborted || (error instanceof RpcError && error.sessionExpired))
+                throw error;
+              return null;
+            })
+        : null,
     ]);
     return {
       bands: [
@@ -79,6 +97,16 @@ export class RadioClient {
       countries: (countries.results ?? [])
         .filter((c) => /^[A-Z]{2}$/.test(c.iso3166))
         .map((c) => ({ code: c.iso3166, name: c.country })),
+      powerLevels:
+        powers && Array.isArray(powers.results)
+          ? [
+              ...new Set(
+                powers.results
+                  .map((p) => p.dbm)
+                  .filter((p) => Number.isInteger(p) && p >= 0 && p <= 40),
+              ),
+            ].sort((a, b) => a - b)
+          : null,
     };
   }
 }
@@ -110,6 +138,30 @@ export function defaultRadioMode(caps: RadioCapabilities, band: WifiBand, channe
   );
 }
 
+export function recommendedRadioMode(
+  caps: RadioCapabilities,
+  band: WifiBand,
+  channel: string,
+  preference: "speed" | "stable",
+) {
+  if (band !== "2g" && band !== "5g") return "";
+  const modes = radioModes(caps, band, channel);
+  // 二点四吉赫兹保留二十兆赫；五吉赫兹按用途选择，仍服从当前信道限制。
+  const choices =
+    band === "2g"
+      ? ["HE20", "HT20"]
+      : [
+          ...(preference === "speed" ? ["HE80", "VHT80"] : []),
+          "HE40",
+          "VHT40",
+          "HT40",
+          "HE20",
+          "VHT20",
+          "HT20",
+        ];
+  return choices.find((mode) => modes.includes(mode)) ?? "";
+}
+
 export function radioDraft(snapshot: SettingsSnapshot, section: string) {
   const radio = snapshot.wireless[section];
   if (radio?.[".type"] !== "wifi-device" || (radio.type && radio.type !== "mac80211"))
@@ -119,6 +171,7 @@ export function radioDraft(snapshot: SettingsSnapshot, section: string) {
     country: String(radio.country ?? "00"),
     channel: String(radio.channel ?? "auto"),
     mode: String(radio.htmode ?? ""),
+    txpower: radio.txpower === undefined || radio.txpower === "" ? "auto" : String(radio.txpower),
   };
 }
 export function radioPlan(
@@ -129,6 +182,7 @@ export function radioPlan(
 ): ConfigPlan {
   const old = radioDraft(snapshot, section),
     values: Record<string, string> = {};
+  const remove: string[] = [];
   const band = draft.band;
   if (
     band !== old.band &&
@@ -162,9 +216,23 @@ export function radioPlan(
     if (value !== previous) values[key] = value;
   }
   if (band !== old.band) values.band = band;
+  if (draft.txpower !== old.txpower) {
+    if (draft.txpower === "auto") {
+      if (snapshot.wireless[section].txpower !== undefined) remove.push("txpower");
+    } else {
+      if (draft.country !== old.country || draft.channel !== old.channel || band !== old.band)
+        throw new Error("请先应用地区、频段或信道，再重新读取可用功率；本次可选择驱动自动。");
+      if (!caps.powerLevels?.some((value) => String(value) === draft.txpower))
+        throw new Error("请选择驱动提供的发射功率，或使用驱动自动。");
+      values.txpower = draft.txpower;
+    }
+  }
   return {
     label: "无线射频参数",
     address: lanDraft(snapshot).address,
-    edits: Object.keys(values).length ? [{ config: "wireless", section, values }] : [],
+    edits:
+      Object.keys(values).length || remove.length
+        ? [{ config: "wireless", section, values, ...(remove.length ? { remove } : {}) }]
+        : [],
   };
 }
