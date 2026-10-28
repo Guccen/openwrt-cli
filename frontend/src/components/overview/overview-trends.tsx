@@ -31,7 +31,14 @@ export function OverviewTrends({ history }: { history: OverviewSample[] }) {
         {metrics.map((metric) => (
           <Card size="sm" key={metric.key}>
             <CardHeader>
-              <CardTitle>{metric.title}</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: metric.color }}
+                />
+                {metric.title}
+              </CardTitle>
               <CardDescription>{metric.description}</CardDescription>
             </CardHeader>
             <CardContent>
@@ -75,7 +82,7 @@ export function OverviewTrends({ history }: { history: OverviewSample[] }) {
                     type="linear"
                     dataKey={metric.key}
                     stroke={`var(--color-${metric.key})`}
-                    strokeWidth={2}
+                    strokeWidth={2.5}
                     dot={history.length < 2}
                     connectNulls={false}
                     isAnimationActive={false}
