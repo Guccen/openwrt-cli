@@ -18,6 +18,7 @@ const status = {
   next: null,
   last: null,
   cronRunning: true,
+  cronSynchronized: true,
 };
 
 test("定时重启严格验证24小时制和不重复的星期，关闭时仍保存有效计划", () => {

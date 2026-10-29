@@ -3,6 +3,7 @@ import { cursor } from 'uci';
 import { readfile, writefile, rename, unlink, fdopen, popen } from 'fs';
 const config = '/etc/router-ui-schedule.json';
 const stateFile = '/etc/router-ui-schedule.last';
+const cronFile = '/etc/crontabs/root';
 const reasons = ['requested', 'disabled', 'invalid_clock', 'not_due', 'duplicate', 'boot_grace', 'configuration_busy', 'maintenance_busy', 'reboot_failed'];
 function validate(value) {
     if (type(value) != 'object' || type(value.enabled) != 'bool' || type(value.time) != 'string' || length(value.time) != 5 ||
@@ -104,6 +105,24 @@ function cronRunning() {
     process.read(16);
     return process.close() == 0;
 }
+function cronLine(settings) {
+    if (!settings.enabled) return '';
+    let clock = split(settings.time, ':');
+    return sprintf('%d %d * * %s /usr/libexec/router-ui/scheduled-reboot run >/dev/null 2>&1 # router-ui-scheduled-reboot', int(clock[1]), int(clock[0]), join(',', settings.days));
+}
+function cronSynchronized(settings) {
+    let text = readfile(cronFile, 65537);
+    if (text == null) return !settings.enabled;
+    if (type(text) != 'string' || length(text) > 65536) return false;
+    let expected = cronLine(settings), found = 0;
+    for (let row in split(text, '\n')) {
+        let current = trim(row);
+        if (!match(current, / # router-ui-scheduled-reboot$/)) continue;
+        if (!settings.enabled || current != expected) return false;
+        found++;
+    }
+    return settings.enabled ? found == 1 : found == 0;
+}
 try {
     if (ARGV[0] == 'validate') {
         let text = fdopen(0, 'r').read(4097);
@@ -111,10 +130,9 @@ try {
         print(requestPolicy(json(text)));
     } else if (ARGV[0] == 'status') {
         let settings = policy(), previous = state(), now = time();
-        print({ ok: true, policy: settings, localTime: dateTime(localtime(now)), timezone: zoneName(), next: nextTime(settings, now, previous), last: previous.last, cronRunning: cronRunning() });
+        print({ ok: true, policy: settings, localTime: dateTime(localtime(now)), timezone: zoneName(), next: nextTime(settings, now, previous), last: previous.last, cronRunning: cronRunning(), cronSynchronized: cronSynchronized(settings) });
     } else if (ARGV[0] == 'line') {
-        let settings = policy(), clock = split(settings.time, ':');
-        if (settings.enabled) print(sprintf('%d %d * * %s /usr/libexec/router-ui/scheduled-reboot run >/dev/null 2>&1 # router-ui-scheduled-reboot\n', int(clock[1]), int(clock[0]), join(',', settings.days)));
+        print(cronLine(policy()));
     } else if (ARGV[0] == 'decision') {
         print(decision(policy(), time(), state(), uptime()));
     } else if (ARGV[0] == 'record') {

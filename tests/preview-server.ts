@@ -276,6 +276,7 @@ const rpc = {
                 : null,
               last: null,
               cronRunning: true,
+              cronSynchronized: true,
             },
           ];
         if (method === "schedule_save") {

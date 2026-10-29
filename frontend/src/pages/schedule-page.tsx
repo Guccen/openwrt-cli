@@ -200,6 +200,8 @@ function ScheduleForm({ snapshot, disabled }: { snapshot: ScheduleSnapshot; disa
   const [policy, setPolicy] = useState<SchedulePolicy>(() => structuredClone(snapshot.policy));
   const [confirmation, setConfirmation] = useState<SchedulePolicy | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const needsRepair =
+    !snapshot.cronSynchronized || (snapshot.policy.enabled && !snapshot.cronRunning);
   function update(values: Partial<SchedulePolicy>) {
     setPolicy((current) => ({ ...current, ...values }));
     setError(null);
@@ -216,11 +218,12 @@ function ScheduleForm({ snapshot, disabled }: { snapshot: ScheduleSnapshot; disa
     }
     update({ enabled });
   }
-  async function save(value: SchedulePolicy) {
+  async function save(value: SchedulePolicy, repairing = false) {
     setConfirmation(null);
     const session = useRouter.getState().session;
     if (!session || disabled || configurationBusy() || useSchedule.getState().session !== session)
       return;
+    if (repairing && !sameSchedule(policy, snapshot.policy)) return;
     const token = useMaintenanceOperation.getState().begin("schedule");
     if (!token) return;
     setError(null);
@@ -228,12 +231,24 @@ function ScheduleForm({ snapshot, disabled }: { snapshot: ScheduleSnapshot; disa
     try {
       await scheduleClient.save(session, value);
       if (useRouter.getState().session === session) {
-        notify.success("schedule", value.enabled ? "定时重启计划已保存" : "定时重启已关闭");
+        notify.success(
+          "schedule",
+          repairing
+            ? "定时任务已重新同步"
+            : value.enabled
+              ? "定时重启计划已保存"
+              : "定时重启已关闭",
+          repairing ? "已根据设备中保存的计划修复 cron 任务。" : undefined,
+        );
         await useSchedule.getState().load();
       }
     } catch (cause) {
       if (useRouter.getState().session === session)
-        notify.error("schedule", cause, "定时任务保存失败，请重试。");
+        notify.error(
+          "schedule",
+          cause,
+          repairing ? "定时任务同步失败，请检查 cron 服务后重试。" : "定时任务保存失败，请重试。",
+        );
     } finally {
       useMaintenanceOperation.getState().finish(token);
     }
@@ -350,6 +365,33 @@ function ScheduleForm({ snapshot, disabled }: { snapshot: ScheduleSnapshot; disa
             <Button disabled={disabled || sameSchedule(policy, snapshot.policy)}>
               保存定时任务
             </Button>
+            {needsRepair && (
+              <Alert variant="destructive">
+                <AlertDescription className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    {!snapshot.policy.enabled
+                      ? "计划已关闭，但 cron 中仍有本功能的任务行。"
+                      : !snapshot.cronRunning
+                        ? "cron 服务未运行，已启用的计划无法触发。"
+                        : "已保存的计划与 cron 任务行不同步，计划可能不会执行。"}
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!sameSchedule(policy, snapshot.policy) && (
+                      <span className="text-muted-foreground">请先保存或撤销未保存的更改。</span>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={disabled || !sameSchedule(policy, snapshot.policy)}
+                      onClick={() => void save(snapshot.policy, true)}
+                    >
+                      {!snapshot.policy.enabled ? "清理残留任务" : "重新同步计划"}
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
           </form>
         </CardContent>
       </Card>
@@ -399,6 +441,11 @@ function ScheduleStatus({ snapshot }: { snapshot: ScheduleSnapshot }) {
           <dd className="min-w-0 break-words">{snapshot.localTime}</dd>
           <dt className="text-muted-foreground">设备时区</dt>
           <dd className="min-w-0 break-words">{snapshot.timezone}</dd>
+          <dt className="text-muted-foreground">任务同步</dt>
+          <dd className="min-w-0 break-words">
+            {snapshot.cronSynchronized ? "已同步" : "与 cron 不一致"}
+            {snapshot.policy.enabled && !snapshot.cronRunning ? " · cron 服务未运行" : ""}
+          </dd>
           <dt className="text-muted-foreground">下次执行</dt>
           <dd className="min-w-0 break-words">
             {snapshot.policy.enabled
@@ -416,13 +463,6 @@ function ScheduleStatus({ snapshot }: { snapshot: ScheduleSnapshot }) {
             </>
           )}
         </dl>
-        {!snapshot.cronRunning && (
-          <Alert variant="destructive">
-            <AlertDescription>
-              cron 服务未运行，定时任务无法触发。请先启动 cron 服务，再重新读取状态。
-            </AlertDescription>
-          </Alert>
-        )}
       </CardContent>
     </Card>
   );

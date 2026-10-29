@@ -21,6 +21,7 @@ export interface ScheduleSnapshot {
   next: string | null;
   last: ScheduleRecord | null;
   cronRunning: boolean;
+  cronSynchronized: boolean;
   updatedAt: number;
 }
 
@@ -114,7 +115,8 @@ export class ScheduleClient {
       !validText(response.localTime) ||
       !validText(response.timezone, 128) ||
       (response.next !== null && !validText(response.next)) ||
-      typeof response.cronRunning !== "boolean"
+      typeof response.cronRunning !== "boolean" ||
+      typeof response.cronSynchronized !== "boolean"
     )
       throw new Error("定时任务状态格式不正确，请确认设备组件已更新。");
     const last = response.last as ScheduleRecord | null;
@@ -136,6 +138,7 @@ export class ScheduleClient {
       next: response.next,
       last,
       cronRunning: response.cronRunning,
+      cronSynchronized: response.cronSynchronized,
       updatedAt: Date.now(),
     };
   }

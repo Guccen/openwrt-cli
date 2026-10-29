@@ -8,6 +8,6 @@
 
 计划使用已有系统 cron 和按需执行的脚本，不新增常驻进程。启用时会启动并启用 cron；停用或卸载只删除本功能标记的任务，保留其他任务和 cron 服务。与状态灯共享 crontab 写入锁。配置与最近记录分别保存在 `/etc/router-ui-schedule.json`、`/etc/router-ui-schedule.last`，纳入备份保留列表。
 
-网页通过受限 `router.maintenance.schedule_status` / `schedule_save` 读取、保存固定的 `{enabled,time,days}`，不开放任意命令、路径或 cron 表达式。保存应用失败时恢复原配置和任务；若恢复也失败，页面会明确报告，需要重新读取并检查设备。
+网页通过受限 `router.maintenance.schedule_status` / `schedule_save` 读取、保存固定的 `{enabled,time,days}`，不开放任意命令、路径或 cron 表达式。页面会核对 cron 服务及本计划对应的标记行；发现任务行被手动删除或与已保存计划不一致时，可在页面重新同步。同步只重建本功能的标记行，并保留其他 cron 任务。手动删除任务行后不会自动补回，需打开页面按提示修复。保存应用失败时恢复原配置和任务；若恢复也失败，页面会明确报告，需要重新读取并检查设备。
 
 本地 shell 测试使用隔离文件和替身命令，验证执行门禁、去重、重启调用失败和任务恢复；ucode 测试运行真实解释器。QEMU 验证安装后的 RPC 权限、配置、cron 行和停用保留，不触发计划重启。真实设备的定时重启和断电后的时钟恢复仍需实机确认。

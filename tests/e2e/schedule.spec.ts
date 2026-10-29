@@ -34,6 +34,7 @@ async function mockSchedule(page: Page, options: { cronRunning?: boolean; error?
           slot: "2026-10-27 03:00",
         },
         cronRunning: options.cronRunning ?? true,
+        cronSynchronized: true,
       };
     }
     await route.fulfill({ json: { jsonrpc: "2.0", id: body.id, result: [0, result] } });
