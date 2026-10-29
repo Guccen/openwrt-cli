@@ -14,8 +14,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { DeviceLoading } from "@/components/status/device-loading";
 import { ErrorAlert } from "@/components/status/error-alert";
@@ -32,6 +38,65 @@ import { useRouter } from "@/stores/router";
 import { useSettings } from "@/stores/settings";
 import { useMaintenanceOperation } from "@/stores/maintenance-operation";
 import { scheduleClient, useSchedule } from "@/stores/schedule";
+
+const scheduleHours = Array.from({ length: 24 }, (_, value) => String(value).padStart(2, "0"));
+const scheduleMinutes = Array.from({ length: 60 }, (_, value) => String(value).padStart(2, "0"));
+
+function ScheduleTimePicker({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  disabled: boolean;
+  onChange: (part: "hour" | "minute", value: string) => void;
+}) {
+  const [hour, minute] = value.split(":");
+  return (
+    <div
+      role="group"
+      aria-label="执行时间"
+      className="flex h-8 w-full items-center gap-1 rounded-md border border-input bg-input/20 px-2 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30 sm:max-w-40 dark:bg-input/30"
+    >
+      <Select value={hour} onValueChange={(next) => onChange("hour", next)} disabled={disabled}>
+        <SelectTrigger
+          id="schedule-time-hour"
+          aria-label="小时"
+          size="sm"
+          className="h-6 min-w-0 flex-1 justify-center border-0 bg-transparent px-1 text-sm shadow-none focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent position="popper" className="min-w-16">
+          {scheduleHours.map((option) => (
+            <SelectItem key={option} value={option} className="justify-center pr-6">
+              {option}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <span aria-hidden="true" className="text-muted-foreground">
+        :
+      </span>
+      <Select value={minute} onValueChange={(next) => onChange("minute", next)} disabled={disabled}>
+        <SelectTrigger
+          aria-label="分钟"
+          size="sm"
+          className="h-6 min-w-0 flex-1 justify-center border-0 bg-transparent px-1 text-sm shadow-none focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent position="popper" className="min-w-16">
+          {scheduleMinutes.map((option) => (
+            <SelectItem key={option} value={option} className="justify-center pr-6">
+              {option}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 function configurationBusy() {
   const settings = useSettings.getState();
@@ -129,20 +194,24 @@ function ScheduleForm({ snapshot, disabled }: { snapshot: ScheduleSnapshot; disa
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">
-                <Label htmlFor="schedule-time">执行时间</Label>
+                <Label htmlFor="schedule-time-hour">执行时间</Label>
                 <HelpTip label="执行时间说明">
                   使用设备本地时间，时区见下方运行状态。建议选择网络空闲时段。
                 </HelpTip>
               </div>
-              <Input
-                id="schedule-time"
-                type="time"
-                step={60}
-                required
-                className="w-full sm:max-w-40"
+              <ScheduleTimePicker
                 value={policy.time}
                 disabled={disabled || !policy.enabled}
-                onChange={(event) => update({ time: event.target.value })}
+                onChange={(part, value) => {
+                  setPolicy((current) => {
+                    const [hour, minute] = current.time.split(":");
+                    return {
+                      ...current,
+                      time: part === "hour" ? `${value}:${minute}` : `${hour}:${value}`,
+                    };
+                  });
+                  setError(null);
+                }}
               />
             </div>
             <fieldset className="space-y-2" disabled={disabled || !policy.enabled}>
