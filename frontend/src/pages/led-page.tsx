@@ -57,7 +57,7 @@ function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: bool
     try {
       await ledClient.save(session, policy, snapshot);
       if (useRouter.getState().session === session) {
-        notify.success("led", "指示灯触发器已保存并应用", "灯效由内核实时驱动，无需定时任务。");
+        notify.success("led", "指示灯触发器已保存并应用", "内核会按所选事件实时控制灯效。");
         await useLeds.getState().load();
       }
     } catch (e) {
@@ -76,7 +76,7 @@ function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: bool
         <CardHeader>
           <CardTitle>智能状态灯</CardTitle>
           <CardDescription>
-            使用设备内核提供的 LED 触发器响应网卡、Wi‑Fi、存储和系统活动；不检测公网在线状态。
+            根据网卡、Wi‑Fi、存储和系统事件控制指示灯，具体选项由设备驱动决定。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -89,8 +89,7 @@ function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: bool
             <div className="flex items-center gap-1">
               <Label htmlFor="led-policy-enabled">启用内核触发器控制</Label>
               <HelpTip label="内核触发器说明">
-                触发器由 Linux LED 驱动响应事件，不启动轮询进程，也不创建 cron
-                任务。不同设备提供的触发器不同。
+                Linux LED 驱动会根据所选事件控制指示灯。不同设备提供的触发方式不同。
               </HelpTip>
             </div>
             <Switch
@@ -287,7 +286,7 @@ function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: bool
                         />
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        网卡触发器响应所选接口的链路和收发活动，不探测上游互联网。
+                        显示所选接口的链路与数据收发活动。
                       </p>
                     </div>
                   )}
