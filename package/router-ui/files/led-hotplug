@@ -1,4 +1,4 @@
 #!/bin/sh
 case "$ACTION" in
-    ifup|ifdown|ifupdate) /usr/libexec/router-ui/led-state check >/dev/null 2>&1 ;;
+    ifup|ifdown|ifupdate) /usr/libexec/router-ui/led-state start >/dev/null 2>&1 ;;
 esac

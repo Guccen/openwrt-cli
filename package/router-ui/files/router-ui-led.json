@@ -1,10 +1,6 @@
 {
+  "version": 2,
   "enabled": false,
-  "targets": ["223.5.5.5", "119.29.29.29"],
-  "states": {
-    "boot": { "led": "", "effect": "blink", "onMs": 250, "offMs": 250 },
-    "normal": { "led": "", "effect": "on", "onMs": 500, "offMs": 500 },
-    "offline": { "led": "", "effect": "blink", "onMs": 1000, "offMs": 1000 },
-    "fault": { "led": "", "effect": "blink", "onMs": 100, "offMs": 100 }
-  }
+  "boot": { "led": "", "effect": "blink", "onMs": 250, "offMs": 250 },
+  "leds": []
 }

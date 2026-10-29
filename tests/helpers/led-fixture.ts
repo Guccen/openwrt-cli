@@ -1,4 +1,4 @@
-import type { LedPolicy, LedSnapshot, LedState } from "../../frontend/src/lib/led-client";
+import type { LedPolicy, LedSnapshot } from "../../frontend/src/lib/led-client";
 
 export function ledFixture(
   device = "jdcloud-ax1800",
@@ -9,17 +9,34 @@ export function ledFixture(
       ? ["red:status", "green:status", "blue:status"]
       : ["n1:white:status"]
     : [];
-  const effects: Record<LedState, LedPolicy["states"][LedState]> = {
-    boot: { led: "", effect: "blink", onMs: 250, offMs: 250 },
-    normal: { led: "", effect: "on", onMs: 500, offMs: 500 },
-    offline: { led: "", effect: "blink", onMs: 1000, offMs: 1000 },
-    fault: { led: "", effect: "blink", onMs: 100, offMs: 100 },
-  };
+  const triggers = [
+    "timer",
+    "heartbeat",
+    "default-on",
+    "netdev",
+    "mmc0",
+    "phy0rx",
+    "phy0tx",
+    "phy0assoc",
+    "phy0radio",
+    "phy1rx",
+    "phy1tx",
+    "phy1assoc",
+    "phy1radio",
+  ];
   return {
-    leds: ids.map((id) => ({ id, timer: true, maxBrightness: 1 })),
-    policy: { enabled: false, targets: ["223.5.5.5", "119.29.29.29"], states: effects },
-    current: null,
-    cronRunning: true,
-    cronSynchronized: true,
+    leds: ids.map((id) => ({ id, triggers, currentTrigger: "default-on", maxBrightness: 1 })),
+    networkDevices: ["lo", "wan", "br-lan", "phy0-ap0"],
+    policy: {
+      version: 2,
+      enabled: false,
+      boot: {
+        led: device === "jdcloud-ax1800" ? "blue:status" : "n1:white:status",
+        effect: "blink",
+        onMs: 250,
+        offMs: 250,
+      },
+      leds: [],
+    } satisfies LedPolicy,
   };
 }

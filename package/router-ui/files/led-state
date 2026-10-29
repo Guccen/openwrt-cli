@@ -1,78 +1,30 @@
 #!/bin/sh
-# oneshot/cron/hotplug 共享状态机；不启动新的常驻进程。
+# 通过启动阶段和网络接口事件配置内核 LED 触发器，不创建周期任务。
 set -e
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 077
-CONFIG=/etc/router-ui-led.json
 HELPER=/usr/libexec/router-ui/led-policy.uc
 LOCK=/var/run/router-ui-led.lock
-BOOT=/var/run/router-ui-led.boot
-CRON=/etc/crontabs/root
-CRONLOCK=/var/run/router-ui-crontab.lock
-LINE='* * * * * /usr/libexec/router-ui/led-state check >/dev/null 2>&1 # router-ui-led'
-mode=${1:-check}
-[ -r "$CONFIG" ] || exit 0
-enabled=$(jsonfilter -i "$CONFIG" -e '@.enabled' 2>/dev/null) || exit 1
-[ "$mode" != check ] || [ ! -d /var/run/router-ui-maintenance.lock ] || exit 0
-if ! mkdir "$LOCK" 2>/dev/null; then [ "$mode" = check ] && exit 0; exit 1; fi
-temporary=
-cron_locked=false
-trap '[ -z "$temporary" ] || rm -f "$temporary"; [ "$cron_locked" != true ] || rmdir "$CRONLOCK" 2>/dev/null || true; rmdir "$LOCK" 2>/dev/null || true' EXIT
+mode=${1:-start}
+
+if ! mkdir "$LOCK" 2>/dev/null; then
+    case "$mode" in start|boot) exit 0 ;; *) exit 1 ;; esac
+fi
+trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
 trap 'exit 1' HUP INT TERM
+
 case "$mode" in
-    configure|start|uninstall)
-        count=0
-        until mkdir "$CRONLOCK" 2>/dev/null; do
-            count=$((count + 1)); [ "$count" -lt 5 ] || exit 1
-            sleep 1
-        done
-        cron_locked=true
-        if [ "$mode" = configure ] || [ "$mode" = uninstall ]; then ucode "$HELPER" restore >/dev/null; fi
-        [ "$mode" != uninstall ] || enabled=false
-        mkdir -p /etc/crontabs
-        temporary=$(mktemp /etc/crontabs/.router-ui-led.XXXXXX)
-        if [ -f "$CRON" ]; then
-            if grep -v ' # router-ui-led$' "$CRON" > "$temporary"; then :;
-            else result=$?; [ "$result" -eq 1 ] || exit 1; fi
-        fi
-        if [ "$enabled" = true ]; then printf '%s\n' "$LINE" >> "$temporary"; fi
-        mv "$temporary" "$CRON"
-        temporary=
-        if [ "$enabled" = true ]; then
-            /etc/init.d/cron enable
-            pidof crond >/dev/null || /etc/init.d/cron start
-        fi
-        rm -f "$BOOT"
-        rmdir "$CRONLOCK"
-        cron_locked=false
+    configure)
+        ucode "$HELPER" configure
+        ;;
+    start)
+        ucode "$HELPER" start
         ;;
     boot)
-        [ "$enabled" = true ] || exit 0
-        : > "$BOOT"
-        ucode "$HELPER" apply boot
-        exit
+        ucode "$HELPER" boot
         ;;
-    stop)
+    stop|uninstall)
         ucode "$HELPER" restore
-        rm -f "$BOOT"
-        exit
         ;;
-    check) [ ! -e "$BOOT" ] || exit 0 ;;
     *) exit 1 ;;
 esac
-[ "$enabled" = true ] || exit 0
-state=normal
-if ! pidof netifd >/dev/null || ! pidof rpcd >/dev/null || ! pidof uhttpd >/dev/null; then
-    state=fault
-else
-    reachable=false
-    count=0
-    for target in $(jsonfilter -i "$CONFIG" -e '@.targets[*]'); do
-        count=$((count + 1))
-        [ "$count" -le 2 ] || break
-        case "$target" in ''|*[!0-9.]*) continue ;; esac
-        if ping -n -c 1 -W 2 "$target" >/dev/null 2>&1; then reachable=true; break; fi
-    done
-    [ "$reachable" = true ] || state=offline
-fi
-ucode "$HELPER" apply "$state"

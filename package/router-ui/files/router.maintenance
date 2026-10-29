@@ -164,11 +164,6 @@ case "$1" in
                 /usr/libexec/router-ui/led-state configure >/dev/null 2>&1 || fail led_apply_failed
                 printf '%s\n' "$result"
                 ;;
-            led_repair)
-                lock
-                /usr/libexec/router-ui/led-state configure >/dev/null 2>&1 || fail led_apply_failed
-                printf '%s\n' '{"ok":true}'
-                ;;
             password)
                 lock
                 ucode /usr/libexec/router-ui/password.uc

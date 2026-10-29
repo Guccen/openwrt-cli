@@ -15,13 +15,13 @@ import {
 import { ErrorAlert } from "@/components/status/error-alert";
 import { DeviceLoading } from "@/components/status/device-loading";
 import {
-  ledStates,
   ledLabel,
   ledDraft,
+  triggerLabel,
   validateLedPolicy,
-  type LedState,
+  type LedPolicy,
+  type LedRule,
   type LedSnapshot,
-  type LedEffect,
 } from "@/lib/led-client";
 import { ledClient, useLeds } from "@/stores/leds";
 import { useSettings } from "@/stores/settings";
@@ -31,28 +31,23 @@ import { notify } from "@/lib/notifications";
 
 function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: boolean }) {
   const [policy, setPolicy] = useState(() => ledDraft(snapshot));
-  const [targets, setTargets] = useState(policy.targets.join(", "));
   const [error, setError] = useState<string | null>(null);
-  function update(name: LedState, values: Partial<LedEffect>) {
+  function updateBoot(values: Partial<LedPolicy["boot"]>) {
+    setPolicy((current) => ({ ...current, boot: { ...current.boot, ...values } }));
+  }
+  function updateLed(id: string, values: Partial<LedRule>) {
     setPolicy((current) => ({
       ...current,
-      states: { ...current.states, [name]: { ...current.states[name], ...values } },
+      leds: current.leds.map((item) => (item.id === id ? { ...item, ...values } : item)),
     }));
   }
   async function save() {
     const session = useRouter.getState().session;
     if (!session || disabled) return;
-    const value = {
-      ...policy,
-      targets: targets
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-    };
     try {
-      validateLedPolicy(value, snapshot.leds);
+      validateLedPolicy(policy, snapshot.leds, snapshot.networkDevices);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "请检查指示灯配置。");
+      setError(e instanceof Error ? e.message : "请检查指示灯触发器设置。");
       return;
     }
     const operation = useMaintenanceOperation.getState().begin("led");
@@ -60,10 +55,9 @@ function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: bool
     setError(null);
     notify.dismiss("led");
     try {
-      await ledClient.save(session, value, snapshot.leds);
+      await ledClient.save(session, policy, snapshot);
       if (useRouter.getState().session === session) {
-        notify.success("led", "指示灯配置已保存并应用", "状态每分钟检测一次。");
-        // 读取设备实际保存的配置与状态。
+        notify.success("led", "指示灯触发器已保存并应用", "灯效由内核实时驱动，无需定时任务。");
         await useLeds.getState().load();
       }
     } catch (e) {
@@ -72,45 +66,17 @@ function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: bool
       useMaintenanceOperation.getState().finish(operation);
     }
   }
-  async function repairTask() {
-    const session = useRouter.getState().session;
-    if (!session || disabled) return;
-    const operation = useMaintenanceOperation.getState().begin("led");
-    if (!operation) return;
-    setError(null);
-    notify.dismiss("led");
-    try {
-      await ledClient.repair(session);
-      if (useRouter.getState().session === session) {
-        notify.success(
-          "led",
-          "指示灯定时任务已同步",
-          snapshot.policy.enabled ? "每分钟状态检查已恢复。" : "残留任务已清理。",
-        );
-        await useLeds.getState().load();
-      }
-    } catch (e) {
-      if (useRouter.getState().session === session) notify.error("led", e, "指示灯任务修复失败");
-    } finally {
-      useMaintenanceOperation.getState().finish(operation);
-    }
-  }
+
   const available = snapshot.leds.length > 0;
   const savedDraft = ledDraft(snapshot);
-  const hasUnsavedChanges =
-    JSON.stringify(policy) !== JSON.stringify(savedDraft) ||
-    targets !== savedDraft.targets.join(", ");
-  const taskNeedsRepair =
-    !snapshot.cronSynchronized || (snapshot.policy.enabled && !snapshot.cronRunning);
+  const hasUnsavedChanges = JSON.stringify(policy) !== JSON.stringify(savedDraft);
   return (
     <div className="space-y-3">
       <Card size="sm">
         <CardHeader>
-          <CardTitle>系统状态灯</CardTitle>
+          <CardTitle>智能状态灯</CardTitle>
           <CardDescription>
-            {snapshot.current
-              ? `最近状态：${ledStates[snapshot.current.state]} · ${new Date(snapshot.current.checkedAt * 1000).toLocaleTimeString("zh-CN")}`
-              : "尚未启用状态灯控制"}
+            使用设备内核提供的 LED 触发器响应网卡、Wi‑Fi、存储和系统活动；不检测公网在线状态。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -121,9 +87,10 @@ function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: bool
           )}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-1">
-              <Label htmlFor="led-policy-enabled">按系统状态控制指示灯</Label>
-              <HelpTip label="状态灯控制说明">
-                每分钟及网络接口变化时更新状态。仅接管选中的灯，停用后恢复接管前的灯效。
+              <Label htmlFor="led-policy-enabled">启用内核触发器控制</Label>
+              <HelpTip label="内核触发器说明">
+                触发器由 Linux LED 驱动响应事件，不启动轮询进程，也不创建 cron
+                任务。不同设备提供的触发器不同。
               </HelpTip>
             </div>
             <Switch
@@ -133,121 +100,195 @@ function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: bool
               onCheckedChange={(enabled) => setPolicy((current) => ({ ...current, enabled }))}
             />
           </div>
-          <div className="flex items-center gap-1">
-            <Label htmlFor="led-targets">连通性探测目标（1–2 个 IPv4）</Label>
-            <HelpTip label="连通性探测说明">
-              两个目标均无法响应 ping 时显示断网；任一目标可达则正常。故障指 netifd、rpcd 或 uhttpd
-              关键进程缺失。ICMP 被拦截可能误判，不能检测断电、内核崩溃或所有业务故障。
-            </HelpTip>
-          </div>
-          <Input
-            id="led-targets"
-            value={targets}
-            onChange={(event) => setTargets(event.target.value)}
-            disabled={disabled || !available}
-          />
-          {taskNeedsRepair && (
-            <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">
-                  指示灯定时任务{snapshot.cronSynchronized ? "未运行" : "与配置不一致"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {snapshot.policy.enabled
-                    ? "状态控制已启用，但每分钟检查任务缺失或 cron 服务未运行。"
-                    : "状态控制已关闭，检测到残留的指示灯定时任务。"}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={disabled || hasUnsavedChanges}
-                onClick={() => void repairTask()}
-              >
-                {snapshot.policy.enabled ? "重新同步任务" : "清理残留任务"}
-              </Button>
-            </div>
-          )}
-          {taskNeedsRepair && hasUnsavedChanges && (
-            <p className="text-xs text-muted-foreground">
-              请先保存或撤销未保存的指示灯设置，再修复定时任务。
-            </p>
-          )}
         </CardContent>
       </Card>
+
+      {available && (
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle>开机效果</CardTitle>
+            <CardDescription>
+              启动早期短暂显示所选灯效，系统启动完成后切换为下方配置的内核触发器。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="led-boot">使用指示灯</Label>
+              <Select
+                value={policy.boot.led}
+                disabled={disabled}
+                onValueChange={(led) => updateBoot({ led })}
+              >
+                <SelectTrigger id="led-boot" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {snapshot.leds.map((item, index) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {ledLabel(item.id, index)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="led-boot-effect">开机灯效</Label>
+              <Select
+                value={policy.boot.effect}
+                disabled={disabled}
+                onValueChange={(effect) =>
+                  updateBoot({ effect: effect as LedPolicy["boot"]["effect"] })
+                }
+              >
+                <SelectTrigger id="led-boot-effect" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="off">熄灭</SelectItem>
+                  <SelectItem value="on">常亮</SelectItem>
+                  {snapshot.leds
+                    .find((item) => item.id === policy.boot.led)
+                    ?.triggers.includes("timer") && <SelectItem value="blink">闪烁</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
+            {policy.boot.effect === "blink" && (
+              <div className="grid grid-cols-2 gap-3 sm:col-span-2">
+                {(["onMs", "offMs"] as const).map((key) => (
+                  <div className="space-y-2" key={key}>
+                    <Label htmlFor={`boot-${key}`}>
+                      {key === "onMs" ? "亮起" : "熄灭"}时间（毫秒）
+                    </Label>
+                    <Input
+                      id={`boot-${key}`}
+                      type="number"
+                      min={50}
+                      max={10000}
+                      value={policy.boot[key]}
+                      disabled={disabled}
+                      onChange={(event) => updateBoot({ [key]: Number(event.target.value) })}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {available && (
         <div className="grid gap-3 md:grid-cols-2">
-          {(Object.keys(ledStates) as LedState[]).map((name) => {
-            const effect = policy.states[name];
-            const led = snapshot.leds.find((item) => item.id === effect.led);
+          {snapshot.leds.map((led, index) => {
+            const rule = policy.leds.find((item) => item.id === led.id);
+            if (!rule) return null;
+            const triggerOptions = led.triggers.filter(
+              (trigger) => trigger !== "none" && trigger !== "default-on",
+            );
             return (
-              <Card size="sm" key={name}>
+              <Card size="sm" key={led.id}>
                 <CardHeader>
-                  <CardTitle>{ledStates[name]}时</CardTitle>
+                  <CardTitle>{ledLabel(led.id, index)}</CardTitle>
+                  <CardDescription>当前触发器：{triggerLabel(led.currentTrigger)}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <Label htmlFor={`led-${name}`}>使用指示灯</Label>
+                  <Label htmlFor={`trigger-${led.id}`}>触发方式</Label>
                   <Select
-                    value={effect.led}
+                    value={rule.trigger}
                     disabled={disabled}
-                    onValueChange={(value) =>
-                      update(name, {
-                        led: value,
-                        ...(!snapshot.leds.find((item) => item.id === value)?.timer &&
-                        effect.effect === "blink"
-                          ? { effect: "on" as const }
-                          : {}),
-                      })
-                    }
+                    onValueChange={(trigger) => updateLed(led.id, { trigger })}
                   >
-                    <SelectTrigger id={`led-${name}`} className="w-full">
+                    <SelectTrigger id={`trigger-${led.id}`} className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {snapshot.leds.map((item, index) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {ledLabel(item.id, index)}
+                      <SelectItem value="preserve">保持设备原有灯效</SelectItem>
+                      <SelectItem value="off">关闭</SelectItem>
+                      <SelectItem value="on">常亮</SelectItem>
+                      {triggerOptions.map((trigger) => (
+                        <SelectItem key={trigger} value={trigger}>
+                          {triggerLabel(trigger)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <Label htmlFor={`effect-${name}`}>灯效</Label>
-                  <Select
-                    value={effect.effect}
-                    disabled={disabled}
-                    onValueChange={(value) =>
-                      update(name, { effect: value as LedEffect["effect"] })
-                    }
-                  >
-                    <SelectTrigger id={`effect-${name}`} className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="on">常亮</SelectItem>
-                      <SelectItem value="off">熄灭</SelectItem>
-                      {led?.timer && <SelectItem value="blink">闪烁</SelectItem>}
-                    </SelectContent>
-                  </Select>
-                  {effect.effect === "blink" && (
+                  {rule.trigger === "timer" && (
                     <div className="grid grid-cols-2 gap-3">
                       {(["onMs", "offMs"] as const).map((key) => (
                         <div className="space-y-2" key={key}>
-                          <Label htmlFor={`${name}-${key}`}>
+                          <Label htmlFor={`${led.id}-${key}`}>
                             {key === "onMs" ? "亮起" : "熄灭"}时间（毫秒）
                           </Label>
                           <Input
-                            id={`${name}-${key}`}
+                            id={`${led.id}-${key}`}
                             type="number"
                             min={50}
                             max={10000}
-                            value={effect[key]}
+                            value={rule[key]}
                             disabled={disabled}
                             onChange={(event) =>
-                              update(name, { [key]: Number(event.target.value) })
+                              updateLed(led.id, { [key]: Number(event.target.value) })
                             }
                           />
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {rule.trigger === "netdev" && (
+                    <div className="space-y-3 rounded-lg border p-3">
+                      <div className="space-y-2">
+                        <Label htmlFor={`${led.id}-device`}>网络接口</Label>
+                        <Select
+                          value={rule.deviceName}
+                          disabled={disabled || !snapshot.networkDevices.length}
+                          onValueChange={(deviceName) => updateLed(led.id, { deviceName })}
+                        >
+                          <SelectTrigger id={`${led.id}-device`} className="w-full">
+                            <SelectValue placeholder="选择网络接口" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {snapshot.networkDevices.map((device) => (
+                              <SelectItem key={device} value={device}>
+                                {device}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        {(["link", "rx", "tx"] as const).map((key) => {
+                          const label = { link: "链路", rx: "接收", tx: "发送" }[key];
+                          return (
+                            <div className="flex items-center justify-between gap-2" key={key}>
+                              <Label htmlFor={`${led.id}-${key}`} className="text-xs">
+                                {label}
+                              </Label>
+                              <Switch
+                                id={`${led.id}-${key}`}
+                                checked={rule[key]}
+                                disabled={disabled}
+                                onCheckedChange={(checked) => updateLed(led.id, { [key]: checked })}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`${led.id}-interval`}>活动检测间隔（毫秒）</Label>
+                        <Input
+                          id={`${led.id}-interval`}
+                          type="number"
+                          min={10}
+                          max={10000}
+                          value={rule.interval}
+                          disabled={disabled}
+                          onChange={(event) =>
+                            updateLed(led.id, { interval: Number(event.target.value) })
+                          }
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        网卡触发器响应所选接口的链路和收发活动，不探测上游互联网。
+                      </p>
                     </div>
                   )}
                 </CardContent>
@@ -256,6 +297,7 @@ function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: bool
           })}
         </div>
       )}
+
       <ErrorAlert message={error} />
       <Button
         disabled={disabled || (!available && !snapshot.policy.enabled)}
@@ -264,12 +306,14 @@ function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: bool
         保存指示灯配置
       </Button>
       <p className="text-xs text-muted-foreground">
-        开机灯效从用户空间启动阶段生效；更早的启动及救援模式由固件控制。N1
-        单色灯可通过闪烁节奏区分状态，颜色以设备实际列出的灯为准。
+        AX1800、N1
+        等设备会按实际驱动支持的触发器显示选项。开机灯效在用户空间启动阶段执行一次；网络和无线活动由内核触发器实时处理。
       </p>
+      {hasUnsavedChanges && <span className="sr-only">有未保存的指示灯设置</span>}
     </div>
   );
 }
+
 export function LedPage() {
   const { session, snapshot, load, loading, error } = useLeds();
   const settings = useSettings();

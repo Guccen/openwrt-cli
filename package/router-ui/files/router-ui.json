@@ -28,7 +28,6 @@
           "reset",
           "password",
           "led_save",
-          "led_repair",
           "time_save",
           "schedule_save"
         ],
