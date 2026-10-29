@@ -1,5 +1,5 @@
 import type { NetworkInterface } from "./types";
-import { ipv4, ipv4Text, maskPrefix, poolRange } from "./ipv4";
+import { ipv4, ipv4Text, maskPrefix, poolRange, poolStartOffset, subnet } from "./ipv4";
 import { wifiBand, type WifiBand } from "./wifi-band";
 export { ipv4, maskPrefix } from "./ipv4";
 
@@ -29,6 +29,7 @@ export interface ConfigPlan {
   label: string;
   edits: ConfigEdit[];
   address: string;
+  details?: string[];
 }
 export interface LanDraft {
   address: string;
@@ -111,6 +112,8 @@ export function lanPlan(
     throw new Error("子网掩码需在 /8 至 /30 之间");
   const network = (ip & mask) >>> 0;
   const broadcast = (network | ~mask) >>> 0;
+  const oldBounds = subnet(old.address, old.netmask);
+  const networkChanged = address !== old.address || netmask !== old.netmask;
   if (ip === network || ip === broadcast) throw new Error("LAN 地址不能是网络地址或广播地址");
   for (const section of Object.values(snapshot.dhcp)) {
     if (section[".type"] !== "host" || typeof section.ip !== "string") continue;
@@ -129,6 +132,8 @@ export function lanPlan(
     if (target !== null && (target <= network || target >= broadcast || target === ip))
       throw new Error("新的 LAN 网段与已有端口转发目标冲突，请先调整转发规则。");
   }
+  const dhcpEdits: ConfigPlan["edits"] = [];
+  const details: string[] = [];
   if (!bypass) {
     for (const [name, section] of Object.entries(snapshot.dhcp)) {
       if (
@@ -139,7 +144,21 @@ export function lanPlan(
       )
         continue;
       try {
-        poolRange(address, netmask, Number(section.start ?? 100), Number(section.limit ?? 150));
+        const startOffset = poolStartOffset(section.start, oldBounds.network);
+        const count = Number(section.limit ?? 150);
+        const absoluteStart = typeof section.start === "string" ? ipv4(section.start) : null;
+        let targetOffset = startOffset;
+        if (absoluteStart !== null && (absoluteStart <= network || absoluteStart >= broadcast)) {
+          poolRange(address, netmask, startOffset, count);
+          const shiftedStart = ipv4Text(network + startOffset);
+          dhcpEdits.push({ config: "dhcp", section: name, values: { start: shiftedStart } });
+          details.push(
+            `LAN 网段变更时，DHCP 地址池起始地址将从 ${ipv4Text(absoluteStart)} 调整为 ${shiftedStart}，地址数量保持 ${count} 个。`,
+          );
+        } else if (absoluteStart !== null) {
+          targetOffset = absoluteStart - network;
+        }
+        poolRange(address, netmask, targetOffset, count);
       } catch (error) {
         throw new Error(
           `${error instanceof Error ? error.message : "地址池不正确"}；请先调整 DHCP 地址池，再修改 LAN。`,
@@ -180,7 +199,6 @@ export function lanPlan(
   }
   const values: Record<string, string | string[]> = {};
   const currentAddress = snapshot.network.lan.ipaddr;
-  const networkChanged = address !== old.address || netmask !== old.netmask;
   if (typeof currentAddress === "string" && currentAddress.includes("/") && networkChanged) {
     values.ipaddr = address;
     values.netmask = netmask;
@@ -198,10 +216,13 @@ export function lanPlan(
   ) {
     values.dns = [gateway];
   }
+  const edits = [...dhcpEdits];
+  if (Object.keys(values).length) edits.push({ config: "network", section: "lan", values });
   return {
     label: "LAN 设置",
     address,
-    edits: Object.keys(values).length ? [{ config: "network", section: "lan", values }] : [],
+    edits,
+    ...(details.length ? { details } : {}),
   };
 }
 

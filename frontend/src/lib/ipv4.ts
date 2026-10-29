@@ -15,6 +15,19 @@ export function ipv4Text(value: number) {
     throw new Error("IPv4 地址超出范围");
   return [24, 16, 8, 0].map((shift) => (value >>> shift) & 255).join(".");
 }
+export function poolStartOffset(value: unknown, network: number) {
+  const raw = value ?? 100;
+  if (typeof raw !== "string" && typeof raw !== "number") return Number.NaN;
+  const text = String(raw);
+  const address = ipv4(text);
+  if (address !== null) return address - network;
+  return /^(0|[1-9]\d*)$/.test(text) ? Number(text) : Number.NaN;
+}
+export function poolStartValue(address: number, network: number, current: unknown) {
+  return typeof current === "string" && ipv4(current) !== null
+    ? ipv4Text(address)
+    : String(address - network);
+}
 export function subnet(address: string, netmask: string) {
   const ip = ipv4(address),
     mask = ipv4(netmask),

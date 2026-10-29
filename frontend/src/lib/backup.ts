@@ -12,6 +12,7 @@ import {
 } from "./settings";
 import type { Device, NetworkInterface } from "./types";
 import { dhcpDraft, dhcpPlan, dhcpSection, type DhcpDraft } from "./dhcp-settings";
+import { ipv4, subnet } from "./ipv4";
 
 export const BACKUP_LIMIT = 64 * 1024;
 interface WifiBackup {
@@ -250,6 +251,7 @@ export function restoreBackup(
   let dhcp: ConfigPlan | null = null;
   let validationSnapshot = snapshot;
   if (backup.dhcp) {
+    const previousDhcp = dhcpDraft(snapshot);
     const projected = {
       ...snapshot,
       network: {
@@ -257,14 +259,22 @@ export function restoreBackup(
         lan: { ...snapshot.network.lan, ipaddr: backup.lan.address, netmask: backup.lan.netmask },
       },
     };
-    dhcp = dhcpPlan(projected, backup.dhcp, device.role === "bypass");
+    dhcp = dhcpPlan(projected, backup.dhcp, device.role === "bypass", previousDhcp);
     // 地址池相对目标 LAN 子网计算，与 LAN 改址在同一个回滚事务中恢复。
     const [section] = dhcpSection(snapshot);
+    const start = ipv4(backup.dhcp.start);
+    const end = ipv4(backup.dhcp.end);
+    const targetNetwork = subnet(backup.lan.address, backup.lan.netmask).network;
     validationSnapshot = {
       ...snapshot,
       dhcp: {
         ...snapshot.dhcp,
-        [section]: { ...snapshot.dhcp[section], ...(dhcp.edits[0]?.values ?? {}) },
+        [section]: {
+          ...snapshot.dhcp[section],
+          ...(dhcp.edits.find((edit) => edit.config === "dhcp" && edit.section === section)?.values ?? {}),
+          start: String((start ?? targetNetwork) - targetNetwork),
+          ...(start !== null && end !== null ? { limit: String(end - start + 1) } : {}),
+        },
       },
     };
   }

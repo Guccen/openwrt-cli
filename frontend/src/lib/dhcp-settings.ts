@@ -1,5 +1,5 @@
 import { lanDraft, type ConfigPlan, type SettingsSnapshot } from "./settings";
-import { ipv4, ipv4Text, poolRange, subnet } from "./ipv4";
+import { ipv4, poolRange, poolStartOffset, poolStartValue, subnet } from "./ipv4";
 
 export interface DhcpDraft {
   enabled: boolean;
@@ -34,20 +34,20 @@ export function dhcpDraft(snapshot: SettingsSnapshot): DhcpDraft {
   const [, current] = dhcpSection(snapshot);
   const lan = lanDraft(snapshot),
     range = subnet(lan.address, lan.netmask);
-  const start = Number(current.start ?? 100),
+  const start = poolStartOffset(current.start, range.network),
     count = Number(current.limit ?? 150);
-  if (
-    !Number.isInteger(start) ||
-    !Number.isInteger(count) ||
-    start < 1 ||
-    count < 1 ||
-    range.network + start + count - 1 > 0xffffffff
-  )
+  if (!Number.isInteger(count) || count < 1)
     throw new Error("当前 DHCP 地址池格式不受支持，请通过 SSH 管理。");
+  let pool;
+  try {
+    pool = poolRange(lan.address, lan.netmask, start, count);
+  } catch {
+    throw new Error("当前 DHCP 地址池格式不受支持，请通过 SSH 管理。");
+  }
   return {
     enabled: String(current.ignore ?? "0") !== "1" && current.dhcpv4 !== "disabled",
-    start: ipv4Text(range.network + start),
-    end: ipv4Text(range.network + start + count - 1),
+    start: pool.start,
+    end: pool.end,
     lease: String(current.leasetime ?? "12h"),
   };
 }
@@ -55,10 +55,11 @@ export function dhcpPlan(
   snapshot: SettingsSnapshot,
   draft: DhcpDraft,
   bypass: boolean,
+  previous?: DhcpDraft,
 ): ConfigPlan {
   if (bypass) throw new Error("旁路由不开放 DHCP 地址分配，请使用主路由的 DHCP 服务。");
   const [section, raw] = dhcpSection(snapshot),
-    old = dhcpDraft(snapshot),
+    old = previous ?? dhcpDraft(snapshot),
     lan = lanDraft(snapshot);
   const values: Record<string, string> = {};
   const set = (key: string, value: string) => {
@@ -78,7 +79,8 @@ export function dhcpPlan(
       throw new Error("DHCP 起止地址需按顺序位于 LAN 可用网段内");
     poolRange(lan.address, lan.netmask, start - bounds.network, end - start + 1);
     leaseSeconds(draft.lease.trim());
-    if (draft.start.trim() !== old.start) set("start", String(start - bounds.network));
+    if (draft.start.trim() !== old.start)
+      set("start", poolStartValue(start, bounds.network, raw.start));
     if (draft.end.trim() !== old.end || draft.start.trim() !== old.start)
       set("limit", String(end - start + 1));
     if (draft.lease.trim() !== old.lease) set("leasetime", draft.lease.trim());

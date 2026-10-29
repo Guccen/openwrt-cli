@@ -40,6 +40,11 @@ export function ApplyReviewDialog({
               currentAddress &&
               plan.address !== currentAddress &&
               ` 新管理地址：${plan.address}。`}
+            {plan?.details?.map((detail) => (
+              <span className="block" key={detail}>
+                {detail}
+              </span>
+            ))}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
