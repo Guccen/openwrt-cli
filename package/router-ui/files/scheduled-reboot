@@ -28,6 +28,16 @@ cleanup() {
     [ "$maintenance_locked" != true ] || rmdir "$MAINTENANCE" 2>/dev/null || true
     rmdir "$LOCK" 2>/dev/null || true
 }
+wait_for_cron() {
+    local attempt=0
+    # procd 拉起 crond 是异步的，等待进程出现后再判断应用结果。
+    while [ "$attempt" -lt 10 ]; do
+        pidof crond >/dev/null 2>&1 && return 0
+        attempt=$((attempt + 1))
+        sleep 1
+    done
+    return 1
+}
 fail() { printf '{"ok":false,"error":"%s"}\n' "$1"; exit 1; }
 rollback() {
     [ "$transaction" = true ] || return 0
@@ -39,7 +49,8 @@ rollback() {
     else rm -f "$CRON" || restored=false; fi
     if [ "$was_enabled" = true ]; then /etc/init.d/cron enable >/dev/null 2>&1 || restored=false;
     else /etc/init.d/cron disable >/dev/null 2>&1 || restored=false; fi
-    if [ "$was_running" = true ]; then /etc/init.d/cron restart >/dev/null 2>&1 || restored=false;
+    if [ "$was_running" = true ]; then
+        /etc/init.d/cron restart >/dev/null 2>&1 && wait_for_cron || restored=false
     else /etc/init.d/cron stop >/dev/null 2>&1 || restored=false; fi
     [ "$restored" = true ]
 }
@@ -117,7 +128,7 @@ temporary=
 if [ -n "$line" ]; then /etc/init.d/cron enable >/dev/null 2>&1 || abort; fi
 if [ -n "$line" ] || [ "$was_running" = true ]; then
     /etc/init.d/cron restart >/dev/null 2>&1 || abort
-    pidof crond >/dev/null 2>&1 || abort
+    wait_for_cron || abort
 fi
 transaction=false
 printf '%s\n' '{"ok":true}'
