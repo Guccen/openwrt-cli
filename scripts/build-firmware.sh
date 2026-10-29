@@ -12,7 +12,7 @@ mkdir -p "$ARTIFACTS"
 CACHE="$ROOT/build/ccache"
 mkdir -p "$CACHE"
 export CCACHE_COMPILERCHECK=content
-export CCACHE_MAXSIZE=1G
+export CCACHE_MAXSIZE=2G
 # 通过构建参数启用隐藏的缓存选项，不开启开发模式，也不复用旧镜像或暂存目录。
 MAKE_CACHE=(CONFIG_CCACHE=y "CONFIG_CCACHE_DIR=$CACHE")
 cache_stats() {
