@@ -61,11 +61,7 @@ export function isDnsAddress(value: string) {
 
 export function lanDraft(snapshot: SettingsSnapshot): LanDraft {
   const lan = snapshot.network.lan;
-  if (
-    !lan ||
-    lan.proto !== "static" ||
-    typeof lan.ipaddr !== "string"
-  ) {
+  if (!lan || lan.proto !== "static" || typeof lan.ipaddr !== "string") {
     throw new Error("当前 LAN 使用高级配置，请通过 SSH 管理，避免覆盖现有配置");
   }
   let address = lan.ipaddr;

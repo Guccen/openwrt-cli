@@ -271,7 +271,8 @@ export function restoreBackup(
         ...snapshot.dhcp,
         [section]: {
           ...snapshot.dhcp[section],
-          ...(dhcp.edits.find((edit) => edit.config === "dhcp" && edit.section === section)?.values ?? {}),
+          ...(dhcp.edits.find((edit) => edit.config === "dhcp" && edit.section === section)
+            ?.values ?? {}),
           start: String((start ?? targetNetwork) - targetNetwork),
           ...(start !== null && end !== null ? { limit: String(end - start + 1) } : {}),
         },

@@ -16,7 +16,7 @@ SOURCES = json.loads((ROOT / "configs/sources.json").read_text(encoding="utf-8")
 DEVICES = ("jdcloud-ax1800", "phicomm-n1")
 CORE = ["dnsmasq", "firewall4"]
 ROUTING = ["odhcp6c", "odhcpd-ipv6only", "ppp", "ppp-mod-pppoe"]
-AX_STORAGE = ["e2fsprogs", "mkf2fs", "kmod-fs-ext4", "kmod-fs-f2fs"]
+AX_STORAGE = ["block-mount", "e2fsprogs", "mkf2fs", "kmod-fs-ext4", "kmod-fs-f2fs"]
 AX_HARDWARE = [
     "uboot-envtools", "wpad-openssl", "kmod-ath11k", "kmod-ath11k-ahb",
     "kmod-dsa", "kmod-dsa-qca8k", "kmod-phy-qca83xx",
@@ -171,6 +171,8 @@ def overlay(destination, device, role, wan="eth1"):
         dhcp = dhcp.replace("@IGNORE@", "0" if role == "router" else "1")
         dhcp = dhcp.replace("@IPV6@", "server" if role == "router" else "disabled")
         (config / "dhcp").write_text(dhcp, encoding="utf-8", newline="\n")
+    elif device == "jdcloud-ax1800":
+        shutil.copytree(ROOT / "files/jdcloud-ax1800", destination, dirs_exist_ok=True)
     defaults = destination / "etc/uci-defaults/zz-router-lite"
     defaults.parent.mkdir(exist_ok=True)
     text = (ROOT / "files/router-defaults.sh").read_text(encoding="utf-8")

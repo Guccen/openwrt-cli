@@ -24,13 +24,13 @@
 
 ## 京东云 AX1800（RE-SS-01）
 
-此设备采用 eMMC。固定的 LiBwrt 源码为 RE-SS-01 选择 `EmmcImage`，升级写入 `0:HLOS` 和 `rootfs` 分区；fstools 在固件根分区内识别只读系统结尾，并在剩余区域自动初始化可写层。正常刷入支持的固件后即可保存配置、安装适用软件，不需要手动创建可写区。
+此设备采用 eMMC。固定的 LiBwrt 源码为 RE-SS-01 选择 `EmmcImage`，升级写入 `0:HLOS` 和 `rootfs` 分区；fstools 在固件根分区内识别只读系统结尾，并在剩余区域自动初始化内部可写层。
 
-0.10.3 补回此前精简默认包时遗漏的 `e2fsprogs`、`mkf2fs`、ext4 与 F2FS 驱动，并在配置阶段强制检查。这些组件供原生可写层创建和挂载使用，不需要新增重分区脚本。
+实机检查发现，`/dev/mmcblk0p18` 的 `rootfs` 分区约 60 MiB，内部 overlay 约 42 MiB；`/dev/mmcblk0p27` 标记为 `storage`，约 56 GiB，读到 ext4 超级块签名，但原镜像没有挂载它。因此 AX1800 新构建加入 `block-mount`，并将 `/dev/mmcblk0p27` 配置为 `/overlay` 的 extroot。启动时由 fstools 在 PREINIT 阶段挂载，根目录可写容量随该分区扩展；不重建分区表、不格式化该分区。若 extroot 不可用，系统保留内部 overlay 回退。
 
-这不表示 eMMC 的全部容量都属于系统。设备可能保留启动、校准、恢复或厂商数据分区，本项目不会在启动时重建整盘分区表，也不会把未知分区格式化或强行合并。尚未取得用户 AX1800 的真实分区表，不能保证整盘剩余容量均已并入可写层。概览新增整盘及分区容量展示，便于区分文件系统空闲与分区外的尾部空间。
+extroot 会使用 `storage` 分区根目录下的 `upper` 和 `work` 作为可写层目录；分区上的其他文件不会被清理。若这两个目录已存在，其内容会被系统当作 overlay 数据使用。原内部 overlay 的配置不会自动复制到新 extroot；刷入新构建前应备份需要保留的设置。当前分区表中其他启动、校准、恢复或厂商分区保持原样，尾部未分配空间也不会并入根目录。
 
-依据为固定源码的 [RE-SS-01 设备定义](https://github.com/LiBwrt/LibWrt/blob/a151272502f075bfc5b708e8e696870aa2c48868/target/linux/qualcommax/image/ipq60xx.mk)、[eMMC 升级分支](https://github.com/LiBwrt/LibWrt/blob/a151272502f075bfc5b708e8e696870aa2c48868/target/linux/qualcommax/ipq60xx/base-files/lib/upgrade/platform.sh) 和 [fstools 根磁盘初始化](https://github.com/openwrt/fstools/blob/16718b6e3c0fc7db7be6ae5848db0eae88ac8a8b/libfstools/rootdisk.c)。
+依据为固定源码的 [RE-SS-01 设备定义](https://github.com/LiBwrt/LibWrt/blob/a151272502f075bfc5b708e8e696870aa2c48868/target/linux/qualcommax/image/ipq60xx.mk)、[eMMC 升级分支](https://github.com/LiBwrt/LibWrt/blob/a151272502f075bfc5b708e8e696870aa2c48868/target/linux/qualcommax/ipq60xx/base-files/lib/upgrade/platform.sh)、[fstools 根磁盘初始化](https://github.com/openwrt/fstools/blob/16718b6e3c0fc7db7be6ae5848db0eae88ac8a8b/libfstools/rootdisk.c) 和 [OpenWrt extroot 配置](https://openwrt.org/docs/guide-user/additional-software/extroot_configuration)。
 
 ## 性能与资源占用
 

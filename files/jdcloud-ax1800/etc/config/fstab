@@ -1,0 +1,7 @@
+# 将 AX1800 的现有 storage 分区挂载为 extroot，不格式化分区。
+config mount 'extroot'
+	option target '/overlay'
+	option device '/dev/mmcblk0p27'
+	option fstype 'ext4'
+	option options 'rw,noatime'
+	option enabled '1'
