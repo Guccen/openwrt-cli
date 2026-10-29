@@ -170,7 +170,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="$DEVICE-$ROLE-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           DEVICE_NAME='京东云 AX1800'
           IMAGE_NOTE='已刷 OpenWrt 的设备使用 sysupgrade.bin；factory.bin 供原厂刷入或救砖使用。'
           if [[ "$DEVICE" == phicomm-n1 ]]; then
@@ -180,6 +179,7 @@ jobs:
           ROLE_NAME='主路由'
           if [[ "$ROLE" == bypass ]]; then ROLE_NAME='旁路由'; fi
           VERSION=$(jq -r .version package.json)
+          TAG="$DEVICE-$ROLE-$VERSION"
           cat > build/release-notes.md <<EOF
           设备：$DEVICE_NAME
           运行模式：$ROLE_NAME
@@ -193,20 +193,20 @@ jobs:
           本次直接构建与发布镜像，未执行模拟机安装测试，功能验收以实机为准。
           刷机步骤：https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/flashing.md
           EOF
-          gh release create "$TAG" build/artifacts/* --title "$DEVICE_NAME $ROLE_NAME · $VERSION · $GITHUB_RUN_NUMBER" \
+          gh release create "$TAG" build/artifacts/* --title "$DEVICE_NAME $ROLE_NAME · $VERSION" \
             --target "$GITHUB_SHA" --notes-file build/release-notes.md
           gh release list --limit 1000 --json tagName > build/releases.json
-          jq -r --arg prefix "$DEVICE-$ROLE-" '
-            [
-              .[]
-              | select(
-                  (.tagName | startswith($prefix))
-                  and (.tagName | ltrimstr($prefix) | test("^[0-9]+-[0-9]+$"))
-                )
-            ]
-            | sort_by(.tagName | ltrimstr($prefix) | split("-") | map(tonumber))
-            | .[:-1][]
-            | .tagName
+          jq -r --arg prefix "$DEVICE-$ROLE-" --arg current "$TAG" '
+            .[]
+            | select(.tagName != $current)
+            | select(.tagName | startswith($prefix))
+            | .tagName as $tag
+            | ($tag | ltrimstr($prefix)) as $suffix
+            | select(
+                ($suffix | test("^[0-9]+-[0-9]+$")) or
+                ($suffix | test("^v?[0-9]+\\.[0-9]+\\.[0-9]+([+-][0-9A-Za-z.-]+)?$"))
+              )
+            | $tag
           ' build/releases.json |
           while IFS= read -r old_tag; do
             [[ -n "$old_tag" ]] || continue
