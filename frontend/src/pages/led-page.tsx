@@ -16,6 +16,7 @@ import { ErrorAlert } from "@/components/status/error-alert";
 import { DeviceLoading } from "@/components/status/device-loading";
 import {
   ledStates,
+  ledLabel,
   ledDraft,
   validateLedPolicy,
   type LedState,
@@ -147,9 +148,9 @@ function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: bool
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {snapshot.leds.map((item) => (
+                      {snapshot.leds.map((item, index) => (
                         <SelectItem key={item.id} value={item.id}>
-                          {item.id}
+                          {ledLabel(item.id, index)}
                         </SelectItem>
                       ))}
                     </SelectContent>

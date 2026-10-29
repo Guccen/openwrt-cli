@@ -61,7 +61,7 @@ test("N1 white LED supports separate patterns and rejects invalid probe targets 
   const saved = await mockLeds(page, "phicomm-n1");
   await loginPage(page);
   await navigate(page, "指示灯设置");
-  await expect(page.getByRole("combobox").filter({ hasText: "n1:white:status" })).toHaveCount(4);
+  await expect(page.getByRole("combobox").filter({ hasText: "白色状态灯" })).toHaveCount(4);
   await page.getByLabel("连通性探测目标（1–2 个 IPv4）", { exact: true }).fill("223.5.5.5; reboot");
   await page.getByRole("button", { name: "保存指示灯配置", exact: true }).click();
   await expect(

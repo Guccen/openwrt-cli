@@ -3,6 +3,39 @@ import { ipv4 } from "./ipv4";
 
 export const ledStates = { boot: "开机", normal: "正常", offline: "断网", fault: "故障" } as const;
 export type LedState = keyof typeof ledStates;
+
+const ledColorLabels: Record<string, string> = {
+  amber: "琥珀色",
+  blue: "蓝色",
+  green: "绿色",
+  orange: "橙色",
+  red: "红色",
+  white: "白色",
+  yellow: "黄色",
+};
+const ledRoleLabels: Record<string, string> = {
+  internet: "网络灯",
+  lan: "局域网灯",
+  power: "电源灯",
+  status: "状态灯",
+  wan: "广域网灯",
+  wifi: "无线灯",
+  wlan: "无线灯",
+};
+const ledGroupLabels: Record<string, string> = { system: "系统", usb: "USB" };
+
+export function ledLabel(id: string, index: number) {
+  const parts = id.toLowerCase().split(/[:_-]+/);
+  const color = parts.find((part) => ledColorLabels[part]);
+  const role = parts.find((part) => ledRoleLabels[part]);
+  const group = parts.find((part) => ledGroupLabels[part]);
+  if (color && role) return `${ledColorLabels[color]}${ledRoleLabels[role]}`;
+  if (group && role) return `${ledGroupLabels[group]}${ledRoleLabels[role]}`;
+  if (color) return `${ledColorLabels[color]}指示灯`;
+  if (role) return ledRoleLabels[role];
+  return `设备指示灯 ${index + 1}`;
+}
+
 export interface LedEffect {
   led: string;
   effect: "on" | "off" | "blink";
