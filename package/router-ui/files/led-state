@@ -32,7 +32,7 @@ case "$mode" in
         mkdir -p /etc/crontabs
         temporary=$(mktemp /etc/crontabs/.router-ui-led.XXXXXX)
         if [ -f "$CRON" ]; then
-            if grep -F -x -v "$LINE" "$CRON" > "$temporary"; then :;
+            if grep -v ' # router-ui-led$' "$CRON" > "$temporary"; then :;
             else result=$?; [ "$result" -eq 1 ] || exit 1; fi
         fi
         if [ "$enabled" = true ]; then printf '%s\n' "$LINE" >> "$temporary"; fi

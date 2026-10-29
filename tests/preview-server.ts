@@ -263,6 +263,7 @@ const rpc = {
           ];
         // 演示模式不生成或操作真实系统归档，也不重启主机。
         if (method === "led_status") result = [0, { ok: true, ...ledSettings }];
+        if (method === "led_repair") result = [0, { ok: true }];
         if (method === "schedule_status")
           result = [
             0,

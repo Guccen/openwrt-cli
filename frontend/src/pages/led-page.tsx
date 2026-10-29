@@ -72,7 +72,36 @@ function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: bool
       useMaintenanceOperation.getState().finish(operation);
     }
   }
+  async function repairTask() {
+    const session = useRouter.getState().session;
+    if (!session || disabled) return;
+    const operation = useMaintenanceOperation.getState().begin("led");
+    if (!operation) return;
+    setError(null);
+    notify.dismiss("led");
+    try {
+      await ledClient.repair(session);
+      if (useRouter.getState().session === session) {
+        notify.success(
+          "led",
+          "指示灯定时任务已同步",
+          snapshot.policy.enabled ? "每分钟状态检查已恢复。" : "残留任务已清理。",
+        );
+        await useLeds.getState().load();
+      }
+    } catch (e) {
+      if (useRouter.getState().session === session) notify.error("led", e, "指示灯任务修复失败");
+    } finally {
+      useMaintenanceOperation.getState().finish(operation);
+    }
+  }
   const available = snapshot.leds.length > 0;
+  const savedDraft = ledDraft(snapshot);
+  const hasUnsavedChanges =
+    JSON.stringify(policy) !== JSON.stringify(savedDraft) ||
+    targets !== savedDraft.targets.join(", ");
+  const taskNeedsRepair =
+    !snapshot.cronSynchronized || (snapshot.policy.enabled && !snapshot.cronRunning);
   return (
     <div className="space-y-3">
       <Card size="sm">
@@ -117,6 +146,33 @@ function LedForm({ snapshot, disabled }: { snapshot: LedSnapshot; disabled: bool
             onChange={(event) => setTargets(event.target.value)}
             disabled={disabled || !available}
           />
+          {taskNeedsRepair && (
+            <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">
+                  指示灯定时任务{snapshot.cronSynchronized ? "未运行" : "与配置不一致"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {snapshot.policy.enabled
+                    ? "状态控制已启用，但每分钟检查任务缺失或 cron 服务未运行。"
+                    : "状态控制已关闭，检测到残留的指示灯定时任务。"}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={disabled || hasUnsavedChanges}
+                onClick={() => void repairTask()}
+              >
+                {snapshot.policy.enabled ? "重新同步任务" : "清理残留任务"}
+              </Button>
+            </div>
+          )}
+          {taskNeedsRepair && hasUnsavedChanges && (
+            <p className="text-xs text-muted-foreground">
+              请先保存或撤销未保存的指示灯设置，再修复定时任务。
+            </p>
+          )}
         </CardContent>
       </Card>
       {available && (

@@ -10,7 +10,7 @@ from simulation import REPORT, ssh
 def run(address):
     api = Api(address)
     api.login()
-    for method in ("led_status", "led_save"):
+    for method in ("led_status", "led_save", "led_repair"):
         try:
             maintenance(Api(address), method, {"policy": "{}"})
         except RpcFailure as error:

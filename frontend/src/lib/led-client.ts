@@ -51,6 +51,8 @@ export interface LedSnapshot {
   leds: { id: string; timer: boolean; maxBrightness: number }[];
   policy: LedPolicy;
   current: { state: LedState; checkedAt: number } | null;
+  cronRunning: boolean;
+  cronSynchronized: boolean;
   updatedAt: number;
 }
 export function validateLedPolicy(policy: LedPolicy, leds: LedSnapshot["leds"]) {
@@ -123,6 +125,8 @@ export class LedClient {
     const result = await this.call(session, "led_status");
     if (!Array.isArray(result.leds) || !result.policy || typeof result.policy !== "object")
       throw new Error("指示灯状态格式不正确");
+    if (typeof result.cronRunning !== "boolean" || typeof result.cronSynchronized !== "boolean")
+      throw new Error("指示灯定时任务状态格式不正确");
     const leds = result.leds as LedSnapshot["leds"];
     if (
       leds.some(
@@ -144,11 +148,16 @@ export class LedClient {
         current && Object.hasOwn(ledStates, current.state) && typeof current.checkedAt === "number"
           ? current
           : null,
+      cronRunning: result.cronRunning,
+      cronSynchronized: result.cronSynchronized,
       updatedAt: Date.now(),
     };
   }
   async save(session: string, policy: LedPolicy, leds: LedSnapshot["leds"]) {
     validateLedPolicy(policy, leds);
     await this.call(session, "led_save", { policy: JSON.stringify(policy) });
+  }
+  async repair(session: string) {
+    await this.call(session, "led_repair");
   }
 }

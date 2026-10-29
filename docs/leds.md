@@ -19,6 +19,8 @@ AX1800 当前固定源码定义红、绿、蓝三路状态灯，N1 上游设备�
 
 运行时由两个一次性启动脚本、接口 hotplug 和已有 cron 驱动，没有新增常驻进程。cron 停用时启用此功能会启用并启动系统 cron；关闭指示灯功能不会停止其他任务共用的 cron 服务。暂存、待确认网络配置或其他维护操作期间拒绝保存；周期检测会避开维护锁。
 
+页面会检查本功能的 cron 标记行和 cron 服务状态。启用状态控制时若每分钟检查任务缺失、重复或被改动，页面提供重新同步；关闭状态控制时若发现残留标记行，可从页面清理。修复只重建或移除指示灯自己的标记行，并保留其他 cron 任务。
+
 QEMU 不模拟物理灯。测试在隔离目录验证四种状态、闪烁参数、原灯效恢复、禁用后不探测和保留其他 cron 任务，同时在真实 OpenWrt 检查接口权限、无硬件限制和启动钩子安装。物理灯颜色、驱动触发器和开机时序仍需 AX1800/N1 实机验收。
 
 硬件依据：[AX1800 固定设备树](https://github.com/LiBwrt/LibWrt/blob/a151272502f075bfc5b708e8e696870aa2c48868/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq6000-re-ss-01.dts)、[N1 Linux 设备树](https://github.com/torvalds/linux/blob/master/arch/arm64/boot/dts/amlogic/meson-gxl-s905d-phicomm-n1.dts)。

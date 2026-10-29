@@ -1,8 +1,10 @@
 // 只控制内核实际枚举的 LED 与固定属性，配置通过原子重命名保存。
-import { readfile, writefile, rename, unlink, glob, access, fdopen } from 'fs';
+import { readfile, writefile, rename, unlink, glob, access, fdopen, popen } from 'fs';
 const config = '/etc/router-ui-led.json';
 const previous = '/var/run/router-ui-led.previous';
 const statusFile = '/var/run/router-ui-led.status';
+const cronFile = '/etc/crontabs/root';
+const cronLine = '* * * * * /usr/libexec/router-ui/led-state check >/dev/null 2>&1 # router-ui-led';
 const states = ['boot', 'normal', 'offline', 'fault'];
 function fail(reason) { die(reason); }
 function write(path, value) {
@@ -53,6 +55,25 @@ function validate(policy, leds) {
 function policy() {
     return json(readfile(config, 8193));
 }
+function cronRunning() {
+    let process = popen('/usr/bin/timeout -s KILL 2 pidof crond >/dev/null 2>&1', 'r');
+    if (!process) return false;
+    process.read(16);
+    return process.close() == 0;
+}
+function cronSynchronized(settings) {
+    let text = readfile(cronFile, 65537);
+    if (text == null) return !settings.enabled;
+    if (type(text) != 'string' || length(text) > 65536) return false;
+    let found = 0;
+    for (let row in split(text, '\n')) {
+        let current = trim(row);
+        if (!match(current, / # router-ui-led$/)) continue;
+        if (!settings.enabled || current != cronLine) return false;
+        found++;
+    }
+    return settings.enabled ? found == 1 : found == 0;
+}
 function attributes(id) {
     let base = '/sys/class/leds/' + id, values = {};
     let current = match(readfile(base + '/trigger', 4096) || '', /\[([^\]]+)\]/);
@@ -81,8 +102,9 @@ function restore(leds) {
 try {
     let leds = capabilities();
     if (ARGV[0] == 'status') {
-        let current = readfile(statusFile, 1024);
-        print({ ok: true, leds, policy: policy(), current: current ? json(current) : null });
+        let settings = policy(), current = readfile(statusFile, 1024);
+        print({ ok: true, leds, policy: settings, current: current ? json(current) : null,
+            cronRunning: cronRunning(), cronSynchronized: cronSynchronized(settings) });
     }
     else if (ARGV[0] == 'save') {
         let input = fdopen(0, 'r').read(16385);

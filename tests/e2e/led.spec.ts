@@ -9,7 +9,10 @@ async function mockLeds(page: Page, device = "jdcloud-ax1800", hardware = true) 
   await page.route("**/ubus", async (route) => {
     const body = route.request().postDataJSON();
     const [, object, method, args] = body.params ?? [];
-    if (object !== "router.maintenance" || !["led_status", "led_save"].includes(method))
+    if (
+      object !== "router.maintenance" ||
+      !["led_status", "led_save", "led_repair"].includes(method)
+    )
       return route.continue();
     if (method === "led_save") {
       fixture.policy = JSON.parse(args.policy);

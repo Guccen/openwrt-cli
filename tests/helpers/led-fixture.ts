@@ -19,5 +19,7 @@ export function ledFixture(
     leds: ids.map((id) => ({ id, timer: true, maxBrightness: 1 })),
     policy: { enabled: false, targets: ["223.5.5.5", "119.29.29.29"], states: effects },
     current: null,
+    cronRunning: true,
+    cronSynchronized: true,
   };
 }
