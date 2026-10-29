@@ -33,7 +33,10 @@ const triggerLabels: Record<string, string> = {
 };
 
 export function ledLabel(id: string, index: number) {
-  const parts = id.toLowerCase().split(/[:_-]+/);
+  const normalizedId = id.toLowerCase();
+  const storage = /^mmc(\d+)::?$/.exec(normalizedId);
+  if (storage) return storage[1] === "0" ? "存储指示灯" : `存储指示灯 ${storage[1]}`;
+  const parts = normalizedId.split(/[:_-]+/);
   const color = parts.find((part) => ledColorLabels[part]);
   const role = parts.find((part) => ledRoleLabels[part]);
   const group = parts.find((part) => ledGroupLabels[part]);
