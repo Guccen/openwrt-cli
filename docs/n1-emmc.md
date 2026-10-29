@@ -180,7 +180,7 @@ ubus call system board
 
 ## 核对来源
 
-- [项目版本锁定](../configs/sources.json)：N1 打包器 `52ad5239`，安装脚本依赖 `16df300f`。
-- [固定版本安装脚本](https://github.com/ophub/luci-app-amlogic/blob/16df300f86e5b4e48e955cd66f337c5872d27d3c/luci-app-amlogic/root/usr/sbin/openwrt-install-amlogic)：参数、引导写入分支、分区布局及复制范围。
+- [项目版本锁定](../configs/sources.json)：N1 打包器 `52ad5239`，安装脚本依赖 `869a7ae5`。
+- [固定版本安装脚本](https://github.com/ophub/luci-app-amlogic/blob/869a7ae501d54d9b94742a1165df374b2a4d0e69/luci-app-amlogic/root/usr/sbin/openwrt-install-amlogic)：参数、引导写入分支、分区布局及复制范围。
 - [固定版本设备表](https://github.com/ophub/amlogic-s9xxx-openwrt/blob/52ad5239e6720f5b56c9afafcd7080cbe3cf2881/make-openwrt/openwrt-files/common-files/etc/model_database.conf)：标准 N1 的 `101` 条目与配套设备树、U-Boot。
 - [上游安装与备份恢复说明](https://github.com/ophub/amlogic-s9xxx-openwrt/blob/52ad5239e6720f5b56c9afafcd7080cbe3cf2881/README.cn.md)：eMMC 安装、备份恢复及安卓恢复镜像入口。

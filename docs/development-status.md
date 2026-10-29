@@ -4,7 +4,7 @@
 
 ## 2026-10-29 京东云上游同步
 
-AX1800 源码锁从 LiBwrt `25.12-nss` 的 `3a3d0b0` 更新到 `a151272`，上游 NSS 软件源同步切换为 `laipeng668/nss-packages` 的 `NSS-LibWrt` 分支，packages 锁保持不变。新版包含 mac80211 与 ath11k NSS 补丁更新。此项仅完成源码锁同步，配置检查和固件编译尚未运行；已取消的构建未重新触发。详情见[上游版本记录](upstream-versions.md)。
+AX1800 源码锁从 LiBwrt `25.12-nss` 的 `3a3d0b0` 更新到 `a151272`，NSS 软件源切换为 `laipeng668/nss-packages` 的 `NSS-LibWrt` 分支，packages 锁保持不变。随后将 N1 内核从 6.18.58 更新为 6.18.59，并更新 `luci-app-amlogic` 依赖至 `869a7ae`。这些仅完成版本锁同步，配置检查和固件编译尚未运行；已取消的构建未重新触发。设备上已验收的镜像仍运行 6.18.58。详情见[上游版本记录](upstream-versions.md)。
 
 ## 0.10.6 无线信道带宽校验
 
