@@ -174,7 +174,7 @@ def overlay(destination, device, role, wan="eth1"):
     defaults = destination / "etc/uci-defaults/zz-router-lite"
     defaults.parent.mkdir(exist_ok=True)
     text = (ROOT / "files/router-defaults.sh").read_text(encoding="utf-8")
-    text = text.replace("@HOSTNAME@", device).replace("@ADDRESS@", address)
+    text = text.replace("@HOSTNAME@", device).replace("@ADDRESS@", address).replace("@ROLE@", role)
     defaults.write_text(text, encoding="utf-8", newline="\n")
     defaults.chmod(0o755)
     return metadata

@@ -29,8 +29,8 @@ if uci -q get system.@imm_init[0] >/dev/null; then
     uci set system.@imm_init[0].apk_mirror='https://mirror.nju.edu.cn/immortalwrt'
 fi
 uci set network.lan.ipaddr='@ADDRESS@'
-# 每台设备首次启动时生成稳定的本地 IPv6 前缀，保留上游已有值。
-if [ -z "$(uci -q get network.globals.ula_prefix || true)" ]; then
+# 主路由首次启动时生成稳定的本地 IPv6 前缀，保留上游已有值；旁路由不向 LAN 分配该前缀。
+if [ '@ROLE@' = 'router' ] && [ -z "$(uci -q get network.globals.ula_prefix || true)" ]; then
     prefix=$(ucode -e 'import { readfile } from "fs"; let h=hexenc(readfile("/dev/urandom",5)); if(length(h)!=10) exit(1); print(sprintf("fd%s:%s:%s::/48",substr(h,0,2),substr(h,2,4),substr(h,6,4)));')
     uci set network.globals='globals'
     uci set "network.globals.ula_prefix=$prefix"
