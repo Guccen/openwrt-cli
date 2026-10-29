@@ -1,5 +1,5 @@
 import type { NetworkInterface } from "./types";
-import { ipv4, maskPrefix, poolRange } from "./ipv4";
+import { ipv4, ipv4Text, maskPrefix, poolRange } from "./ipv4";
 import { wifiBand, type WifiBand } from "./wifi-band";
 export { ipv4, maskPrefix } from "./ipv4";
 
@@ -63,14 +63,31 @@ export function lanDraft(snapshot: SettingsSnapshot): LanDraft {
   if (
     !lan ||
     lan.proto !== "static" ||
-    typeof lan.ipaddr !== "string" ||
-    lan.ipaddr.includes("/")
+    typeof lan.ipaddr !== "string"
   ) {
     throw new Error("当前 LAN 使用高级配置，请通过 SSH 管理，避免覆盖现有配置");
   }
+  let address = lan.ipaddr;
+  let netmask = String(lan.netmask ?? "255.255.255.0");
+  if (lan.ipaddr.includes("/")) {
+    const cidr = /^([^/]+)\/(\d{1,2})$/.exec(lan.ipaddr);
+    const prefix = Number(cidr?.[2]);
+    if (
+      !cidr ||
+      ipv4(cidr[1]) === null ||
+      prefix < 8 ||
+      prefix > 30 ||
+      (lan.netmask !== undefined &&
+        (typeof lan.netmask !== "string" || maskPrefix(lan.netmask) !== prefix))
+    ) {
+      throw new Error("当前 LAN 使用高级配置，请通过 SSH 管理，避免覆盖现有配置");
+    }
+    address = cidr[1];
+    netmask = ipv4Text((0xffffffff << (32 - prefix)) >>> 0);
+  }
   return {
-    address: lan.ipaddr,
-    netmask: String(lan.netmask ?? "255.255.255.0"),
+    address,
+    netmask,
     gateway: String(lan.gateway ?? ""),
   };
 }
@@ -162,8 +179,15 @@ export function lanPlan(
       throw new Error("旁路由网关需是同网段中另一台路由器的有效地址");
   }
   const values: Record<string, string | string[]> = {};
-  if (address !== old.address) values.ipaddr = address;
-  if (netmask !== old.netmask) values.netmask = netmask;
+  const currentAddress = snapshot.network.lan.ipaddr;
+  const networkChanged = address !== old.address || netmask !== old.netmask;
+  if (typeof currentAddress === "string" && currentAddress.includes("/") && networkChanged) {
+    values.ipaddr = address;
+    values.netmask = netmask;
+  } else {
+    if (address !== old.address) values.ipaddr = address;
+    if (netmask !== old.netmask) values.netmask = netmask;
+  }
   if (bypass && gateway !== old.gateway) values.gateway = gateway;
   const oldDns = snapshot.network.lan.dns;
   if (
