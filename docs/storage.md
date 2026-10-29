@@ -30,7 +30,7 @@
 
 这不表示 eMMC 的全部容量都属于系统。设备可能保留启动、校准、恢复或厂商数据分区，本项目不会在启动时重建整盘分区表，也不会把未知分区格式化或强行合并。尚未取得用户 AX1800 的真实分区表，不能保证整盘剩余容量均已并入可写层。概览新增整盘及分区容量展示，便于区分文件系统空闲与分区外的尾部空间。
 
-依据为固定源码的 [RE-SS-01 设备定义](https://github.com/LiBwrt/LibWrt/blob/3a3d0b08595530070ad9cd8a20c0ae4ea3e77f70/target/linux/qualcommax/image/ipq60xx.mk)、[eMMC 升级分支](https://github.com/LiBwrt/LibWrt/blob/3a3d0b08595530070ad9cd8a20c0ae4ea3e77f70/target/linux/qualcommax/ipq60xx/base-files/lib/upgrade/platform.sh) 和 [fstools 根磁盘初始化](https://github.com/openwrt/fstools/blob/16718b6e3c0fc7db7be6ae5848db0eae88ac8a8b/libfstools/rootdisk.c)。
+依据为固定源码的 [RE-SS-01 设备定义](https://github.com/LiBwrt/LibWrt/blob/a151272502f075bfc5b708e8e696870aa2c48868/target/linux/qualcommax/image/ipq60xx.mk)、[eMMC 升级分支](https://github.com/LiBwrt/LibWrt/blob/a151272502f075bfc5b708e8e696870aa2c48868/target/linux/qualcommax/ipq60xx/base-files/lib/upgrade/platform.sh) 和 [fstools 根磁盘初始化](https://github.com/openwrt/fstools/blob/16718b6e3c0fc7db7be6ae5848db0eae88ac8a8b/libfstools/rootdisk.c)。
 
 ## 性能与资源占用
 

@@ -31,4 +31,4 @@
 
 刷入后分别在近距离和常用隔墙位置，用同一终端、同一频段比较信号和协商速率；有线局域网对端测速更适合排除宽带瓶颈。每次只调整一类参数，并记录前后结果。代码检查和固件编译通过均不代表实际吞吐或覆盖已改善。
 
-依据：[固定上游无线默认配置](https://github.com/LiBwrt/LibWrt/blob/3a3d0b08595530070ad9cd8a20c0ae4ea3e77f70/package/network/config/wifi-scripts/files/lib/wifi/mac80211.uc)、[固定上游驱动参数处理](https://github.com/LiBwrt/LibWrt/blob/3a3d0b08595530070ad9cd8a20c0ae4ea3e77f70/package/network/config/wifi-scripts/files/lib/netifd/wireless/mac80211.sh)、[功率列表接口](https://github.com/openwrt/rpcd/blob/master/iwinfo.c)。
+依据：[固定上游无线默认配置](https://github.com/LiBwrt/LibWrt/blob/a151272502f075bfc5b708e8e696870aa2c48868/package/network/config/wifi-scripts/files/lib/wifi/mac80211.uc)、[固定上游驱动参数处理](https://github.com/LiBwrt/LibWrt/blob/a151272502f075bfc5b708e8e696870aa2c48868/package/network/config/wifi-scripts/files/lib/netifd/wireless/mac80211.sh)、[功率列表接口](https://github.com/openwrt/rpcd/blob/master/iwinfo.c)。

@@ -1,7 +1,7 @@
 {
   "jdcloud-ax1800": {
     "url": "https://github.com/LiBwrt/LibWrt.git",
-    "revision": "3a3d0b08595530070ad9cd8a20c0ae4ea3e77f70",
+    "revision": "a151272502f075bfc5b708e8e696870aa2c48868",
     "version": "25.12-nss",
     "feeds": {
       "packages": {
@@ -9,8 +9,8 @@
         "revision": "6f8f6461e8a6a0bbc134592d12353700fe698506"
       },
       "nss_packages": {
-        "url": "https://github.com/qosmio/nss-packages.git",
-        "revision": "0d970dbf0185e3f53709bd803e8a466598023c57"
+        "url": "https://github.com/laipeng668/nss-packages.git",
+        "revision": "c425674d8feab34a3dc8045f9f4f4890d8fb6ca9"
       }
     }
   },

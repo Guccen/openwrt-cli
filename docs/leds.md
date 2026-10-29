@@ -21,4 +21,4 @@ AX1800 当前固定源码定义红、绿、蓝三路状态灯，N1 上游设备�
 
 QEMU 不模拟物理灯。测试在隔离目录验证四种状态、闪烁参数、原灯效恢复、禁用后不探测和保留其他 cron 任务，同时在真实 OpenWrt 检查接口权限、无硬件限制和启动钩子安装。物理灯颜色、驱动触发器和开机时序仍需 AX1800/N1 实机验收。
 
-硬件依据：[AX1800 固定设备树](https://github.com/LiBwrt/LibWrt/blob/3a3d0b08595530070ad9cd8a20c0ae4ea3e77f70/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq6000-re-ss-01.dts)、[N1 Linux 设备树](https://github.com/torvalds/linux/blob/master/arch/arm64/boot/dts/amlogic/meson-gxl-s905d-phicomm-n1.dts)。
+硬件依据：[AX1800 固定设备树](https://github.com/LiBwrt/LibWrt/blob/a151272502f075bfc5b708e8e696870aa2c48868/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq6000-re-ss-01.dts)、[N1 Linux 设备树](https://github.com/torvalds/linux/blob/master/arch/arm64/boot/dts/amlogic/meson-gxl-s905d-phicomm-n1.dts)。
