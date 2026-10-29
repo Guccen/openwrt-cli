@@ -14,9 +14,13 @@ export default defineConfig({
     host: "127.0.0.1",
     proxy: process.env.OPENWRT_API_URL
       ? {
-        "/ubus": { target: process.env.OPENWRT_API_URL, changeOrigin: true, secure: false },
-        "/device.json": { target: process.env.OPENWRT_API_URL, changeOrigin: true, secure: false },
-      }
+          "/ubus": { target: process.env.OPENWRT_API_URL, changeOrigin: true, secure: false },
+          "/device.json": {
+            target: process.env.OPENWRT_API_URL,
+            changeOrigin: true,
+            secure: false,
+          },
+        }
       : undefined,
   },
   build: {
