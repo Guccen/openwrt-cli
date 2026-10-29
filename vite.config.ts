@@ -14,9 +14,9 @@ export default defineConfig({
     host: "127.0.0.1",
     proxy: process.env.OPENWRT_API_URL
       ? {
-          "/ubus": { target: process.env.OPENWRT_API_URL, changeOrigin: true },
-          "/device.json": { target: process.env.OPENWRT_API_URL, changeOrigin: true },
-        }
+        "/ubus": { target: process.env.OPENWRT_API_URL, changeOrigin: true, secure: false },
+        "/device.json": { target: process.env.OPENWRT_API_URL, changeOrigin: true, secure: false },
+      }
       : undefined,
   },
   build: {
@@ -25,17 +25,11 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: false,
     target: "es2022",
-    // 图表与基础运行时独立分块，其余依赖按页面复用关系拆分，避免登录页提前加载。
+    // React 独立分块；图表随概况页按需加载，避免跨分块循环依赖。
     rolldownOptions: {
       output: {
         codeSplitting: {
           groups: [
-            {
-              name: "charts",
-              test: /[\\/]node_modules[\\/](recharts|recharts-scale|victory-vendor|d3-[^\\/]+|@reduxjs|react-redux|redux|immer)[\\/]/,
-              priority: 20,
-              includeDependenciesRecursively: false,
-            },
             {
               name: "react",
               test: /[\\/]node_modules[\\/](react|react-dom|scheduler|use-sync-external-store)[\\/]/,
