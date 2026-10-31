@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { wanDraft, wanPlan } from "../../frontend/src/lib/wan-settings";
 import { dhcpDraft, dhcpPlan, leaseSeconds } from "../../frontend/src/lib/dhcp-settings";
 import { lanDraft, lanPlan } from "../../frontend/src/lib/settings";
+import type { UciSection } from "../../frontend/src/lib/settings";
 import { settingsFixture } from "../helpers/settings-fixture";
 
 describe("WAN 上网设置", () => {
@@ -10,7 +11,10 @@ describe("WAN 上网设置", () => {
     Object.assign(snapshot.network.wan, { mtu: "1480", macaddr: "00:11:22:33:44:55" });
     expect(wanPlan(snapshot, wanDraft(snapshot), false).edits).toEqual([]);
     expect(() => wanPlan(snapshot, wanDraft(snapshot), true)).toThrow("旁路由");
-    for (const wan of [{ proto: "wireguard" }, { proto: "static", ipaddr: ["10.0.0.2/24"] }])
+    for (const wan of [
+      { proto: "wireguard" },
+      { proto: "static", ipaddr: ["10.0.0.2/24"] },
+    ] as UciSection[])
       expect(() => wanDraft({ ...snapshot, network: { ...snapshot.network, wan } })).toThrow(
         "高级",
       );

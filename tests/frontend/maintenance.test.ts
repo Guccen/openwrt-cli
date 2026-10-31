@@ -201,7 +201,7 @@ test("修改登录密码校验当前密码、两次确认、字节上限与控�
     ["old", " ".repeat(12), " ".repeat(12)],
     ["old", "字".repeat(43), "字".repeat(43)],
   ] as const)
-    expect(() => validatePasswordChange(...values)).toThrow();
+    expect(() => validatePasswordChange(values[0], values[1], values[2])).toThrow();
 });
 
 test("密码修改只调用受限接口，不把拒绝或不完整响应当成修改成功", async () => {

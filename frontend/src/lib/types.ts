@@ -14,7 +14,13 @@ export interface Board {
   model?: string;
   system?: string;
   kernel: string;
-  release: { distribution: string; version: string; revision: string; target: string };
+  release: {
+    distribution: string;
+    version: string;
+    revision: string;
+    target: string;
+    description?: string;
+  };
 }
 
 export interface SystemInfo {

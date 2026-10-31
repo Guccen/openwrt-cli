@@ -100,7 +100,7 @@ test("设备错误保留可操作提示，状态和执行记录不完整时拒�
   const record = {
     at: 1793088000,
     localTime: "2026-10-27 03:00:00",
-    outcome: "skipped",
+    outcome: "skipped" as const,
     reason: "configuration_busy",
     slot: "2026-10-27 03:00",
   };

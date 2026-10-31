@@ -318,11 +318,8 @@ const rpc = {
           else {
             try {
               const policy = JSON.parse(String(args.policy)) as LedPolicy;
-              validateLedPolicy(policy, ledSettings.leds);
+              validateLedPolicy(policy, ledSettings.leds, ledSettings.networkDevices);
               ledSettings.policy = policy;
-              ledSettings.current = policy.enabled
-                ? { state: "normal", checkedAt: Math.floor(Date.now() / 1000) }
-                : null;
               result = [0, { ok: true }];
             } catch {
               result = [0, { ok: false, error: "led_invalid" }];
