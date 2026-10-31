@@ -51,11 +51,18 @@ test("自动 IPv6 保留 IPv4 和拨号凭据，缺少接口时通过命名新�
 test("中继配置明确主从接口，退出中继清理自身创建的主接口", () => {
   const snapshot = settingsFixture();
   snapshot.dhcp.lan.ra = "server";
+  snapshot.dhcp.wan6 = { ".type": "dhcp", interface: "wan6" };
+  snapshot.dhcp.lan.ra_flags = ["managed-config", "other-config"];
   const plan = ipv6Plan(
     snapshot,
     { ...ipv6Draft(snapshot, false), mode: "relay", lan: true },
     false,
   );
+  expect(plan.edits).toContainEqual({
+    config: "dhcp",
+    section: "wan6",
+    deleteSection: true,
+  });
   expect(plan.edits).toContainEqual(
     expect.objectContaining({
       section: "router_ui_ipv6_uplink",
@@ -67,6 +74,7 @@ test("中继配置明确主从接口，退出中继清理自身创建的主接�
     expect.objectContaining({
       section: "lan",
       values: expect.objectContaining({ ra: "relay", ndp: "relay" }),
+      remove: expect.arrayContaining(["ra_flags"]),
     }),
   );
   snapshot.dhcp.router_ui_ipv6_uplink = { ".type": "dhcp", master: "1", interface: "wan6" };
@@ -77,6 +85,71 @@ test("中继配置明确主从接口，退出中继清理自身创建的主接�
     section: "router_ui_ipv6_uplink",
     deleteSection: true,
   });
+});
+
+test("NAT66 模式配置 ULA 伪装和无状态路由，旁路由拒绝此模式", () => {
+  const snapshot = settingsFixture();
+  const plan = ipv6Plan(
+    snapshot,
+    { ...ipv6Draft(snapshot, false), mode: "nat66", lan: true },
+    false,
+  );
+  expect(plan.edits).toContainEqual(
+    expect.objectContaining({
+      config: "network",
+      section: "wan6",
+      values: expect.objectContaining({
+        delegate: "0",
+        reqprefix: "no",
+        sourcefilter: "0",
+      }),
+    }),
+  );
+  expect(plan.edits).toContainEqual(
+    expect.objectContaining({
+      config: "firewall",
+      section: "wan",
+      values: { masq6: "1" },
+    }),
+  );
+  expect(plan.edits).toContainEqual(
+    expect.objectContaining({
+      config: "dhcp",
+      section: "lan",
+      values: expect.objectContaining({
+        ra: "server",
+        dhcpv6: "server",
+        ra_flags: ["other-config"],
+      }),
+    }),
+  );
+
+  snapshot.firewall.wan.masq6 = "1";
+  snapshot.network.wan6.sourcefilter = "0";
+  expect(ipv6Draft(snapshot, false).mode).toBe("nat66");
+
+  const backToAuto = ipv6Plan(
+    snapshot,
+    { ...ipv6Draft(snapshot, false), mode: "auto", lan: true },
+    false,
+  );
+  expect(backToAuto.edits).toContainEqual({
+    config: "firewall",
+    section: "wan",
+    remove: ["masq6"],
+  });
+  expect(backToAuto.edits).toContainEqual(
+    expect.objectContaining({
+      config: "network",
+      section: "wan6",
+      remove: expect.arrayContaining(["sourcefilter"]),
+    }),
+  );
+
+  const bypassSnapshot = settingsFixture(true);
+  expect(() =>
+    ipv6Plan(bypassSnapshot, { ...ipv6Draft(bypassSnapshot, true), mode: "nat66" }, true),
+  ).toThrow("支持");
 });
 
 test("旁路由仅获取本机地址，不创建 RA 服务或请求下游前缀", () => {

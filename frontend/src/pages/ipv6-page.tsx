@@ -32,6 +32,19 @@ export function Ipv6Page() {
           return value !== null && value >> 121n !== 126n && value >> 118n !== 1018n;
         }),
     );
+  const isNat66 =
+    !bypass &&
+    !delegated &&
+    !!address &&
+    !!route &&
+    !!snapshot?.interfaces.some(
+      (item) =>
+        item.interface === "lan" &&
+        item["ipv6-prefix-assignment"]?.some((prefix) => {
+          const value = ipv6Number(prefix.address);
+          return value !== null && value >> 121n === 126n;
+        }),
+    );
   return (
     <div className="space-y-3">
       <SettingsSection>
@@ -55,9 +68,11 @@ export function Ipv6Page() {
               ? "尚未获取可用的 IPv6 地址，请检查上游地址分配。"
               : !route
                 ? "已获取 IPv6 地址，但没有默认 IPv6 路由。"
-                : !bypass && !delegated
-                  ? "已获取上游地址和默认路由；若使用自动分配且 LAN 无法上网，请检查前缀委派，或确认上游是否要求中继。"
-                  : `${address ? "已获取上游 IPv6 地址" : "已获取 IPv6 委派前缀"}及默认路由；仍需通过连通性诊断确认外网可达。`}
+                : isNat66
+                  ? "已启用 NAT66 地址转换，内网设备通过 ULA 与路由器公网 IPv6 出网；仍需通过连通性诊断确认外网可达。"
+                  : !bypass && !delegated
+                    ? "已获取上游地址和默认路由；若使用自动分配且 LAN 无法上网，请检查前缀委派，或确认上游是否要求中继或 NAT66。"
+                    : `${address ? "已获取上游 IPv6 地址" : "已获取 IPv6 委派前缀"}及默认路由；仍需通过连通性诊断确认外网可达。`}
         </AlertDescription>
       </Alert>
       {snapshot && <UpstreamCard snapshot={snapshot} />}

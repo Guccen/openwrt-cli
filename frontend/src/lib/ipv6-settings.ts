@@ -6,7 +6,7 @@ import {
   type UciSection,
 } from "./settings";
 
-export type Ipv6Mode = "auto" | "relay" | "static" | "off";
+export type Ipv6Mode = "auto" | "nat66" | "relay" | "static" | "off";
 export interface Ipv6Draft {
   mode: Ipv6Mode;
   prefixHint: string;
@@ -19,6 +19,7 @@ export interface Ipv6Draft {
 }
 export const ipv6Modes: Record<Ipv6Mode, string> = {
   auto: "自动获取（DHCPv6 / 前缀委派）",
+  nat66: "NAT66（光猫无前缀 / 单地址转换）",
   relay: "中继（上游不分配前缀）",
   static: "静态 IPv6",
   off: "关闭 IPv6 上网",
@@ -69,6 +70,13 @@ function lanDhcp(snapshot: SettingsSnapshot) {
   if (result.length !== 1) throw new Error("LAN 地址分配配置不唯一，需先检查高级 DHCP 配置。");
   return result[0]!;
 }
+function wanFirewallZone(snapshot: SettingsSnapshot): [string, UciSection] | undefined {
+  return Object.entries(snapshot.firewall).find(
+    ([, section]) =>
+      section[".type"] === "zone" &&
+      (section.name === "wan" || list(section.network).includes("wan")),
+  );
+}
 export function ipv6Draft(snapshot: SettingsSnapshot, bypass: boolean): Ipv6Draft {
   const name = bypass ? "lan6" : "wan6",
     current = snapshot.network[name];
@@ -100,6 +108,9 @@ export function ipv6Draft(snapshot: SettingsSnapshot, bypass: boolean): Ipv6Draf
     if (section !== relaySection && String(value.master ?? "0") === "1")
       throw new Error("检测到自定义 IPv6 中继主接口，需先检查高级配置。");
   }
+  const [, wanZone] = wanFirewallZone(snapshot) ?? [];
+  const isNat66 =
+    !bypass && String(wanZone?.masq6 ?? "0") === "1" && String(current?.sourcefilter ?? "") === "0";
   return {
     mode:
       !current || current.proto === "none" || String(current.auto ?? "1") === "0"
@@ -108,7 +119,9 @@ export function ipv6Draft(snapshot: SettingsSnapshot, bypass: boolean): Ipv6Draf
           ? "relay"
           : current.proto === "static"
             ? "static"
-            : "auto",
+            : isNat66
+              ? "nat66"
+              : "auto",
     prefixHint:
       current?.reqprefix && current.reqprefix !== "no" ? String(current.reqprefix) : "auto",
     autoDns: String(current?.peerdns ?? "1") !== "0",
@@ -127,7 +140,10 @@ export function ipv6Plan(
   const initial = ipv6Draft(snapshot, bypass);
   if (JSON.stringify(initial) === JSON.stringify(draft))
     return { label: "IPv6 设置", edits: [], address: lanDraft(snapshot).address };
-  if (!Object.hasOwn(ipv6Modes, draft.mode) || (bypass && draft.mode === "relay"))
+  if (
+    !Object.hasOwn(ipv6Modes, draft.mode) ||
+    (bypass && (draft.mode === "relay" || draft.mode === "nat66"))
+  )
     throw new Error("请选择支持的 IPv6 上网方式。");
   const edits: ConfigEdit[] = [],
     name = bypass ? "lan6" : "wan6",
@@ -146,9 +162,14 @@ export function ipv6Plan(
     set("proto", draft.mode === "off" ? "none" : draft.mode === "static" ? "static" : "dhcpv6");
     set("auto", draft.mode === "off" ? "0" : "1");
     set("device", String(old.device ?? (bypass ? "@lan" : "@wan")));
-    set("delegate", bypass || draft.mode === "off" || draft.mode === "relay" ? "0" : "1");
+    set(
+      "delegate",
+      bypass || draft.mode === "off" || draft.mode === "relay" || draft.mode === "nat66"
+        ? "0"
+        : "1",
+    );
   }
-  if (draft.mode === "auto" || draft.mode === "relay") {
+  if (draft.mode === "auto" || draft.mode === "relay" || draft.mode === "nat66") {
     if (
       draft.prefixHint !== initial.prefixHint &&
       !["auto", "48", "56", "60", "64"].includes(draft.prefixHint)
@@ -156,7 +177,14 @@ export function ipv6Plan(
       throw new Error("前缀请求长度只能是自动、48、56、60 或 64。");
     if (profileChanged && old.reqaddress === undefined) set("reqaddress", "try");
     if (profileChanged || draft.prefixHint !== initial.prefixHint)
-      set("reqprefix", bypass || draft.mode === "relay" ? "no" : draft.prefixHint);
+      set(
+        "reqprefix",
+        bypass || draft.mode === "relay" || draft.mode === "nat66" ? "no" : draft.prefixHint,
+      );
+    if (!bypass) {
+      if (draft.mode === "nat66") set("sourcefilter", "0");
+      else clear("sourcefilter");
+    }
   }
   if (draft.mode === "static") {
     if (!ipv6Cidr(draft.address) || !isIpv6Unicast(draft.gateway.trim()))
@@ -206,22 +234,34 @@ export function ipv6Plan(
   const [section, lan] = lanDhcp(snapshot);
   if (!bypass && profileChanged) {
     const enabled = draft.mode !== "off" && draft.lan,
-      relay = enabled && draft.mode === "relay";
+      relay = enabled && draft.mode === "relay",
+      nat66 = enabled && draft.mode === "nat66";
     const options: Record<string, string | string[]> = {
       ra: enabled ? (relay ? "relay" : "server") : "disabled",
       dhcpv6: enabled ? (relay ? "relay" : "server") : "disabled",
       ndp: relay ? "relay" : "disabled",
     };
+    const lanRemove: string[] = [];
     if (enabled && !relay) {
       options.ra_slaac = "1";
-      options.ra_flags = ["managed-config", "other-config"];
+      if (nat66) options.ra_flags = ["other-config"];
+      else options.ra_flags = ["managed-config", "other-config"];
+    } else {
+      if (lan.ra_flags !== undefined) lanRemove.push("ra_flags");
+      if (lan.ra_slaac !== undefined) lanRemove.push("ra_slaac");
     }
     const changed = Object.fromEntries(
       Object.entries(options).filter(
         ([key, value]) => JSON.stringify(lan[key]) !== JSON.stringify(value),
       ),
     );
-    if (Object.keys(changed).length) edits.push({ config: "dhcp", section, values: changed });
+    if (Object.keys(changed).length || lanRemove.length)
+      edits.push({
+        config: "dhcp",
+        section,
+        ...(Object.keys(changed).length ? { values: changed } : {}),
+        ...(lanRemove.length ? { remove: lanRemove } : {}),
+      });
     const rawLan = snapshot.network.lan,
       assign = enabled && !relay ? String(rawLan.ip6assign ?? "64") : null;
     if (assign ? rawLan.ip6assign !== assign : rawLan.ip6assign !== undefined)
@@ -231,6 +271,7 @@ export function ipv6Plan(
         ...(assign ? { values: { ip6assign: assign } } : { remove: ["ip6assign"] }),
       });
     if (relay) {
+      if (snapshot.dhcp[name]) edits.push({ config: "dhcp", section: name, deleteSection: true });
       const prior = snapshot.dhcp[relaySection];
       const master = { interface: name, master: "1", ra: "relay", dhcpv6: "relay", ndp: "relay" };
       if (!prior || Object.entries(master).some(([key, value]) => prior[key] !== value))
@@ -244,6 +285,15 @@ export function ipv6Plan(
       edits.push({ config: "dhcp", section: relaySection, deleteSection: true });
   }
   if (!bypass) {
+    const [wanZoneKey, wanZone] = wanFirewallZone(snapshot) ?? [];
+    if (wanZoneKey && wanZone) {
+      const nat66 = draft.mode === "nat66" && draft.lan;
+      if (nat66 && wanZone.masq6 !== "1") {
+        edits.push({ config: "firewall", section: wanZoneKey, values: { masq6: "1" } });
+      } else if (!nat66 && wanZone.masq6 !== undefined) {
+        edits.push({ config: "firewall", section: wanZoneKey, remove: ["masq6"] });
+      }
+    }
     const relay = draft.mode === "relay" && draft.lan;
     if (relay) {
       const prior = snapshot.firewall[relayRule];

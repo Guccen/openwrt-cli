@@ -55,7 +55,7 @@ export function Ipv6Form({
               </SelectTrigger>
               <SelectContent>
                 {Object.entries(ipv6Modes)
-                  .filter(([mode]) => !bypass || mode !== "relay")
+                  .filter(([mode]) => !bypass || (mode !== "relay" && mode !== "nat66"))
                   .map(([mode, title]) => (
                     <SelectItem key={mode} value={mode}>
                       {title}
@@ -92,6 +92,12 @@ export function Ipv6Form({
                 这是向上游提出的请求，实际长度由运营商决定。
               </p>
             </div>
+          )}
+          {draft.mode === "nat66" && (
+            <p className="text-xs text-muted-foreground">
+              使用本地 ULA 前缀并通过 IPv6 NAT
+              出网，适用于光猫拨号且仅下发单地址（不提供前缀委派）的情况。
+            </p>
           )}
           {draft.mode === "relay" && (
             <p className="text-xs text-muted-foreground">
