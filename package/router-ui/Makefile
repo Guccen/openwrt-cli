@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=router-ui
-PKG_VERSION:=0.10.9
+PKG_VERSION:=0.10.10
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 
