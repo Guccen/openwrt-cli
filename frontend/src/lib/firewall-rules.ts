@@ -67,3 +67,38 @@ export function dmzLast(snapshot: SettingsSnapshot, plan: ConfigPlan): ConfigPla
     ],
   };
 }
+
+export function protocols(value: unknown) {
+  return (Array.isArray(value) ? value : [value ?? "tcp udp"])
+    .flatMap((item) => String(item).trim().split(/\s+/))
+    .map((item) => (item === "6" ? "tcp" : item === "17" ? "udp" : item))
+    .sort()
+    .join(" ");
+}
+
+// IPv4 转发和远程 HTTPS 管理使用同一套端口范围与协议交集判断。
+export function redirectConflicts(rule: UciSection, port: string, protocol: string) {
+  if (
+    rule[".type"] !== "redirect" ||
+    rule.src !== "wan" ||
+    String(rule.enabled ?? "1") === "0" ||
+    rule.family === "ipv6" ||
+    String(rule.target ?? "DNAT") !== "DNAT"
+  )
+    return false;
+  const incoming = protocols(rule.proto).split(" ");
+  if (
+    !incoming.some((item) => ["all", "any", "*", "0"].includes(item)) &&
+    !protocols(protocol)
+      .split(" ")
+      .some((item) => incoming.includes(item))
+  )
+    return false;
+  const ports = Array.isArray(rule.src_dport) ? rule.src_dport : [String(rule.src_dport ?? "")];
+  return ports
+    .flatMap((item) => item.split(/[\s,]+/))
+    .some((item) => {
+      const range = /^(\d+)(?:[:-](\d+))?$/.exec(item);
+      return !!range && +port >= +range[1]! && +port <= +(range[2] ?? range[1]!);
+    });
+}

@@ -353,3 +353,34 @@ test("拒绝覆盖同名的非转发配置及重复的 DMZ 配置", () => {
   snapshot.firewall.duplicate = { ...snapshot.firewall.router_ui_dmz };
   expect(() => dmzPlan(snapshot, { enabled: false, address: "" })).toThrow("多条");
 });
+
+test("远程管理和转发统一检查协议、区间、列表及禁用规则", () => {
+  const snapshot = settingsFixture();
+  const draft = { ...securityDraft(snapshot), remoteWebEnabled: true, remoteWebPort: "8443" };
+  const forward: Forwarding = {
+    section: "",
+    name: "NAS",
+    protocol: "tcp",
+    external: "8443",
+    internal: "443",
+    address: "192.168.69.20",
+    enabled: true,
+    editable: true,
+  };
+  for (const src_dport of ["8000-9000", "8000:9000", "443 8443", ["443", "8400-8500"]]) {
+    snapshot.firewall.other = { ".type": "redirect", src: "wan", proto: "tcp", src_dport };
+    expect(() => securityPlan(snapshot, draft)).toThrow("冲突");
+    expect(() => forwardingPlan(snapshot, forward)).toThrow("冲突");
+    snapshot.firewall.other.proto = "udp";
+    expect(securityPlan(snapshot, draft).edits).not.toHaveLength(0);
+    expect(forwardingPlan(snapshot, forward).edits).not.toHaveLength(0);
+    expect(() => forwardingPlan(snapshot, { ...forward, protocol: "tcp udp" })).toThrow("冲突");
+    snapshot.firewall.other.proto = "all";
+    expect(() => securityPlan(snapshot, draft)).toThrow("冲突");
+    snapshot.firewall.other.enabled = "0";
+    expect(securityPlan(snapshot, draft).edits).not.toHaveLength(0);
+    snapshot.firewall.other.enabled = "1";
+    snapshot.firewall.other.family = "ipv6";
+    expect(securityPlan(snapshot, draft).edits).not.toHaveLength(0);
+  }
+});

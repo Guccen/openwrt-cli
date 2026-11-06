@@ -1,5 +1,5 @@
 import { hasControl, lanDraft, type ConfigPlan, type SettingsSnapshot } from "./settings";
-import { managedRedirect, dmzLast } from "./firewall-rules";
+import { managedRedirect, dmzLast, protocols, redirectConflicts } from "./firewall-rules";
 import { lanHost } from "./reservations";
 import { isIpv6Unicast } from "./ipv6-settings";
 
@@ -60,13 +60,6 @@ const ipv6RuleKeys = [
   "dest_ip",
   "enabled",
 ];
-
-function protocols(value: unknown) {
-  return (Array.isArray(value) ? value : String(value ?? "tcp udp").split(/\s+/))
-    .map(String)
-    .sort()
-    .join(" ");
-}
 
 export function forwardingRows(snapshot: SettingsSnapshot): Forwarding[] {
   return Object.entries(snapshot.firewall)
@@ -324,19 +317,12 @@ export function securityPlan(snapshot: SettingsSnapshot, draft: SecurityDraft): 
     if (!/^[1-9]\d{0,4}$/.test(port) || +port > 65535) {
       throw new Error("远程访问端口需为 1 至 65535 的整数。");
     }
-    for (const [sec, rule] of Object.entries(snapshot.firewall)) {
-      if (
-        sec === webSection ||
-        sec === "router_ui_dmz" ||
-        rule[".type"] !== "redirect" ||
-        rule.src !== "wan" ||
-        String(rule.enabled ?? "1") === "0"
+    if (
+      Object.entries(snapshot.firewall).some(
+        ([name, rule]) => name !== webSection && redirectConflicts(rule, port, "tcp"),
       )
-        continue;
-      if (String(rule.src_dport) === port) {
-        throw new Error("该远程访问端口与已有启用的端口转发冲突。");
-      }
-    }
+    )
+      throw new Error("该远程访问端口与已有启用的端口转发冲突。");
     plan.edits.push({
       config: "firewall",
       section: webSection,
@@ -393,25 +379,13 @@ export function forwardingPlan(
     throw new Error("端口需为 1 至 65535 的整数。");
   if (!lanHost(snapshot, address))
     throw new Error("目标地址必须在 LAN 网段内，且不能是路由器地址。");
-  if (draft.enabled)
-    for (const [section, rule] of Object.entries(snapshot.firewall)) {
-      if (
-        section === old?.section ||
-        rule[".type"] !== "redirect" ||
-        rule.src !== "wan" ||
-        String(rule.enabled ?? "1") === "0"
-      )
-        continue;
-      const match = /^(\d+)(?:[:-](\d+))?$/.exec(String(rule.src_dport ?? "")),
-        incoming = protocols(rule.proto).split(" ");
-      if (
-        match &&
-        +external >= +match[1]! &&
-        +external <= +(match[2] ?? match[1]!) &&
-        (incoming.includes("all") || draft.protocol.split(" ").some((p) => incoming.includes(p)))
-      )
-        throw new Error("该外部端口与已有启用的转发冲突。");
-    }
+  if (
+    draft.enabled &&
+    Object.entries(snapshot.firewall).some(
+      ([name, rule]) => name !== old?.section && redirectConflicts(rule, external, draft.protocol),
+    )
+  )
+    throw new Error("该外部端口与已有启用的转发冲突。");
   let section = old?.section ?? "";
   if (!old) {
     let i = 1;
