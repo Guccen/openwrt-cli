@@ -7,7 +7,12 @@ permissions:
   contents: read
 
 jobs:
+  checks:
+    name: Verify code and prepare frontend
+    uses: ./.github/workflows/code-checks.yml
+
   configure:
+    needs: checks
     name: Configure ${{ matrix.device }} ${{ matrix.role }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -24,20 +29,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - name: Restore verified frontend package
+        uses: ./.github/actions/restore-ui
         with:
-          bun-version: 1.4.4
+          artifact-id: ${{ needs.checks.outputs.artifact-id }}
       - name: Install configuration prerequisites
         timeout-minutes: 15
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 build-essential clang flex bison gawk gettext git \
             libncurses-dev libssl-dev python3 python3-setuptools rsync swig unzip zlib1g-dev file wget curl
-      - name: Build static frontend package
-        run: |
-          bun install --frozen-lockfile
-          bun run build
       - name: Resolve pinned firmware configuration
         shell: bash
         env:

@@ -1,0 +1,31 @@
+name: Restore verified frontend package
+description: Reuse the package checked in this workflow run and verify its source revision
+inputs:
+  artifact-id:
+    description: Artifact ID returned by the successful code checks
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Download verified frontend package
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+      with:
+        artifact-ids: ${{ inputs.artifact-id }}
+        path: ${{ runner.temp }}/router-ui-bundle
+        merge-multiple: true
+    - name: Restore package and verify source revision
+      shell: bash
+      run: |
+        mkdir -p build
+        tar -xzf "$RUNNER_TEMP/router-ui-bundle/router-ui.tar.gz" -C build
+        test "$(cat build/ui-source-revision.txt)" = "$GITHUB_SHA"
+        test -s build/router-ui/htdocs/index.html
+        test -s build/router-ui/files/shadcn-ui.LICENSE
+        test -s build/router-ui/files/sonner.LICENSE
+        test -s build/router-ui/files/recharts.LICENSE
+        test -s build/ui-size.json
+        test -s build/ui-manifest.json
+        diff -u package/router-ui/Makefile build/router-ui/Makefile
+        for source in package/router-ui/files/*; do
+          cmp "$source" "build/router-ui/files/$(basename "$source")"
+        done

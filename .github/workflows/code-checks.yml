@@ -1,0 +1,85 @@
+name: Reusable code and UI checks
+
+on:
+  workflow_call:
+    outputs:
+      artifact-id:
+        description: Verified frontend package for this commit and workflow run
+        value: ${{ jobs.verify-bundle.outputs.artifact-id }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check code and UI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      artifact-id: ${{ steps.ui.outputs.artifact-id }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.4
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+      - name: Check and build frontend
+        run: bun run check
+      - name: Prepare native ucode for script tests
+        run: bash scripts/prepare-test-ucode.sh
+      - name: Check firmware configuration and scripts
+        run: |
+          python3 - <<'PY'
+          import unittest
+          suite = unittest.defaultTestLoader.discover("tests/firmware")
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.skipped:
+              raise SystemExit("固件脚本测试失败或存在被跳过的用例")
+          PY
+          python3 -m compileall -q scripts tests/runtime
+          for script in scripts/*.sh files/router-defaults.sh files/n1/etc/uci-defaults/00-router-ui-storage files/n1/usr/libexec/router-ui/expand-rootfs package/router-ui/files/router.maintenance package/router-ui/files/router.status package/router-ui/files/router.diagnostics package/router-ui/files/led-state package/router-ui/files/router-ui-led package/router-ui/files/router-ui-led-boot package/router-ui/files/led-hotplug package/router-ui/files/led-defaults package/router-ui/files/scheduled-reboot package/router-ui/files/schedule-defaults; do bash -n "$script"; done
+      - name: Install browser for smoke tests
+        run: bunx playwright install --with-deps chromium
+      - name: Run browser smoke tests
+        run: bun run test:smoke
+      - name: Preserve smoke test reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: smoke-report
+          path: build/smoke-report/
+          retention-days: 7
+      - name: Validate browser test definitions
+        run: bunx playwright test --list
+
+      - name: Archive verified frontend package
+        run: |
+          printf '%s\n' "$GITHUB_SHA" > build/ui-source-revision.txt
+          tar -czf "$RUNNER_TEMP/router-ui.tar.gz" -C build router-ui ui-size.json ui-manifest.json ui-source-revision.txt
+      - name: Upload verified frontend package
+        id: ui
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: checked-ui-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/router-ui.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  verify-bundle:
+    name: Verify frontend artifact reuse
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      artifact-id: ${{ needs.check.outputs.artifact-id }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Restore verified frontend package
+        uses: ./.github/actions/restore-ui
+        with:
+          artifact-id: ${{ needs.check.outputs.artifact-id }}
