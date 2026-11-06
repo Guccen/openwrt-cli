@@ -334,7 +334,7 @@ function SecurityCard(props: SettingsFormProps) {
                     onChange={(e) => setDraft({ ...draft, remoteWebPort: e.target.value })}
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    建议使用大于 1024 的非标准端口（如 8443）。外网访问地址为：http://[公网IP]:
+                    建议使用大于 1024 的非标准端口（如 8443）。外网访问地址为：https://[公网IP]:
                     {draft.remoteWebPort || "8443"}
                   </p>
                 </div>

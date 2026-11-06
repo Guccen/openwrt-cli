@@ -179,7 +179,7 @@ describe("安全与远程访问", () => {
           dest: "lan",
           dest_ip: "192.168.69.1",
           src_dport: "8443",
-          dest_port: "80",
+          dest_port: "443",
           proto: "tcp",
           target: "DNAT",
           enabled: "1",
@@ -195,7 +195,7 @@ describe("安全与远程访问", () => {
       dest: "lan",
       dest_ip: "192.168.69.1",
       src_dport: "8443",
-      dest_port: "80",
+      dest_port: "443",
       proto: "tcp",
       target: "DNAT",
       enabled: "1",
@@ -234,4 +234,30 @@ describe("安全与远程访问", () => {
       deleteSection: true,
     });
   });
+});
+
+test("保存已有远程管理规则会迁移到 HTTPS，重复保存保持无改动", () => {
+  const snapshot = settingsFixture();
+  snapshot.firewall.router_ui_remote_web = {
+    ".type": "redirect",
+    name: "Router-Remote-Web",
+    src: "wan",
+    dest: "lan",
+    dest_ip: "192.168.69.1",
+    src_dport: "8443",
+    dest_port: "80",
+    proto: "tcp",
+    target: "DNAT",
+    enabled: "1",
+  };
+  const draft = securityDraft(snapshot);
+  const plan = securityPlan(snapshot, draft);
+  expect(plan.edits).toContainEqual(
+    expect.objectContaining({
+      section: "router_ui_remote_web",
+      values: expect.objectContaining({ dest_port: "443" }),
+    }),
+  );
+  snapshot.firewall.router_ui_remote_web.dest_port = "443";
+  expect(securityPlan(snapshot, draft).edits).toHaveLength(0);
 });

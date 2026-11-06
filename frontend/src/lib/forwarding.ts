@@ -276,7 +276,9 @@ export function securityPlan(snapshot: SettingsSnapshot, draft: SecurityDraft): 
   if (
     current.wanPing === draft.wanPing &&
     current.remoteWebEnabled === draft.remoteWebEnabled &&
-    (!draft.remoteWebEnabled || current.remoteWebPort === port)
+    (!draft.remoteWebEnabled ||
+      (current.remoteWebPort === port &&
+        snapshot.firewall.router_ui_remote_web?.dest_port === "443"))
   ) {
     return { label: "安全与远程访问", address: lanDraft(snapshot).address, edits: [] };
   }
@@ -350,7 +352,7 @@ export function securityPlan(snapshot: SettingsSnapshot, draft: SecurityDraft): 
         dest: "lan",
         dest_ip: lanDraft(snapshot).address,
         src_dport: port,
-        dest_port: "80",
+        dest_port: "443",
         proto: "tcp",
         target: "DNAT",
         enabled: "1",
