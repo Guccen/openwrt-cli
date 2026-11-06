@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { bindSettingsSession } from "../../frontend/src/stores/session-binding";
+import {
+  bindSettingsSession,
+  registerSessionBinder,
+} from "../../frontend/src/stores/session-binding";
 import { useRouter } from "../../frontend/src/stores/router";
 import { useSettings, type PendingApply } from "../../frontend/src/stores/settings";
 import axios from "axios";
@@ -63,5 +66,23 @@ test("单个 RPC 权限不足不登出，设备确认会话失效才清除所有
   } finally {
     stop();
     useRouter.getState().forgetSession();
+  }
+});
+
+test("按需加载的状态 store 注册后同步当前会话并跟随退出清理", () => {
+  const previous = useRouter.getState().session;
+  const calls: (string | null)[] = [];
+  useRouter.setState({ session: null });
+  const stop = bindSettingsSession();
+  const unregister = registerSessionBinder((session) => calls.push(session));
+  try {
+    expect(calls).toEqual([null]);
+    useRouter.setState({ session: "a".repeat(32) });
+    useRouter.setState({ session: null });
+    expect(calls).toEqual([null, "a".repeat(32), null]);
+  } finally {
+    unregister();
+    stop();
+    useRouter.setState({ session: previous });
   }
 });

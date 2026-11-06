@@ -1,12 +1,19 @@
 import { useRouter } from "./router";
 import { useSettings } from "./settings";
-import { useWireless } from "./wireless";
-import { useMaintenance } from "./maintenance";
 import { useMaintenanceOperation } from "./maintenance-operation";
-import { useLeds } from "./leds";
-import { useSchedule } from "./schedule";
-import { useClients } from "./clients";
 import { onSessionRejection, RouterClient, RpcError } from "../lib/rpc";
+
+type SessionBinder = (session: string | null) => void;
+const sessionBinders = new Set<SessionBinder>();
+let bindingActive = false;
+let currentSession: string | null = null;
+
+/** 页面按需加载的 store 注册后立即同步当前会话，避免首屏静态引入所有管理模块。 */
+export function registerSessionBinder(bind: SessionBinder) {
+  sessionBinders.add(bind);
+  if (bindingActive) bind(currentSession);
+  return () => sessionBinders.delete(bind);
+}
 
 // 会话绑定独立于页面生命周期，避免首次路由跳转覆盖刚接收的配置事务。
 export function bindSettingsSession(client = new RouterClient()) {
@@ -35,19 +42,18 @@ export function bindSettingsSession(client = new RouterClient()) {
       .finally(() => checking.delete(session));
   });
   const bind = (session: string | null) => {
+    currentSession = session;
     useSettings.getState().bind(session);
-    useWireless.getState().bind(session);
-    useMaintenance.getState().bind(session);
-    useLeds.getState().bind(session);
-    useSchedule.getState().bind(session);
-    useClients.getState().bind(session);
     useMaintenanceOperation.getState().bind(session);
+    for (const bindSession of sessionBinders) bindSession(session);
   };
+  bindingActive = true;
   bind(useRouter.getState().session);
   const unsubscribe = useRouter.subscribe((state, previous) => {
     if (state.session !== previous.session) bind(state.session);
   });
   return () => {
+    bindingActive = false;
     disposed = true;
     stopChecking();
     unsubscribe();
