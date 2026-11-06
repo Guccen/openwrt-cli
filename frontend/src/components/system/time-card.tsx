@@ -34,23 +34,21 @@ export function TimeCard({ disabled }: { disabled: boolean }) {
     [busy, setBusy] = useState(false),
     [attempt, retry] = useState(0);
   useEffect(() => {
-    let active = true;
     alive.current = true;
     if (session)
       void client
         .read(session)
         .then((response) => {
-          if (active) {
+          if (alive.current) {
             setValue(response);
             setServers(response.settings.servers.join("\n"));
             setError(null);
           }
         })
         .catch((e) => {
-          if (active) setError(e instanceof Error ? e.message : "读取失败");
+          if (alive.current) setError(e instanceof Error ? e.message : "读取失败");
         });
     return () => {
-      active = false;
       alive.current = false;
     };
   }, [session, attempt]);

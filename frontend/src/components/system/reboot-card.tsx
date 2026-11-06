@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RotateCw } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -36,22 +36,24 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
   const [expiredOperation, setExpiredOperation] = useState<number | null>(null);
   const expired = expiredOperation === startedAt;
   const [error, setError] = useState<string | null>(null);
+  const cancelled = useRef(false);
+  const polling = useRef(false);
   useEffect(() => {
     if (!waiting || !session) return;
-    let cancelled = false;
-    let polling = false;
+    cancelled.current = false;
+    polling.current = false;
     const started = startedAt || Date.now();
     const timer = setInterval(async () => {
-      if (polling || cancelled) return;
+      if (polling.current || cancelled.current) return;
       if (Date.now() - started > 180000) {
         setExpiredOperation(startedAt);
         clearInterval(timer);
         return;
       }
-      polling = true;
+      polling.current = true;
       try {
         const status = await maintenanceClient.read(session);
-        if (cancelled) return;
+        if (cancelled.current) return;
         useMaintenanceOperation.getState().observe(status.operation ?? null);
         if (!useMaintenanceOperation.getState().kind) return;
         // 重启后原 rpcd 会话失效；只有管理页恢复且会话失效时才返回登录页。
@@ -60,17 +62,17 @@ export function RebootCard({ disabled }: { disabled: boolean }) {
         if (e instanceof RpcError && e.sessionExpired) {
           try {
             const device = await rpc.device();
-            if (!cancelled && device) useRouter.getState().forgetSession();
+            if (!cancelled.current && device) useRouter.getState().forgetSession();
           } catch {
             /* 设备 HTTP 服务尚未恢复，下次继续探测。 */
           }
         }
       } finally {
-        polling = false;
+        polling.current = false;
       }
     }, 3000);
     return () => {
-      cancelled = true;
+      cancelled.current = true;
       clearInterval(timer);
     };
   }, [waiting, session, operationId, startedAt]);
