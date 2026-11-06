@@ -1,3 +1,4 @@
+import { managedRedirect } from "./firewall-rules";
 import type { NetworkInterface } from "./types";
 import { ipv4, ipv4Text, maskPrefix, poolRange, poolStartOffset, subnet } from "./ipv4";
 import { wifiBand, type WifiBand } from "./wifi-band";
@@ -117,8 +118,10 @@ export function lanPlan(
     if (reserved !== null && (reserved <= network || reserved >= broadcast || reserved === ip))
       throw new Error("新的 LAN 网段与已有 DHCP 地址保留冲突，请先调整保留记录。");
   }
-  for (const section of Object.values(snapshot.firewall)) {
+  const remoteWeb = managedRedirect(snapshot.firewall, "web");
+  for (const [name, section] of Object.entries(snapshot.firewall)) {
     if (
+      name === remoteWeb?.[0] ||
       section[".type"] !== "redirect" ||
       section.dest !== "lan" ||
       typeof section.dest_ip !== "string"
@@ -213,6 +216,10 @@ export function lanPlan(
     values.dns = [gateway];
   }
   const edits = [...dhcpEdits];
+  if (remoteWeb && address !== old.address) {
+    edits.push({ config: "firewall", section: remoteWeb[0], values: { dest_ip: address } });
+    details.push(`远程管理目标地址将同步更新为 ${address}，与 LAN 设置一起确认或回滚。`);
+  }
   if (Object.keys(values).length) edits.push({ config: "network", section: "lan", values });
   return {
     label: "LAN 设置",

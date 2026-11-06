@@ -10,7 +10,7 @@ import {
   type RadioCapabilities,
 } from "../../frontend/src/lib/radio-settings";
 import { RouterClient } from "../../frontend/src/lib/rpc";
-import { lanPlan } from "../../frontend/src/lib/settings";
+import { lanDraft, lanPlan } from "../../frontend/src/lib/settings";
 
 test("地址保留支持命名新增、修改、删除，拒绝重复 MAC/IP 和广播、路由器地址", () => {
   const s = settingsFixture(),
@@ -134,4 +134,41 @@ test("射频设置来自真实能力，只改指定射频，换国家时先自�
   ]);
   expect(() => radioPlan(s, "radio0", { ...draft, mode: "HE160" }, caps)).toThrow("带宽");
   expect(() => radioPlan(s, "radio0", { ...draft, channel: "1" }, caps)).toThrow("自动信道");
+});
+
+test("远程管理不阻止修改 LAN 掩码，改址时同一事务更新真实目标", () => {
+  const snapshot = settingsFixture();
+  snapshot.firewall.legacy_web = {
+    ".type": "redirect",
+    name: "Router-Remote-Web",
+    src: "wan",
+    dest: "lan",
+    dest_ip: "192.168.69.1",
+    src_dport: "8443",
+    dest_port: "443",
+    proto: "tcp",
+  };
+  const draft = lanDraft(snapshot);
+  const maskOnly = lanPlan(snapshot, { ...draft, netmask: "255.255.254.0" }, false, []);
+  expect(maskOnly.edits).toEqual([
+    { config: "network", section: "lan", values: { netmask: "255.255.254.0" } },
+  ]);
+  for (const address of ["192.168.69.2", "192.168.70.1"]) {
+    const plan = lanPlan(snapshot, { ...draft, address }, false, []);
+    expect(plan.edits).toContainEqual({
+      config: "firewall",
+      section: "legacy_web",
+      values: { dest_ip: address },
+    });
+    expect(plan.edits).toContainEqual(
+      expect.objectContaining({
+        config: "network",
+        section: "lan",
+        values: expect.objectContaining({ ipaddr: address }),
+      }),
+    );
+    expect(plan.details?.join()).toContain("一起确认或回滚");
+  }
+  snapshot.firewall.pc = { ".type": "redirect", dest: "lan", dest_ip: "192.168.69.30" };
+  expect(() => lanPlan(snapshot, { ...draft, address: "192.168.70.1" }, false, [])).toThrow("转发");
 });
