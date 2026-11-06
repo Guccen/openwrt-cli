@@ -9,6 +9,7 @@ on:
     paths-ignore:
       - "docs/**"
       - "**/*.md"
+  workflow_dispatch:
   workflow_call:
 
 permissions:
@@ -25,20 +26,39 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v2 # v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.4
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
       - name: Check and build frontend
         run: bun run check
+      - name: Prepare native ucode for script tests
+        run: bash scripts/prepare-test-ucode.sh
       - name: Check firmware configuration and scripts
         run: |
-          python3 -m unittest discover -s tests/firmware -v
+          python3 - <<'PY'
+          import unittest
+          suite = unittest.defaultTestLoader.discover("tests/firmware")
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.skipped:
+              raise SystemExit("固件脚本测试失败或存在被跳过的用例")
+          PY
           python3 -m compileall -q scripts tests/runtime
           for script in scripts/*.sh files/router-defaults.sh files/n1/etc/uci-defaults/00-router-ui-storage files/n1/usr/libexec/router-ui/expand-rootfs package/router-ui/files/router.maintenance package/router-ui/files/router.status package/router-ui/files/router.diagnostics package/router-ui/files/led-state package/router-ui/files/router-ui-led package/router-ui/files/router-ui-led-boot package/router-ui/files/led-hotplug package/router-ui/files/led-defaults package/router-ui/files/scheduled-reboot package/router-ui/files/schedule-defaults; do bash -n "$script"; done
+      - name: Install browser for smoke tests
+        run: bunx playwright install --with-deps chromium
+      - name: Run browser smoke tests
+        run: bun run test:smoke
+      - name: Preserve smoke test reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: smoke-report
+          path: build/smoke-report/
+          retention-days: 7
       - name: Validate browser test definitions
         run: bunx playwright test --list
 

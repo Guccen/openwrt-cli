@@ -9,10 +9,13 @@
     "build": "tsc --noEmit && vite build && bun scripts/package-ui.ts",
     "test": "bun test tests/frontend",
     "test:e2e": "playwright test",
-    "lint": "oxlint frontend scripts/package-ui.ts tests/frontend tests/e2e vite.config.ts playwright.config.ts",
+    "lint": "oxlint frontend scripts/package-ui.ts tests/frontend tests/e2e vite.config.ts playwright.config.ts tests/smoke tests/smoke-server.ts playwright.smoke.config.ts",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "check": "bun run lint && bun run format:check && bun run test && bun run build"
+    "check": "bun run check:fast && bun run build",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
+    "check:fast": "bun run lint && bun run format:check && bun run typecheck && bun run test",
+    "test:smoke": "playwright test --config playwright.smoke.config.ts"
   },
   "dependencies": {
     "axios": "1.21.0",
