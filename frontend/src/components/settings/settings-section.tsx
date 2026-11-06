@@ -53,8 +53,9 @@ export function SettingsSection({
     }
   };
   let unsupported: string | null = null;
+  let currentAddress: string | undefined;
   try {
-    if (snapshot) lanDraft(snapshot);
+    if (snapshot) currentAddress = lanDraft(snapshot).address;
   } catch (e) {
     unsupported = e instanceof Error ? e.message : "无法读取配置";
   }
@@ -83,7 +84,7 @@ export function SettingsSection({
       )}
       <ApplyReviewDialog
         plan={plan}
-        currentAddress={snapshot ? String(snapshot.network.lan.ipaddr) : undefined}
+        currentAddress={currentAddress}
         onClose={() => setCandidate(null)}
         onApply={(value) => void apply(value, window.location.origin)}
       />

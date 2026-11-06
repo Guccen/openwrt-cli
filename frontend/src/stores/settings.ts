@@ -7,7 +7,12 @@ import {
   type ApplyStorageAdapter,
   type PendingApply,
 } from "../lib/apply-storage";
-import { managementOrigin, type ConfigPlan, type SettingsSnapshot } from "../lib/settings";
+import {
+  lanDraft,
+  managementOrigin,
+  type ConfigPlan,
+  type SettingsSnapshot,
+} from "../lib/settings";
 
 export type { PendingApply } from "../lib/apply-storage";
 interface SettingsState {
@@ -120,16 +125,15 @@ export function createSettingsStore(client = new ConfigClient(), storage?: Apply
       }
       const request = generation;
       const configs = [...new Set(plan.edits.map((edit) => edit.config))];
+      const previousAddress = lanDraft(snapshot).address;
       const transaction: PendingApply = {
         label: plan.label,
         address: plan.address,
-        previousAddress: String(snapshot.network.lan.ipaddr),
+        previousAddress,
         configs,
         oldOrigin: origin,
         newOrigin:
-          plan.address === String(snapshot.network.lan.ipaddr)
-            ? origin
-            : managementOrigin(plan.address, origin),
+          plan.address === previousAddress ? origin : managementOrigin(plan.address, origin),
         deadline: Date.now() + APPLY_TIMEOUT * 1000,
       };
       set({

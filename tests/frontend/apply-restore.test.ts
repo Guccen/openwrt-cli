@@ -6,12 +6,12 @@ import {
 } from "../../frontend/src/lib/apply-storage";
 import { ConfigClient } from "../../frontend/src/lib/config-client";
 import { createSettingsStore } from "../../frontend/src/stores/settings";
-import { dnsPlan } from "../../frontend/src/lib/settings";
+import { dnsPlan, lanDraft, lanPlan } from "../../frontend/src/lib/settings";
 import { settingsFixture } from "../helpers/settings-fixture";
 
 const sid = "a".repeat(32);
 const origin = "https://192.168.69.1";
-function harness() {
+function harness(cidr = false) {
   const values = new Map<string, string>();
   const storage = createApplyStorage(
     () => ({
@@ -28,6 +28,7 @@ function harness() {
   const calls: string[] = [];
   let active = true;
   const snapshot = settingsFixture();
+  if (cidr) snapshot.network.lan.ipaddr = "192.168.69.1/24";
   const client = {
     read: async () => snapshot,
     changes: async () => false,
@@ -66,6 +67,7 @@ function harness() {
   };
   return {
     store,
+    snapshot,
     storage,
     values,
     client,
@@ -173,4 +175,58 @@ test("设备状态核对失败保留回滚入口，存储不可用仍可正常�
   await store.getState().load();
   await store.getState().apply(dnsPlan(settingsFixture(), "1.1.1.1"), origin);
   expect(store.getState().pending).not.toBeNull();
+});
+
+test("CIDR LAN 修改 DNS 后可刷新恢复事务且不误报改址", async () => {
+  const h = harness(true);
+  await h.apply();
+  expect(h.store.getState().pending).toMatchObject({
+    address: "192.168.69.1",
+    previousAddress: "192.168.69.1",
+    oldOrigin: origin,
+    newOrigin: origin,
+  });
+  const reloaded = h.reload();
+  expect(reloaded.getState().pending).toEqual(h.store.getState().pending);
+  await reloaded.getState().probe();
+  await reloaded.getState().confirm();
+  expect(h.calls).toContain("confirm");
+});
+
+test("CIDR LAN 改址时保存规范化旧地址并允许在新来源恢复", async () => {
+  const h = harness(true);
+  h.store.getState().bind(sid);
+  await h.store.getState().load();
+  await h.store.getState().apply(
+    lanPlan(
+      h.snapshot,
+      {
+        ...lanDraft(h.snapshot),
+        address: "192.168.70.1",
+      },
+      false,
+      [],
+    ),
+    origin,
+  );
+  const pending = h.store.getState().pending!;
+  expect(pending).toMatchObject({
+    previousAddress: "192.168.69.1",
+    address: "192.168.70.1",
+    newOrigin: "https://192.168.70.1",
+  });
+  expect(h.storage.read(sid)?.pending).toEqual(pending);
+  const nextStorage = createApplyStorage(
+    () => ({
+      getItem: (key) => h.values.get(key) ?? null,
+      setItem: (key, value) => {
+        h.values.set(key, value);
+      },
+      removeItem: (key) => {
+        h.values.delete(key);
+      },
+    }),
+    () => pending.newOrigin,
+  );
+  expect(nextStorage.read(sid)?.pending).toEqual(pending);
 });
