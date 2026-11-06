@@ -173,8 +173,9 @@ function wireless() {
 try {
     if (ARGV[0] == 'summary') {
         let storage = disks();
-        print({ ok: true, localTime: deviceTime(), temperatures: temperatures(), storage, blockDisks: physicalDisks(storage), ports: ports() });
+        print({ ok: true, metricsSupported: true, localTime: deviceTime(), temperatures: temperatures(), storage, blockDisks: physicalDisks(storage), ports: ports() });
     }
+    else if (ARGV[0] == 'metrics') print({ ok: true, localTime: deviceTime(), temperatures: temperatures(), ports: ports() });
     else if (ARGV[0] == 'clients') print(clients());
     else if (ARGV[0] == 'wireless') print(wireless());
     else print({ ok: false, error: 'unsupported_method' });

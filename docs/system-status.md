@@ -47,3 +47,7 @@
 本地使用真实 ucode WebAssembly VM 验证租约过滤、IPv6 地址及前缀、存储和内核数据解析，使用 Playwright 验证桌面/平板/手机及旁路由、缺失传感器、不可用 IPv6 来源。QEMU 验证实际安装包、匿名访问拒绝、真实文件系统及 VirtIO 网口、租约文件；不能证明 AX1800/N1 的真实温度、物理端口映射或硬件速率。
 
 数据格式参考 [odhcpd 只读租约接口](https://github.com/openwrt/odhcpd/blob/master/src/ubus.c) 和 [ucode 本地时间定义](https://ucode-lang.org/ucode/module-core.html#localtime)。
+
+概况自动刷新将动态状态与低频信息分开：负载、内存、温度、网口及网络状态保持原刷新周期；
+设备型号、版本、文件系统容量和磁盘布局最多缓存一分钟，减少设备端 `df` 与磁盘扫描。
+手动刷新立即重新采集全部信息；会话改变或检测到重启时失效，旧固件缺少轻量接口时自动回退。

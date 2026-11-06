@@ -17,7 +17,7 @@ def status(api, method):
 def run(address):
     api = Api(address)
     api.login()
-    for method in ("summary", "clients", "wireless"):
+    for method in ("summary", "metrics", "clients", "wireless"):
         try:
             status(Api(address), method)
         except RpcFailure as error:

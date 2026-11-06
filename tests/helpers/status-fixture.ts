@@ -3,6 +3,7 @@ import type { ClientLeases, Telemetry } from "../../frontend/src/lib/types";
 export function telemetryFixture(): Telemetry {
   return {
     ok: true,
+    metricsSupported: true,
     localTime: "2026-10-27 11:00:00",
     temperatures: [{ name: "CPU", celsius: 58.5 }],
     storage: [

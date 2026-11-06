@@ -25,7 +25,7 @@ interface RouterState {
   forgetSession: (message?: string) => void;
   login: (password: string) => Promise<void>;
   logout: () => Promise<void>;
-  refresh: () => Promise<void>;
+  refresh: (background?: boolean) => Promise<void>;
 }
 
 export function createRouterStore(client = new RouterClient(), storage?: SessionStorageAdapter) {
@@ -200,14 +200,14 @@ export function createRouterStore(client = new RouterClient(), storage?: Session
         }
       }
     },
-    refresh: async () => {
+    refresh: async (background = false) => {
       const session = get().session;
       if (!session || get().loading) return;
       if (!get().device) void get().loadDevice();
       const request = generation;
       set({ loading: true, error: null });
       try {
-        const snapshot = await client.snapshot(session);
+        const snapshot = await client.snapshot(session, !background);
         if (request === generation)
           set({ snapshot, history: appendOverviewSample(get().history, snapshot), loading: false });
       } catch (error) {

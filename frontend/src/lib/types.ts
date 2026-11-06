@@ -59,6 +59,7 @@ export interface Snapshot {
 
 export interface Telemetry {
   ok: true;
+  metricsSupported?: boolean;
   localTime: string;
   temperatures: { name: string; celsius: number }[];
   storage: {

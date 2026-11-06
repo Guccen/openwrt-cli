@@ -15,7 +15,7 @@ export function OverviewPage() {
   useEffect(() => {
     if (!session) return;
     return startOverviewRefresh(
-      () => useRouter.getState().refresh(),
+      () => useRouter.getState().refresh(true),
       () => {
         const router = useRouter.getState();
         const settings = useSettings.getState();

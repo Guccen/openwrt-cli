@@ -147,3 +147,16 @@ print(wirelessData(fixture));
         self.assertEqual(data["ports"][0]["speed"], 1000)
         self.assertIsNone(data["ports"][0]["tx"])
 
+
+    def test_metrics_does_not_probe_disks_and_summary_advertises_capability(self):
+        source = (ROOT / "package/router-ui/files/status.uc").read_text(encoding="utf-8")
+        source = source.replace("import { connect } from 'ubus';", "function connect() { return null; }")
+        source = source.replace("function disks() {", "function disks() { die('unexpected_disk_probe');")
+        result = subprocess.run([*self.command, "-e", source.replace("ARGV[0]", "'metrics'")], capture_output=True, encoding="utf-8", timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(result.stdout)
+        self.assertTrue(data["ok"])
+        self.assertIn("temperatures", data)
+        self.assertIn("ports", data)
+        self.assertNotIn("storage", data)
+        self.assertNotIn("blockDisks", data)

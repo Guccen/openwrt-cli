@@ -306,3 +306,98 @@ test("无线读取期限包含排队等待，过期任务不会阻塞后续刷�
   await api.call("sid", "iwinfo", "assoclist", { device: "wlan0" });
   expect(calls).toEqual(["info", "assoclist"]);
 });
+
+test("自动刷新缓存低频信息一分钟，手动刷新、换会话和重启重新采集", async () => {
+  let now = 100000,
+    uptime = 100,
+    summaries = 0,
+    metrics = 0,
+    boards = 0;
+  const api = new RouterClient(
+    transport((body) => {
+      const respond = (request: Request) => {
+        const [, object, method] = request.params;
+        if (method === "board") {
+          boards++;
+          return success(request, { release: { description: `board-${boards}` } });
+        }
+        if (method === "info") return success(request, { memory: { total: 100 }, uptime });
+        if (object === "network.interface") return success(request, { interface: [] });
+        if (method === "summary") {
+          summaries++;
+          return success(request, telemetryFixture());
+        }
+        metrics++;
+        return success(request, {
+          ok: true,
+          temperatures: [{ name: "cpu", celsius: metrics }],
+          ports: [],
+          localTime: "current",
+        });
+      };
+      return Array.isArray(body) ? body.map(respond) : respond(body);
+    }),
+    () => now,
+  );
+  const first = await api.snapshot("a", false);
+  const next = await api.snapshot("a", false);
+  expect([boards, summaries, metrics]).toEqual([1, 1, 1]);
+  expect(next.telemetry?.storage).toEqual(first.telemetry?.storage);
+  expect(next.telemetry?.temperatures[0].celsius).toBe(1);
+  now += 60000;
+  await api.snapshot("a", false);
+  expect([boards, summaries]).toEqual([2, 2]);
+  await api.snapshot("a");
+  expect([boards, summaries]).toEqual([3, 3]);
+  uptime = 1;
+  await api.snapshot("a", false);
+  expect([boards, summaries]).toEqual([4, 4]);
+  await api.snapshot("b", false);
+  expect([boards, summaries]).toEqual([5, 5]);
+});
+
+test("未声明轻量接口的旧固件保持完整查询，权限错误不能被缓存掩盖", async () => {
+  let denied = false,
+    metrics = 0;
+  const api = new RouterClient(
+    transport((body) => {
+      const respond = (request: Request) => {
+        const [, object, method] = request.params;
+        if (denied) return { id: request.id, result: [6] };
+        if (method === "board") return success(request, { release: {} });
+        if (method === "info") return success(request, { memory: { total: 100 }, uptime: 100 });
+        if (object === "network.interface") return success(request, { interface: [] });
+        if (method === "metrics") {
+          metrics++;
+          return { id: request.id, result: [3] };
+        }
+        return success(request, { ...telemetryFixture(), metricsSupported: undefined });
+      };
+      return Array.isArray(body) ? body.map(respond) : respond(body);
+    }),
+  );
+  await api.snapshot("a", false);
+  expect((await api.snapshot("a", false)).telemetry?.ok).toBe(true);
+  await api.snapshot("a", false);
+  expect(metrics).toBe(0);
+  denied = true;
+  await expect(api.snapshot("a", false)).rejects.toThrow();
+});
+
+test("已声明的轻量接口拒绝权限时不会伪装成成功或停用权限检查", async () => {
+  const api = new RouterClient(
+    transport((body) => {
+      const respond = (request: Request) => {
+        const [, object, method] = request.params;
+        if (method === "board") return success(request, { release: {} });
+        if (method === "info") return success(request, { memory: { total: 100 }, uptime: 100 });
+        if (object === "network.interface") return success(request, { interface: [] });
+        if (method === "metrics") return { id: request.id, result: [6] };
+        return success(request, telemetryFixture());
+      };
+      return Array.isArray(body) ? body.map(respond) : respond(body);
+    }),
+  );
+  await api.snapshot("sid", false);
+  await expect(api.snapshot("sid", false)).rejects.toMatchObject({ code: 6 });
+});

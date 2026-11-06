@@ -61,7 +61,20 @@ const rpc = {
       sessions.add(session);
       result = [0, { ubus_rpc_session: session }];
     } else if (sessions.has(sid)) {
-      if (object === "router.status" && method === "summary") result = [0, telemetryFixture()];
+      if (object === "router.status" && ["summary", "metrics"].includes(method)) {
+        const summary = telemetryFixture();
+        result = [
+          0,
+          method === "metrics"
+            ? {
+                ok: true,
+                localTime: summary.localTime,
+                temperatures: summary.temperatures,
+                ports: summary.ports,
+              }
+            : summary,
+        ];
+      }
       if (object === "router.diagnostics" && method === "run")
         result = [
           0,

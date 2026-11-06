@@ -9,6 +9,7 @@ const fastReads = new Set([
   "system.info",
   "network.interface.dump",
   "router.status.summary",
+  "router.status.metrics",
   "router.status.clients",
   "router.status.wireless",
   "uci.get",
@@ -230,8 +231,18 @@ const transports = new WeakMap<AxiosInstance, RpcTransport>();
 
 export class RouterClient {
   private readonly transport: RpcTransport;
+  private metadata: {
+    session: string;
+    board: Board;
+    telemetry: Telemetry;
+    checkedAt: number;
+    uptime: number;
+  } | null = null;
 
-  constructor(private readonly http: AxiosInstance = defaultHttp) {
+  constructor(
+    private readonly http: AxiosInstance = defaultHttp,
+    private readonly now = Date.now,
+  ) {
     // 页面中的多个客户端共用同一个端点队列，避免切页后叠加无线请求。
     let transport = transports.get(http);
     if (!transport) {
@@ -297,6 +308,7 @@ export class RouterClient {
 
   async logout(session: string) {
     // 网关会注入当前会话，客户端不传入可被替换的会话参数。
+    this.metadata = null;
     await this.call(session, "session", "destroy");
   }
 
@@ -311,13 +323,37 @@ export class RouterClient {
     }
   }
 
-  async snapshot(session: string): Promise<Snapshot> {
+  async snapshot(session: string, refreshStatic = true): Promise<Snapshot> {
+    const cached =
+      !refreshStatic &&
+      this.metadata?.session === session &&
+      this.now() - this.metadata.checkedAt >= 0 &&
+      this.now() - this.metadata.checkedAt < 60000
+        ? this.metadata
+        : null;
+    // 能力由完整状态显式声明；旧 ACL 可能对不存在的方法返回权限拒绝，不能靠错误码探测。
+    const lightweight = cached?.telemetry.metricsSupported === true;
+    const readTelemetry = async () => {
+      const value = await this.call<Telemetry>(
+        session,
+        "router.status",
+        lightweight ? "metrics" : "summary",
+      );
+      return lightweight && cached
+        ? {
+            ...value,
+            storage: cached.telemetry.storage,
+            blockDisks: cached.telemetry.blockDisks,
+            metricsSupported: true,
+          }
+        : value;
+    };
     let telemetryError: string | null = null;
     const [board, info, network, telemetry] = await Promise.all([
-      this.call<Board>(session, "system", "board"),
+      cached ? Promise.resolve(cached.board) : this.call<Board>(session, "system", "board"),
       this.call<SystemInfo>(session, "system", "info"),
       this.call<{ interface: NetworkInterface[] }>(session, "network.interface", "dump"),
-      this.call<Telemetry>(session, "router.status", "summary")
+      readTelemetry()
         .then((value) => {
           if (
             !value?.ok ||
@@ -337,13 +373,27 @@ export class RouterClient {
     if (!board?.release || !info?.memory || !Array.isArray(network?.interface)) {
       throw new RpcError("设备状态不完整，请稍后重试");
     }
+    // 重启使旧型号、版本和磁盘布局失效，立即重新采集，不跨启动复用。
+    if (cached && info.uptime < cached.uptime) {
+      this.metadata = null;
+      return this.snapshot(session, true);
+    }
+    if (telemetry)
+      this.metadata = {
+        session,
+        board,
+        telemetry,
+        uptime: info.uptime,
+        checkedAt: cached?.checkedAt ?? this.now(),
+      };
+    else this.metadata = null;
     return {
       board,
       info,
       interfaces: network.interface,
       telemetry,
       telemetryError,
-      updatedAt: Date.now(),
+      updatedAt: this.now(),
     };
   }
 }

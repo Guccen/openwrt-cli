@@ -169,7 +169,7 @@ exit 0
         self.assertEqual(set(acl["write"]["ubus"]), {"session", "uci", "router.maintenance"})
         self.assertEqual(set(acl["write"]["ubus"]["router.maintenance"]), {"reboot", "upload_start", "upload_chunk", "upload_cancel", "inspect", "restore", "upgrade", "reset", "password", "led_save", "time_save", "schedule_save"})
         self.assertEqual(acl["read"]["ubus"]["iwinfo"], ["info", "assoclist", "phyname", "freqlist", "countrylist", "txpowerlist"])
-        self.assertEqual(acl["read"]["ubus"]["router.status"], ["summary", "clients", "wireless"])
+        self.assertEqual(acl["read"]["ubus"]["router.status"], ["summary", "metrics", "clients", "wireless"])
         self.assertNotIn("network.wireless", acl["read"]["ubus"])
         self.assertNotIn("router.status", acl["write"]["ubus"])
         self.assertEqual(set(acl["write"]["uci"]), {"network", "dhcp", "wireless", "firewall"})
