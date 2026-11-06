@@ -1,4 +1,5 @@
 import { hasControl, lanDraft, type ConfigPlan, type SettingsSnapshot } from "./settings";
+import { managedRedirect, dmzLast } from "./firewall-rules";
 import { lanHost } from "./reservations";
 import { isIpv6Unicast } from "./ipv6-settings";
 
@@ -98,16 +99,7 @@ export function forwardingRows(snapshot: SettingsSnapshot): Forwarding[] {
 }
 
 export function dmzDraft(snapshot: SettingsSnapshot): DmzDraft {
-  const dmz =
-    snapshot.firewall.router_ui_dmz ??
-    Object.values(snapshot.firewall).find(
-      (s) =>
-        s[".type"] === "redirect" &&
-        s.name === "DMZ" &&
-        s.src === "wan" &&
-        s.dest === "lan" &&
-        !s.src_dport,
-    );
+  const dmz = managedRedirect(snapshot.firewall, "dmz")?.[1];
   if (!dmz) return { enabled: false, address: "" };
   return {
     enabled: String(dmz.enabled ?? "1") !== "0",
@@ -119,15 +111,16 @@ export function dmzPlan(snapshot: SettingsSnapshot, draft: DmzDraft): ConfigPlan
   const current = dmzDraft(snapshot);
   const address = draft.address.trim();
   if (current.enabled === draft.enabled && current.address === address) {
-    return { label: "DMZ 主机", edits: [], address: lanDraft(snapshot).address };
+    return dmzLast(snapshot, { label: "DMZ 主机", edits: [], address: lanDraft(snapshot).address });
   }
   const plan: ConfigPlan = {
     label: "DMZ 主机",
     address: lanDraft(snapshot).address,
     edits: [],
   };
-  const section = "router_ui_dmz";
-  const exists = Boolean(snapshot.firewall[section]);
+  const entry = managedRedirect(snapshot.firewall, "dmz");
+  const section = entry?.[0] ?? "router_ui_dmz";
+  const exists = !!entry;
 
   if (!draft.enabled) {
     if (exists) {
@@ -154,7 +147,7 @@ export function dmzPlan(snapshot: SettingsSnapshot, draft: DmzDraft): ConfigPlan
     },
     ...(!exists ? { add: "redirect" } : {}),
   });
-  return plan;
+  return dmzLast(snapshot, plan);
 }
 
 export function ipv6RuleRows(snapshot: SettingsSnapshot): Ipv6Rule[] {
@@ -259,11 +252,7 @@ export function securityDraft(snapshot: SettingsSnapshot): SecurityDraft {
   );
   const wanPing = pingSection ? String(pingSection[1].enabled ?? "1") !== "0" : true;
 
-  const webRedirect =
-    snapshot.firewall.router_ui_remote_web ??
-    Object.values(snapshot.firewall).find(
-      (s) => s[".type"] === "redirect" && s.name === "Router-Remote-Web",
-    );
+  const webRedirect = managedRedirect(snapshot.firewall, "web")?.[1];
   const remoteWebEnabled = Boolean(webRedirect && String(webRedirect.enabled ?? "1") !== "0");
   const remoteWebPort = String(webRedirect?.src_dport ?? "8443");
 
@@ -278,9 +267,13 @@ export function securityPlan(snapshot: SettingsSnapshot, draft: SecurityDraft): 
     current.remoteWebEnabled === draft.remoteWebEnabled &&
     (!draft.remoteWebEnabled ||
       (current.remoteWebPort === port &&
-        snapshot.firewall.router_ui_remote_web?.dest_port === "443"))
+        managedRedirect(snapshot.firewall, "web")?.[1].dest_port === "443"))
   ) {
-    return { label: "安全与远程访问", address: lanDraft(snapshot).address, edits: [] };
+    return dmzLast(snapshot, {
+      label: "安全与远程访问",
+      address: lanDraft(snapshot).address,
+      edits: [],
+    });
   }
   const plan: ConfigPlan = {
     label: "安全与远程访问",
@@ -323,8 +316,9 @@ export function securityPlan(snapshot: SettingsSnapshot, draft: SecurityDraft): 
   }
 
   // Remote Web Access
-  const webSection = "router_ui_remote_web";
-  const webRedirect = snapshot.firewall[webSection];
+  const webEntry = managedRedirect(snapshot.firewall, "web");
+  const webSection = webEntry?.[0] ?? "router_ui_remote_web";
+  const webRedirect = webEntry?.[1];
   if (draft.remoteWebEnabled) {
     const port = draft.remoteWebPort.trim();
     if (!/^[1-9]\d{0,4}$/.test(port) || +port > 65535) {
@@ -363,7 +357,7 @@ export function securityPlan(snapshot: SettingsSnapshot, draft: SecurityDraft): 
     plan.edits.push({ config: "firewall", section: webSection, deleteSection: true });
   }
 
-  return plan;
+  return dmzLast(snapshot, plan);
 }
 export function forwardingPlan(
   snapshot: SettingsSnapshot,
@@ -441,5 +435,5 @@ export function forwardingPlan(
     if (String(current[key] ?? "") !== value) values[key] = value;
   if (Object.keys(values).length)
     plan.edits.push({ config: "firewall", section, values, ...(!old ? { add: "redirect" } : {}) });
-  return plan;
+  return dmzLast(snapshot, plan);
 }

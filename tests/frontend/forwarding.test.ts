@@ -261,3 +261,95 @@ test("保存已有远程管理规则会迁移到 HTTPS，重复保存保持无�
   snapshot.firewall.router_ui_remote_web.dest_port = "443";
   expect(securityPlan(snapshot, draft).edits).toHaveLength(0);
 });
+
+test("按真实节名关闭旧 DMZ 和远程管理，不残留或创建第二条规则", () => {
+  const snapshot = settingsFixture();
+  snapshot.firewall.legacy_dmz = {
+    ".type": "redirect",
+    name: "DMZ",
+    src: "wan",
+    dest: "lan",
+    proto: "all",
+    dest_ip: "192.168.69.50",
+  };
+  expect(dmzDraft(snapshot).enabled).toBe(true);
+  expect(dmzPlan(snapshot, { enabled: false, address: "192.168.69.50" }).edits).toEqual([
+    { config: "firewall", section: "legacy_dmz", deleteSection: true },
+  ]);
+  snapshot.firewall.legacy_web = {
+    ".type": "redirect",
+    name: "Router-Remote-Web",
+    src: "wan",
+    dest: "lan",
+    src_dport: "8443",
+    dest_port: "80",
+    dest_ip: "192.168.69.1",
+    proto: "tcp",
+  };
+  const draft = securityDraft(snapshot);
+  expect(securityPlan(snapshot, { ...draft, remoteWebEnabled: false }).edits).toContainEqual({
+    config: "firewall",
+    section: "legacy_web",
+    deleteSection: true,
+  });
+  const migrate = securityPlan(snapshot, draft);
+  expect(migrate.edits).toContainEqual(
+    expect.objectContaining({
+      section: "legacy_web",
+      values: expect.objectContaining({ dest_port: "443" }),
+    }),
+  );
+  expect(migrate.edits.some((edit) => edit.section === "router_ui_remote_web")).toBe(false);
+});
+
+test("DMZ 已开启时新增端口转发会把兜底规则移到最后并保留参数", () => {
+  const snapshot = settingsFixture();
+  snapshot.firewall.legacy_dmz = {
+    ".type": "redirect",
+    ".anonymous": true,
+    name: "DMZ",
+    src: "wan",
+    dest: "lan",
+    proto: "all",
+    dest_ip: "192.168.69.50",
+    reflection: "0",
+  };
+  const plan = forwardingPlan(snapshot, {
+    section: "",
+    name: "NAS",
+    protocol: "tcp",
+    external: "8080",
+    internal: "80",
+    address: "192.168.69.20",
+    enabled: true,
+    editable: true,
+  });
+  expect(plan.edits[0]).toMatchObject({ add: "redirect", values: { src_dport: "8080" } });
+  expect(plan.edits.slice(-2)).toEqual([
+    { config: "firewall", section: "legacy_dmz", deleteSection: true },
+    {
+      config: "firewall",
+      section: "legacy_dmz",
+      add: "redirect",
+      values: {
+        name: "DMZ",
+        src: "wan",
+        dest: "lan",
+        proto: "all",
+        dest_ip: "192.168.69.50",
+        reflection: "0",
+      },
+    },
+  ]);
+  const web = securityPlan(snapshot, { ...securityDraft(snapshot), remoteWebEnabled: true });
+  expect(web.edits.at(-1)?.section).toBe("legacy_dmz");
+});
+
+test("拒绝覆盖同名的非转发配置及重复的 DMZ 配置", () => {
+  const snapshot = settingsFixture();
+  snapshot.firewall.router_ui_dmz = { ".type": "rule", name: "unrelated" };
+  expect(() => dmzDraft(snapshot)).toThrow("高级配置");
+  snapshot.firewall.router_ui_dmz = { ".type": "redirect", name: "DMZ", src: "wan", dest: "lan" };
+  snapshot.firewall.duplicate = { ...snapshot.firewall.router_ui_dmz };
+  expect(() => dmzPlan(snapshot, { enabled: false, address: "" })).toThrow("多条");
+});
